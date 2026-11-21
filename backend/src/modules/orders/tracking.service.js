@@ -37,7 +37,7 @@ export function trackingService(db, secret) {
             where: { status: { in: ['DISPATCHED', 'DELIVERED'] } },
             orderBy: { dispatchedAt: 'desc' }, take: 1,
           },
-          installationByOrder: { select: { status: true, scheduledAt: true } },
+          installationByOrder: { select: { status: true, scheduledAt: true, startedAt: true, signedAt: true } },
           warrantiesByOrder: {
             select: { status: true, startAt: true, endAt: true, asset: {
               select: { serialNumber: true, product: { select: { name: true } } },
@@ -50,8 +50,9 @@ export function trackingService(db, secret) {
       const now = new Date()
       const { quotation, dispatchesByOrder, installationByOrder, warrantiesByOrder, ...summary } = order
       const dispatch = dispatchesByOrder[0] ?? null
+      const job = installationByOrder
       return {
-        ...summary, dispatch, installation: installationByOrder,
+        ...summary, dispatch, installation: job ? { status: job.status, scheduledAt: job.scheduledAt } : null,
         timeline: [
           { stage: 'ENQUIRY_RECEIVED', at: quotation.lead.createdAt },
           { stage: 'SITE_SURVEYED', at: quotation.survey.visitedAt },
@@ -61,6 +62,8 @@ export function trackingService(db, secret) {
           { stage: 'ORDER_CONFIRMED', at: order.confirmedAt },
           { stage: 'DISPATCHED', at: dispatch?.dispatchedAt ?? null },
           { stage: 'DELIVERED', at: dispatch?.deliveredAt ?? null },
+          { stage: 'INSTALLATION_IN_PROGRESS', at: job?.startedAt ?? null },
+          { stage: 'INSTALLATION_COMPLETED', at: job?.signedAt ?? null },
         ],
         warranties: warrantiesByOrder.map(({ asset, status, startAt, endAt }) => ({
           serialNumber: asset.serialNumber, product: asset.product.name, startAt, endAt,

@@ -114,12 +114,13 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.deepEqual(inTransit.timeline.map(event => event.stage), [
           'ENQUIRY_RECEIVED', 'SITE_SURVEYED', 'SURVEY_APPROVED', 'QUOTATION_ISSUED',
           'QUOTATION_ACCEPTED', 'ORDER_CONFIRMED', 'DISPATCHED', 'DELIVERED',
+          'INSTALLATION_IN_PROGRESS', 'INSTALLATION_COMPLETED',
         ])
-        assert.ok(inTransit.timeline.slice(0, -1).every(event => event.at))
-        assert.equal(inTransit.timeline.at(-1).at, null)
+        assert.ok(inTransit.timeline.slice(0, -3).every(event => event.at))
+        assert.ok(inTransit.timeline.slice(-3).every(event => event.at === null))
         const delivered = await post(dispatch + '/deliver', { recipientName: key })
         const tracked = await post('/public/tracking', { token: tracking.token })
-        assert.equal(tracked.timeline.at(-1).at, delivered.deliveredAt)
+        assert.equal(tracked.timeline.find(event => event.stage === 'DELIVERED').at, delivered.deliveredAt)
         const coverage = await request('GET', '/assets/' + key + '/warranty')
         assert.equal(coverage.coveredAsOf, true)
         assert.equal(coverage.warranty.startAt, delivered.deliveredAt)
@@ -127,7 +128,12 @@ test('Express connects public intake to paid delivery, signed completion, and co
         const installationId = order.installationByOrder.id
         const installation = '/installations/' + installationId
         await patch(installation, { technicianIds: [admin.id], scheduledAt: new Date().toISOString() })
-        await patch(installation, { startedAt: new Date().toISOString(), generationReading: 1.8 })
+        const started = await patch(installation, { startedAt: new Date().toISOString(), generationReading: 1.8 })
+        const installing = await post('/public/tracking', { token: tracking.token })
+        assert.deepEqual(installing.timeline.slice(-2), [
+          { stage: 'INSTALLATION_IN_PROGRESS', at: started.startedAt },
+          { stage: 'INSTALLATION_COMPLETED', at: null },
+        ])
         const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Yv1cAAAAASUVORK5CYII=', 'base64')
         async function evidence(filename) {
           const form = new FormData()
@@ -142,6 +148,8 @@ test('Express connects public intake to paid delivery, signed completion, and co
           capacityKw: 2, checklist: { mounting: true, electrical: true, earthing: true, generation: true },
           generationTestPassed: true, signatureAttachmentId: signature.id, customerSignerName: key })
         assert.equal(signed.order.status, 'COMPLETED')
+        const completed = await post('/public/tracking', { token: tracking.token })
+        assert.equal(completed.timeline.at(-1).at, signed.signedAt)
         const ticket = await post('/tickets', { customerId: order.customerId, assetId: coverage.asset.id,
           description: 'Test alarm on supplied panel circuit', priority: 'LOW' })
         const resolution = await post('/tickets/' + ticket.id + '/resolve', { coverageDecision: 'COVERED', resolutionNotes: 'Reconnected the circuit.' })
