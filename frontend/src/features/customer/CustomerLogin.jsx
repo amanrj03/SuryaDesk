@@ -65,8 +65,33 @@ export default function CustomerLogin() {
           aria-pressed={mode === item} onClick={() => choose(item)}>{labels[item]}</button>)}
       </div>
       <form className="form" onSubmit={submit}>
-        <label>Email address<input name="email" type="email" autoComplete="email" required readOnly={sent} value={email} onChange={event => setEmail(event.target.value)} /></label>
-        {mode === 'password' && <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>}
+        <label className="grid gap-1.5 text-xs font-semibold text-gray-700">
+          Email address
+          <input
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            readOnly={sent}
+            value={email}
+            onChange={event => setEmail(event.target.value)}
+            placeholder="name@example.com"
+            className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 shadow-2xs focus:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-black/10 sm:text-sm"
+          />
+        </label>
+        {mode === 'password' && (
+          <label className="grid gap-1.5 text-xs font-semibold text-gray-700">
+            Password
+            <input
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              placeholder="Enter your password"
+              className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 shadow-2xs focus:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-black/10 sm:text-sm"
+            />
+          </label>
+        )}
         {sent && <>
           <CodeNotice remaining={remaining} resend={() => !busy && perform(sendCode)} />
           <CodeField />
