@@ -11,7 +11,7 @@ import { Avatar } from '../ui/Avatar.jsx'
 import { Badge } from '../ui/Badge.jsx'
 import { words } from '../../lib/format.js'
 
-export function Header({ user, onOpenMenu, onLogout }) {
+export function Header({ user, navigationOpen, onToggleNavigation, onLogout }) {
   const navigate = useNavigate()
   const [term, setTerm] = useState('')
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -35,6 +35,7 @@ export function Header({ user, onOpenMenu, onLogout }) {
     navigate(`/leads?q=${encodeURIComponent(query)}`)
   }
 
+  const canSearchLeads = user?.capabilities?.includes('leads:read')
   const canCreateLead = user?.capabilities?.includes('leads:write')
   const canAddPackage = user?.capabilities?.includes('catalog:manage')
 
@@ -44,8 +45,10 @@ export function Header({ user, onOpenMenu, onLogout }) {
       <div className="flex items-center gap-3 lg:w-56">
         <button
           type="button"
-          onClick={onOpenMenu}
-          aria-label="Open navigation"
+          onClick={onToggleNavigation}
+          aria-label={navigationOpen ? 'Hide navigation' : 'Open navigation'}
+          aria-expanded={navigationOpen}
+          aria-controls="workspace-navigation"
           className="rounded-full p-1.5 text-gray-600 transition hover:bg-white/60 lg:hidden"
         >
           <Bars3Icon className="size-5" />
@@ -71,19 +74,20 @@ export function Header({ user, onOpenMenu, onLogout }) {
       </div>
 
       {/* Global Search Pill */}
-      <form onSubmit={onSearch} className="mx-2 hidden max-w-md flex-1 sm:block">
+      {canSearchLeads && <form onSubmit={onSearch} className="mx-2 hidden max-w-md flex-1 sm:block">
         <div className="relative flex items-center">
           <MagnifyingGlassIcon className="pointer-events-none absolute left-3.5 size-4 text-gray-400" />
           <input
             type="search"
             value={term}
             onChange={(e) => setTerm(e.target.value)}
-            placeholder="Search leads, customers, serials, orders…"
-            aria-label="Search records"
+            placeholder="Search enquiries"
+            aria-label="Search enquiries from header"
+            maxLength={120}
             className="w-full rounded-full border border-transparent bg-white/80 py-1.5 pl-10 pr-4 text-xs font-medium text-gray-800 placeholder-gray-400 backdrop-blur-sm transition-all focus:border-white focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-black/10"
           />
         </div>
-      </form>
+      </form>}
 
       {/* Right User & Actions */}
       <div className="flex items-center gap-2 sm:gap-3">

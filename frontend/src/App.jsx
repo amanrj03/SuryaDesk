@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   BoltIcon,
   ClipboardDocumentCheckIcon,
@@ -807,8 +807,9 @@ const statuses = {
 
 function Records({ section, token, capabilities }) {
   const [page, setPage] = useState(1)
-  const [query, setQuery] = useState('')
-  const [search, setSearch] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const search = section.search ? (searchParams.get('q') ?? '').slice(0, 120) : ''
+  const [query, setQuery] = useState(search)
   const [status, setStatus] = useState('')
   const choices = statuses[section.path]?.split(' ')
   const [retry, setRetry] = useState(0)
@@ -827,6 +828,12 @@ function Records({ section, token, capabilities }) {
     canSign ||
     state.result?.data.some((row) => recordActions(section.path, row, capabilities).length)
   const Editor = canEditLead ? LeadEditor : InstallationSignoff
+
+  useEffect(() => {
+    setQuery(search)
+    setPage(1)
+    setState({ busy: true })
+  }, [search])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -946,7 +953,13 @@ function Records({ section, token, capabilities }) {
             onSubmit={(event) => {
               event.preventDefault()
               setState({ busy: true })
-              setSearch(query.trim())
+              setSearchParams((current) => {
+                const next = new URLSearchParams(current)
+                const term = query.trim()
+                if (term) next.set('q', term)
+                else next.delete('q')
+                return next
+              })
               setPage(1)
               setRetry((value) => value + 1)
             }}

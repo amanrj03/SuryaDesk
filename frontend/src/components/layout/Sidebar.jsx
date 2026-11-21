@@ -87,7 +87,7 @@ export function Sidebar({ user, sections = [], onLogout }) {
               className="size-full object-contain"
             />
           </div>
-          {ICON_RAIL.map((entry) => {
+          {ICON_RAIL.filter(({ to }) => to === '/overview' ? hasReports : allowed.some(({ path }) => '/' + path === to)).map((entry) => {
             const Icon = entry.icon
             const active =
               pathname === entry.to ||

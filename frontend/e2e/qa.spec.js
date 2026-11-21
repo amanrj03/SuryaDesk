@@ -138,3 +138,19 @@ test('staff sign-in keeps the form within a mobile viewport and can reveal a pas
   await page.getByRole('link', { name: 'Request a solar quote' }).click()
   await expect(page.getByRole('heading', { name: 'Request a solar quote' })).toBeVisible()
 })
+
+test('header enquiry search and mobile navigation work', async ({ page }) => {
+  await signIn(page)
+  const search = page.getByRole('searchbox', { name: 'Search enquiries from header' })
+  await search.fill('DEMO-LEAD-0001')
+  await search.press('Enter')
+  await expect(page.getByRole('row')).toHaveCount(2)
+  await expect(page.getByRole('row').nth(1)).toContainText('DEMO-LEAD-0001')
+
+  await page.setViewportSize({ width: 360, height: 780 })
+  const navigation = page.getByRole('navigation', { name: 'Workspace' })
+  await page.getByRole('button', { name: 'Hide navigation' }).click()
+  await expect(navigation).toBeHidden()
+  await page.getByRole('button', { name: 'Open navigation' }).click()
+  await expect(navigation).toBeVisible()
+})
