@@ -1,5 +1,6 @@
 import { roleCapabilities } from '../../config/permissions.js'
 import { ApiError } from '../../utils/ApiError.js'
+import { warrantyEnd } from '../warranties/coverage.js'
 
 const missing = () => new ApiError(404, 'NOT_FOUND', 'Installation not found.')
 const forbidden = () => new ApiError(403, 'FORBIDDEN', 'Only assigned technicians can update this installation.')
@@ -39,7 +40,7 @@ async function audit(tx, id, action, actorId, summary = {}) {
   await tx.auditLog.create({ data: { actorId, entityType: 'Installation', entityId: id, action, summary } })
 }
 
-export function installationsService(db) {
+export function installationsService(db, clock = () => new Date()) {
   return {
     async list({ page, limit, status, technicianId }, user) {
       return db.$transaction(async tx => {
@@ -132,10 +133,26 @@ export function installationsService(db) {
             installationId: id, technicianId, startAt: job.startedAt, endAt: data.finishedAt, hourlyCostSnapshot: worker.hourlyCost ?? 0,
           } })
         }
+        const signedAt = clock()
+        const installed = await tx.serializedAsset.findMany({
+          where: { orderId: job.orderId, status: { in: ['DELIVERED', 'INSTALLED'] } },
+          select: { id: true, product: { select: { warrantyMonths: true } }, warrantyByAsset: true },
+        })
+        for (const asset of installed) {
+          const existing = asset.warrantyByAsset
+          if (existing && existing.status !== 'PENDING') continue
+          const months = existing?.months ?? asset.product.warrantyMonths
+          if (months <= 0) continue
+          const coverage = { months, startAt: signedAt, endAt: warrantyEnd(signedAt, months), status: 'ACTIVE' }
+          if (existing) await tx.warranty.update({ where: { id: existing.id }, data: coverage })
+          else await tx.warranty.create({ data: {
+            ...coverage, assetId: asset.id, orderId: job.orderId, customerId: job.order.customerId,
+          } })
+        }
         await tx.serializedAsset.updateMany({ where: { orderId: job.orderId, status: 'DELIVERED' }, data: { status: 'INSTALLED' } })
         await tx.order.update({ where: { id: job.orderId }, data: { status: 'COMPLETED' } })
         await audit(tx, id, 'COMPLETED', user.id, { signer: data.customerSignerName })
-        return tx.installation.update({ where: { id }, data: { ...data, status: 'COMPLETED', signedAt: new Date() }, include })
+        return tx.installation.update({ where: { id }, data: { ...data, status: 'COMPLETED', signedAt }, include })
       })
     },
   }

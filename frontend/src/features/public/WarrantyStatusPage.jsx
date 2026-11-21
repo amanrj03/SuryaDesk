@@ -3,15 +3,13 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Brand } from '../../components/ui/Brand.jsx'
 import { StatusBadge } from '../../components/ui/Badge.jsx'
 import { api } from '../../lib/api.js'
-import { displayReference, formatDate } from '../../lib/format.js'
+import { displayReference, formatDateTime } from '../../lib/format.js'
 
 const duration = months => months + (months === 1 ? ' month' : ' months')
 
-function unrecordedCoverage(product, status) {
-  if (status === 'CANCELLED') return 'Order cancelled'
+function unrecordedCoverage(product) {
   if (!product.catalogMonths) return 'No warranty listed'
-  if (['DELIVERED', 'INSTALLATION_IN_PROGRESS', 'COMPLETED'].includes(status)) return 'No individual warranty record'
-  return 'Awaiting delivery'
+  return 'No individual warranty record'
 }
 
 export default function WarrantyStatusPage() {
@@ -60,7 +58,9 @@ export default function WarrantyStatusPage() {
         {current.error && <p role="alert" className="text-sm text-red-700">{current.error}</p>}
         {order && <section className="rounded-2xl border border-gray-200 bg-white p-5" aria-labelledby="warranty-order">
           <h2 id="warranty-order" className="break-all text-lg font-semibold">{displayReference(order.orderNumber)}</h2>
-          {!order.products.length && <p className="mt-3 text-sm text-gray-600">No products are listed for this order.</p>}
+          {!order.signedAt ? <p className="mt-3 text-sm text-gray-600">
+            {order.status === 'CANCELLED' ? 'This order was cancelled.' : 'Warranty details will appear after installation is completed and signed off.'}
+          </p> : !order.products.length && <p className="mt-3 text-sm text-gray-600">No products are listed for this order.</p>}
           <ul className="mt-3 grid gap-3 sm:grid-cols-2">
             {order.products.map((product, index) => (
               <li key={index} className="rounded-xl border border-gray-200 p-4">
@@ -69,12 +69,12 @@ export default function WarrantyStatusPage() {
                 {product.coverage.length > 0 && <ul className="mt-2 space-y-2">
                   {product.coverage.map((coverage, unit) => <li key={unit} className="text-sm">
                     <StatusBadge status={coverage.status} /> <span>{duration(coverage.months)}</span>
-                    <p className="text-gray-600">{formatDate(coverage.startAt)} to {formatDate(coverage.endAt)}</p>
+                    <p className="text-gray-600">{formatDateTime(coverage.startAt)} to {formatDateTime(coverage.endAt)}</p>
                   </li>)}
                 </ul>}
                 {product.coverage.length < product.quantity && <p className="mt-2 text-sm text-gray-600">
                   {product.coverage.length > 0 && (product.quantity - product.coverage.length) + ' remaining · '}
-                  {unrecordedCoverage(product, order.status)}
+                  {unrecordedCoverage(product)}
                   {product.catalogMonths > 0 && order.status !== 'CANCELLED' && ' · Catalog term ' + duration(product.catalogMonths)}
                 </p>}
               </li>

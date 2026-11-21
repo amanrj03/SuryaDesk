@@ -12,6 +12,7 @@ export function warrantiesService(db) {
         where: { serialNumber }, include: { customer, order, product, warrantyByAsset: true },
       })
       if (!asset) throw new ApiError(404, 'NOT_FOUND', 'Equipment serial not found.')
+      if (asset.warrantyByAsset?.status === 'PENDING') asset.warrantyByAsset = null
       return { asset, warranty: asset.warrantyByAsset, coveredAsOf: isCovered(asset.warrantyByAsset, asOf), asOf }
     },
     async list({ page, limit, q, status }) {
@@ -20,7 +21,7 @@ export function warrantiesService(db) {
         : status === 'EXPIRED' ? { OR: [{ status }, { status: 'ACTIVE', endAt: { lte: now } }] } : { status }
       const search = q && { OR: [{ asset: { serialNumber: { contains: q, mode: 'insensitive' } } },
         { customer: { name: { contains: q, mode: 'insensitive' } } }] }
-      const where = { AND: [state, ...(search ? [search] : [])] }
+      const where = { AND: [{ status: { not: 'PENDING' } }, state, ...(search ? [search] : [])] }
       return db.$transaction(async tx => {
         const rows = await tx.warranty.findMany({
           where, include: { asset: { include: { product } }, customer, order },

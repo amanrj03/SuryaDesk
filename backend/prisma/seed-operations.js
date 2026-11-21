@@ -11,16 +11,15 @@ const faults = [
   ['E052', 'Battery backup is unavailable when the grid drops.'],
 ]
 
-export async function seedOperations(db) {
-  const [workers, support, orders, equipment] = await Promise.all([
-    db.user.findMany({ where: { role: 'TECHNICIAN', email: { endsWith: '@demo.suryadesk.test' } }, orderBy: { email: 'asc' } }),
-    db.user.findUniqueOrThrow({ where: { email: 'support@demo.suryadesk.test' } }),
+const technicians = db => db.user.findMany({
+  where: { role: 'TECHNICIAN', email: { endsWith: '@demo.suryadesk.test' } }, orderBy: { email: 'asc' },
+})
+
+export async function seedInstallationSchedule(db) {
+  const [workers, orders] = await Promise.all([
+    technicians(db),
     db.order.findMany({ where: { id: { startsWith: 'DEMO-ORDER-' }, status: { not: 'CANCELLED' } },
       orderBy: { id: 'asc' }, include: { installationByOrder: true, customer: true } }),
-    db.serializedAsset.findMany({
-      where: { deliveredAt: { not: null }, serialNumber: { startsWith: 'SD-' }, product: { category: { in: ['INVERTER', 'BATTERY', 'CONTROLLER'] } } },
-      orderBy: { serialNumber: 'asc' }, include: { warrantyByAsset: true },
-    }),
   ])
   if (!workers.length) return
   for (const [index, row] of orders.entries()) {
@@ -41,10 +40,21 @@ export async function seedOperations(db) {
       })
     })
   }
+}
 
+export async function seedOperations(db) {
+  const [workers, support, equipment] = await Promise.all([
+    technicians(db),
+    db.user.findUniqueOrThrow({ where: { email: 'support@demo.suryadesk.test' } }),
+    db.serializedAsset.findMany({
+      where: { deliveredAt: { not: null }, serialNumber: { startsWith: 'SD-' }, product: { category: { in: ['INVERTER', 'BATTERY', 'CONTROLLER'] } } },
+      orderBy: { serialNumber: 'asc' }, include: { warrantyByAsset: true },
+    }),
+  ])
+  if (!workers.length) return
   const customers = await db.customer.findMany({ where: { id: { startsWith: 'DEMO-CUSTOMER-' } }, orderBy: { id: 'asc' }, take: 100 })
   const expired = equipment.filter(asset => asset.warrantyByAsset?.endAt < daysFrom(seedNow, -30))
-  const coveredAssets = equipment.filter(asset => asset.warrantyByAsset?.endAt >= seedNow)
+  const coveredAssets = equipment.filter(asset => isCovered(asset.warrantyByAsset, seedNow))
   const testAssets = [...expired.slice(0, 10), ...coveredAssets.slice(0, 30)]
   const parts = await db.product.findMany({
     where: { sku: { in: ['DEMO-CONNECTOR', 'DEMO-SWITCH', 'DEMO-WIRING'] } }, orderBy: { sku: 'asc' },
@@ -59,7 +69,7 @@ export async function seedOperations(db) {
   for (let index = 0; index < Math.min(100, customers.length); index++) {
     const asset = testAssets[index] ?? null
     const proposed = daysFrom(seedNow, index >= 90 ? -3 - (index % 6) / 5 : -6 - index * 1.6)
-    const incidentAt = new Date(Math.max(proposed, asset ? daysFrom(asset.deliveredAt, 1) : 0))
+    const incidentAt = new Date(Math.max(proposed, asset ? daysFrom(asset.warrantyByAsset.startAt, 1) : 0))
     const [faultCode, description] = asset?.warrantyByAsset?.months === 24 && asset.serialNumber.includes('BATTERY')
       ? faults[3] : faults[index % 3]
     const state = ['OPEN', 'TRIAGED', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED_PENDING_CONFIRMATION', 'CLOSED'][index % 6]

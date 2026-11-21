@@ -113,7 +113,7 @@ export default function TrackingPage() {
               )}
             </section>
             {order.timeline?.length > 0 && <OrderTimeline timeline={order.timeline} cancelled={['CANCELLED', 'LOST'].includes(order.status)} />}
-            {order.orderNumber && <section className="rounded-2xl border border-gray-200 bg-white p-5" aria-labelledby="tracking-warranties">
+            {order.orderNumber && order.installation?.status === 'COMPLETED' && <section className="rounded-2xl border border-gray-200 bg-white p-5" aria-labelledby="tracking-warranties">
               <h2 id="tracking-warranties" className="text-lg font-semibold">Equipment warranties</h2>
               {order.warranties.length ? (
                 <ul className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -121,15 +121,13 @@ export default function TrackingPage() {
                     <p className="text-sm font-semibold">{warranty.product}</p>
                     <p className="break-all text-xs text-gray-600">{warranty.serialNumber}</p>
                     <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                      <StatusBadge status={warranty.status} />{formatDate(warranty.startAt)} to {formatDate(warranty.endAt)}
+                      <StatusBadge status={warranty.status} />{formatDateTime(warranty.startAt)} to {formatDateTime(warranty.endAt)}
                     </p>
                   </li>)}
                 </ul>
               ) : (
                 <p className="mt-2 text-sm text-gray-600">
-                  {order.status === 'CANCELLED' || order.dispatch?.deliveredAt
-                    ? 'No equipment warranties are linked to this order.'
-                    : 'Warranty details appear after delivery is confirmed for eligible equipment.'}
+                  No equipment warranties are linked to this order.
                 </p>
               )}
               <Link className="secondary mt-4" to={'/warranty#' + new URLSearchParams({ order: displayReference(order.orderNumber) })}>Warranty status</Link>

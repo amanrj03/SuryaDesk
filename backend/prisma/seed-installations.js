@@ -100,7 +100,7 @@ export async function seedInstallations(db, writtenMedia) {
     }
     await db.$transaction(async tx => {
       await tx.attachment.createMany({ data: files })
-      const service = installationsService({ $transaction: callback => callback(tx) })
+      const service = installationsService({ $transaction: callback => callback(tx) }, () => new Date(finishedAt.getTime() + 300_000))
       await service.update(job.id, { startedAt, generationReading: job.capacityKw.mul('0.86') }, actor)
       await service.complete(job.id, {
         finishedAt, capacityKw: job.capacityKw, customerSignerName: job.order.customer.name,
@@ -113,7 +113,7 @@ export async function seedInstallations(db, writtenMedia) {
         amount: index % 7 === 0 ? 18500 : 850 + index * 35, incurredAt: finishedAt,
       } })
       await tx.installation.update({ where: { id: job.id }, data: {
-        signedAt: new Date(finishedAt.getTime() + 300_000), notes: 'Demo completion with synthetic roof illustration and signature sample.',
+        notes: 'Demo completion with synthetic roof illustration and signature sample.',
       } })
     })
   }

@@ -39,7 +39,7 @@ The demo can be used to exercise the workflow:
 
 - Sales can qualify an enquiry, schedule a survey, create and issue a package quotation, and record customer acceptance to create the order.
 - Search for `QUO-0181`, `QUO-0182`, or `QUO-0183` to try **Create order** on an accepted quotation. For an existing seeded database, run `npm.cmd --prefix backend run db:seed -- --pending-order-quotes` to add these examples without resetting the demo.
-- Warehouse can record stock receipts, allocate the order bill of materials by quantity and serial, record dispatch, and confirm delivery. Eligible warranties start at delivery.
+- Warehouse can record stock receipts, allocate the order bill of materials by quantity and serial, record dispatch, and confirm delivery. Eligible warranties start when installation is signed off.
 - Assigned technicians can record the installation checklist, upload a photo, obtain a drawn signature, and complete the job.
 - Support can look up covered equipment, track a ticket, record service charges, and close the ticket after customer confirmation.
 - Finance can record collections, issue order invoices, track subsidy paperwork, and download reports.

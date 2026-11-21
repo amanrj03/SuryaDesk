@@ -176,6 +176,7 @@ enum DispatchItemStatus {
 }
 
 enum WarrantyStatus {
+  PENDING
   ACTIVE
   EXPIRED
   VOID

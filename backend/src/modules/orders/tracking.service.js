@@ -103,7 +103,7 @@ export function trackingService(db, secret) {
       return {
         ...summary, dispatch, installation: job ? { status: job.status, scheduledAt: job.scheduledAt } : null,
         timeline: timeline(quotation.lead, quotation.survey, quotation, order, dispatch, job),
-        warranties: warrantiesByOrder.map(({ asset, status, startAt, endAt }) => ({
+        warranties: (job?.status === 'COMPLETED' && job.signedAt ? warrantiesByOrder : []).map(({ asset, status, startAt, endAt }) => ({
           serialNumber: asset.serialNumber, product: asset.product.name, startAt, endAt,
           status: warrantyStatus({ status, startAt, endAt }, now),
         })),
@@ -112,6 +112,7 @@ export function trackingService(db, secret) {
     async warranties(reference) {
       const select = {
         orderNumber: true, status: true,
+        installationByOrder: { select: { status: true, signedAt: true } },
         orderLinesByOrder: {
           where: { productId: { not: null } }, orderBy: { descriptionSnapshot: 'asc' },
           select: { productId: true, descriptionSnapshot: true, quantity: true, product: { select: { warrantyMonths: true } } },
@@ -124,6 +125,9 @@ export function trackingService(db, secret) {
       const find = orderNumber => db.order.findUnique({ where: { orderNumber }, select })
       const order = await find(reference) ?? (reference.startsWith('ORD-') ? await find('DEMO-' + reference) : null)
       if (!order) throw new ApiError(404, 'ORDER_NOT_FOUND', 'No order matches that order ID.')
+      const { orderNumber, status, installationByOrder: job } = order
+      const signedAt = job?.status === 'COMPLETED' ? job.signedAt : null
+      if (!signedAt) return { orderNumber, status, signedAt, products: [] }
       const products = new Map()
       for (const line of order.orderLinesByOrder) {
         const product = products.get(line.productId) ?? {
@@ -136,7 +140,7 @@ export function trackingService(db, secret) {
       for (const { asset, ...warranty } of order.warrantiesByOrder) {
         products.get(asset.productId)?.coverage.push({ ...warranty, status: warrantyStatus(warranty, now) })
       }
-      return { orderNumber: order.orderNumber, status: order.status, products: [...products.values()] }
+      return { orderNumber, status, signedAt, products: [...products.values()] }
     },
   }
 }

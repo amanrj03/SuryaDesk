@@ -5,7 +5,7 @@ import { clearDemoData } from './clear-demo-data.js'
 import bcrypt from 'bcrypt'
 import { seedInstallations } from './seed-installations.js'
 import { seedProcurement } from './seed-procurement.js'
-import { seedOperations, seedServiceAssetCases } from './seed-operations.js'
+import { seedInstallationSchedule, seedOperations, seedServiceAssetCases } from './seed-operations.js'
 import { seedFinance } from './seed-finance.js'
 import { seedWarehouse } from './seed-warehouse.js'
 import { seedPendingOrderQuotes, seedSales } from './seed-sales.js'
@@ -131,8 +131,9 @@ async function populate(client, writtenMedia) {
   await seed(client)
   await seedSales(client)
   await seedWarehouse(client)
-  await seedOperations(client)
+  await seedInstallationSchedule(client)
   await seedInstallations(client, writtenMedia)
+  await seedOperations(client)
   await seedServiceAssetCases(client)
   await seedFinance(client)
   await seedProcurement(client)

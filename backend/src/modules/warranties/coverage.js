@@ -11,6 +11,6 @@ export function warrantyEnd(startAt, months) {
 }
 
 export function isCovered(warranty, asOf) {
-  return Boolean(warranty && !['VOID', 'REPLACED'].includes(warranty.status) &&
+  return Boolean(warranty && ['ACTIVE', 'EXPIRED'].includes(warranty.status) &&
     warranty.startAt <= asOf && asOf < warranty.endAt)
 }

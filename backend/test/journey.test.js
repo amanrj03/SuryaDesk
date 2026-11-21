@@ -85,7 +85,8 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.equal(order.id, accepted.orderByQuotation.id)
         assert.equal((await post('/public/tracking', { token: enquiry.leadNumber })).orderNumber, order.orderNumber)
         const pendingWarranties = await post('/public/warranties', { orderNumber: order.orderNumber })
-        assert.deepEqual(pendingWarranties.products, [{ name: product.name, quantity: 1, catalogMonths: 240, coverage: [] }])
+        assert.equal(pendingWarranties.signedAt, null)
+        assert.deepEqual(pendingWarranties.products, [])
         assert.equal(order.tax, '12.5')
         assert.equal(order.orderLinesByOrder.find(line => line.productId === product.id).taxRateSnapshot, '5')
         const payment = await post('/orders/' + order.id + '/payments', { amount: '262.50', method: 'UPI', reference: key })
@@ -129,12 +130,9 @@ test('Express connects public intake to paid delivery, signed completion, and co
         const delivered = await post(dispatch + '/deliver', { recipientName: key })
         const tracked = await post('/public/tracking', { token: tracking.token })
         assert.equal(tracked.timeline.find(event => event.stage === 'DELIVERED').at, delivered.deliveredAt)
-        const warrantyLookup = await post('/public/warranties', { orderNumber: order.orderNumber.toLowerCase() })
-        const [warranty] = warrantyLookup.products[0].coverage
-        assert.deepEqual(warranty, { startAt: delivered.deliveredAt, endAt: tracked.warranties[0].endAt, months: 240, status: 'ACTIVE' })
-        const coverage = await request('GET', '/assets/' + key + '/warranty')
-        assert.equal(coverage.coveredAsOf, true)
-        assert.equal(coverage.warranty.startAt, delivered.deliveredAt)
+        assert.deepEqual(tracked.warranties, [])
+        assert.deepEqual((await post('/public/warranties', { orderNumber: order.orderNumber })).products, [])
+        assert.equal((await request('GET', '/assets/' + key + '/warranty')).coveredAsOf, false)
 
         const installationId = order.installationByOrder.id
         const installation = '/installations/' + installationId
@@ -161,6 +159,13 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.equal(signed.order.status, 'COMPLETED')
         const completed = await post('/public/tracking', { token: tracking.token })
         assert.equal(completed.timeline.at(-1).at, signed.signedAt)
+        const warrantyLookup = await post('/public/warranties', { orderNumber: order.orderNumber.toLowerCase() })
+        assert.equal(warrantyLookup.signedAt, signed.signedAt)
+        const [warranty] = warrantyLookup.products[0].coverage
+        assert.deepEqual(warranty, { startAt: signed.signedAt, endAt: completed.warranties[0].endAt, months: 240, status: 'ACTIVE' })
+        const coverage = await request('GET', '/assets/' + key + '/warranty')
+        assert.equal(coverage.coveredAsOf, true)
+        assert.equal(coverage.warranty.startAt, signed.signedAt)
         const ticket = await post('/tickets', { customerId: order.customerId, assetId: coverage.asset.id,
           description: 'Test alarm on supplied panel circuit', priority: 'LOW' })
         const resolution = await post('/tickets/' + ticket.id + '/resolve', { coverageDecision: 'COVERED', resolutionNotes: 'Reconnected the circuit.' })

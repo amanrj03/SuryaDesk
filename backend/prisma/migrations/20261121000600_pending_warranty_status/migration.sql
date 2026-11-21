@@ -1,0 +1,1 @@
+ALTER TYPE "WarrantyStatus" ADD VALUE 'PENDING';

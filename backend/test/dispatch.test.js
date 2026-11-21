@@ -58,17 +58,17 @@ test('serialized dispatch, warranty activation, and assigned installation sign-o
       await service.dispatch(row.id, {}, user)
       assert.equal(await tx.stockMovement.count({ where: { orderId: order.id, type: 'DISPATCH' } }), 1)
       assert.equal(await tx.warranty.count({ where: { orderId: order.id } }), 0)
-      const delivery = await service.deliver(row.id, { recipientName: 'Customer' }, user)
       await service.deliver(row.id, { recipientName: 'Customer' }, user)
-      const warranties = await tx.warranty.findMany({ where: { orderId: order.id } })
-      assert.equal(warranties.length, 1)
-      assert.deepEqual(warranties[0].startAt, delivery.deliveredAt)
-      assert.equal(warranties[0].customerId, order.customerId)
-      const lookup = await warrantiesService(tx).lookup(key, { asOf: delivery.deliveredAt })
-      assert.equal(lookup.coveredAsOf, true)
-      assert.equal(lookup.asset.customer.id, order.customerId)
-      const expired = await warrantiesService(tx).lookup(key, { asOf: warranties[0].endAt })
-      assert.equal(expired.coveredAsOf, false)
+      await service.deliver(row.id, { recipientName: 'Customer' }, user)
+      assert.equal(await tx.warranty.count({ where: { orderId: order.id } }), 0)
+      const asset = await tx.serializedAsset.findUniqueOrThrow({ where: { serialNumber: key } })
+      const legacy = await tx.warranty.create({ data: {
+        assetId: asset.id, orderId: order.id, customerId: order.customerId, status: 'PENDING',
+        months: 24, startAt: asset.deliveredAt, endAt: warrantyEnd(asset.deliveredAt, 24),
+      } })
+      const pending = await warrantiesService(tx).lookup(key, { asOf: asset.deliveredAt })
+      assert.equal(pending.warranty, null)
+      assert.equal(pending.coveredAsOf, false)
 
       const installer = await tx.user.create({ data: {
         name: 'Assigned technician', email: key + '-tech@example.invalid',
@@ -99,6 +99,16 @@ test('serialized dispatch, warranty activation, and assigned installation sign-o
       assert.equal(complete.customerSignerName, 'Customer')
       await jobs.complete(job.id, proof, technician)
       assert.equal(await tx.workLog.count({ where: { installationId: job.id } }), 1)
+      const warranties = await tx.warranty.findMany({ where: { orderId: order.id } })
+      assert.equal(warranties.length, 1)
+      assert.equal(warranties[0].id, legacy.id)
+      assert.deepEqual(warranties[0].startAt, complete.signedAt)
+      assert.deepEqual(warranties[0].endAt, warrantyEnd(complete.signedAt, 24))
+      const lookup = await warrantiesService(tx).lookup(key, { asOf: complete.signedAt })
+      assert.equal(lookup.coveredAsOf, true)
+      assert.equal(lookup.asset.customer.id, order.customerId)
+      const expired = await warrantiesService(tx).lookup(key, { asOf: warranties[0].endAt })
+      assert.equal(expired.coveredAsOf, false)
 
       const spare = await tx.serializedAsset.create({ data: {
         productId: product.id, serialNumber: key + '-SPARE', status: 'IN_STOCK', receivedAt: new Date(),
@@ -108,7 +118,7 @@ test('serialized dispatch, warranty activation, and assigned installation sign-o
       const support = { ...user, capabilities: ['tickets:manage', 'tickets:resolve'] }
       const ticket = await tickets.create({
         customerId: order.customerId, assetId: warranties[0].assetId, description: 'Fault on supplied equipment',
-        priority: 'MEDIUM', incidentAt: delivery.deliveredAt,
+        priority: 'MEDIUM', incidentAt: complete.signedAt,
       }, support)
       const replacement = await tickets.replace(ticket.id, { serialNumber: spare.serialNumber, chargePerUnit: '200.00' }, support)
       assert.equal(replacement.replacementAssetId, spare.id)

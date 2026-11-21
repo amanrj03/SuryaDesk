@@ -232,7 +232,7 @@ test('assigned technician completes a delivered job with a photo and drawn signa
         packageId: pack.id, createdById: technician.id, status: 'ACCEPTED',
       } })
       const order = await tx.order.create({ data: {
-        ...amounts, orderNumber: name, customerId: lead.customerId, quotationId: quote.id,
+        ...amounts, orderNumber: 'ORD-' + randomUUID().toUpperCase(), customerId: lead.customerId, quotationId: quote.id,
         status: 'DELIVERED', confirmedAt: new Date(Date.now() - 86400_000),
       } })
       const job = await tx.installation.create({ data: {
@@ -242,6 +242,10 @@ test('assigned technician completes a delivered job with a photo and drawn signa
       return { job, order, quote, survey, lead }
     })
     await page.setViewportSize({ width: 430, height: 860 })
+    await page.goto('/warranty')
+    await page.getByRole('textbox', { name: 'Order ID' }).fill(fixture.order.orderNumber)
+    await page.getByRole('button', { name: 'Check warranties' }).click()
+    await expect(page.getByText('Warranty details will appear after installation is completed and signed off.')).toBeVisible()
     await login(page, 'technician')
     await page.getByRole('link', { name: 'Installations' }).click()
     const row = page.getByRole('row').filter({ hasText: name })

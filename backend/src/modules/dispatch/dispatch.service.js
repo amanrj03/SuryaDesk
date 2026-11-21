@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { ApiError } from '../../utils/ApiError.js'
-import { warrantyEnd } from '../warranties/coverage.js'
 
 const include = {
   order: { include: {
@@ -216,11 +215,6 @@ export function dispatchService(db) {
             data: { status: 'DELIVERED', deliveredAt, customerId },
           })
           if (!updated.count) throw unavailable()
-          const months = item.product.warrantyMonths
-          if (months > 0) await tx.warranty.create({ data: {
-            assetId: item.assetId, orderId: row.orderId, customerId, months,
-            startAt: deliveredAt, endAt: warrantyEnd(deliveredAt, months), status: 'ACTIVE',
-          } })
         }
         await tx.dispatchItem.updateMany({ where: { dispatchId: id }, data: { status: 'DELIVERED' } })
         return updateStatus(tx, row, 'DELIVERED', 'DELIVERED', user, { deliveredAt, recipientName: data.recipientName })
