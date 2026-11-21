@@ -219,10 +219,10 @@ function baseRecordActions(section, row, capabilities, detail) {
       ]
     }
   }
-  if (section === 'subsidies' && can('subsidies:manage')) {
+  if (section === 'subsidies' && row.status !== 'PAID' && can('subsidies:manage')) {
     const statuses = {
       NOT_STARTED: ['DOCUMENTS_PENDING'], DOCUMENTS_PENDING: ['SUBMITTED'],
-      SUBMITTED: ['APPROVED', 'REJECTED'], REJECTED: ['DOCUMENTS_PENDING'], APPROVED: ['PAID'], PAID: [],
+      SUBMITTED: ['APPROVED', 'REJECTED'], REJECTED: ['DOCUMENTS_PENDING'], APPROVED: ['PAID'],
     }
     return [patch('subsidyUpdate', 'Update application', '/subsidies/' + id, [
       choice('status', 'Application status', [...new Set([row.status, ...statuses[row.status]])]),

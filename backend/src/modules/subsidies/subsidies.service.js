@@ -52,6 +52,7 @@ export function subsidiesService(db) {
       return db.$transaction(async tx => {
         const row = await tx.subsidyApplication.findUnique({ where: { id } })
         if (!row) throw new ApiError(404, 'NOT_FOUND', 'Subsidy application not found.')
+        if (row.status === 'PAID') throw invalid('Paid subsidy applications are finalized.')
         if (status !== row.status && !transitions[row.status]?.includes(status)) throw invalid('This subsidy status transition is invalid.')
         const merged = { ...(row.documentChecklist ?? {}), ...documentChecklist }
         const submittedAt = fields.submittedAt ?? row.submittedAt

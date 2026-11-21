@@ -58,6 +58,10 @@ test('an accepted quotation converts once and creates both fulfillment queues', 
       }, user)
       assert.equal(application.documentChecklist.utilityBill, true)
       assert.equal(application.status, 'SUBMITTED')
+      await subsidies.update(application.id, { status: 'APPROVED', decisionAt: new Date() }, user)
+      assert.equal((await subsidies.update(application.id, { status: 'PAID' }, user)).status, 'PAID')
+      await assert.rejects(subsidies.update(application.id, { status: 'PAID', notes: 'Changed after payment' }, user),
+        { code: 'INVALID_TRANSITION', message: 'Paid subsidy applications are finalized.' })
       throw new Error('Rollback order fixture')
     }), { message: 'Rollback order fixture' })
   } finally {
