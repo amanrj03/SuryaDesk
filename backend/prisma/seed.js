@@ -1,5 +1,6 @@
 ﻿import { randomBytes } from 'node:crypto'
 import bcrypt from 'bcrypt'
+import { seedWarehouse } from './seed-warehouse.js'
 import { seedSales } from './seed-sales.js'
 import { createDatabase } from '../src/lib/prisma.js'
 
@@ -96,7 +97,8 @@ const db = createDatabase(databaseUrl)
 try {
   await seed(db)
   await seedSales(db)
-  console.log('Demo sales pipeline seeded.')
+  await seedWarehouse(db)
+  console.log('Demo sales and warehouse records seeded.')
 } finally {
   await db.$disconnect()
 }
