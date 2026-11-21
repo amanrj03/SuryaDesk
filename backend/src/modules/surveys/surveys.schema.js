@@ -11,6 +11,7 @@ export const list = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(SurveyStatus).optional(),
   surveyorId: id.optional(),
+  q: z.string().trim().max(120).optional(),
 })
 export const record = z.strictObject({
   visitedAt: instant,

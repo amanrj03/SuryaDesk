@@ -5,7 +5,7 @@ const missing = entity => new ApiError(404, 'NOT_FOUND', entity + ' not found.')
 const transition = message => new ApiError(409, 'INVALID_TRANSITION', message)
 const required = ['visitedAt', 'roofDirection', 'tiltDegrees', 'cableDistanceMeters', 'shadowFreeArea', 'gridSuitable', 'findings']
 const complete = survey => required.every(key => survey[key] != null)
-const include = { lead: { include: { customer: true } } }
+const include = { lead: { include: { customer: true } }, surveyor: { select: { id: true, name: true, email: true } } }
 
 function scope(user) {
   const { capabilities } = user
@@ -41,12 +41,27 @@ export function surveysService(db) {
         return tx.siteSurvey.create({ data: { ...data, leadId, status: 'SCHEDULED' }, include })
       })
     },
-    async list({ page, limit, status, surveyorId }, user) {
-      const where = { AND: [scope(user), { status, surveyorId }] }
+    async list({ page, limit, status, surveyorId, q }, user) {
+      const search = q ? { contains: q, mode: 'insensitive' } : null
+      const searchFilter = search ? {
+        OR: [
+          { lead: { customer: { name: search } } },
+          { lead: { customer: { phone: search } } },
+          { lead: { leadNumber: search } },
+          { surveyor: { name: search } },
+        ],
+      } : null
+      const where = {
+        AND: [
+          scope(user),
+          { status, surveyorId },
+          ...(searchFilter ? [searchFilter] : []),
+        ],
+      }
       const [data, total] = await db.$transaction([
         db.siteSurvey.findMany({
           where, include, skip: (page - 1) * limit, take: limit,
-          orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
+          orderBy: [{ scheduledAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
         }),
         db.siteSurvey.count({ where }),
       ], { isolationLevel: 'RepeatableRead' })

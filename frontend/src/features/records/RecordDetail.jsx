@@ -1,10 +1,11 @@
-﻿import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api.js'
 import { ErrorState } from '../../components/ui/States.jsx'
 import { displayContactEmail, displayPackageDescription, displayReference } from '../../lib/format.js'
 import { Link } from 'react-router-dom'
 import WorkflowAction, { recordActions } from './WorkflowAction.jsx'
 import { TrackingLink } from './TrackingLink.jsx'
+import { InvoiceDocument } from './InvoiceDocument.jsx'
 
 const localDate = value => value ? new Intl.DateTimeFormat('en-IN', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata',
@@ -47,7 +48,7 @@ const definition = {
   }),
   surveys: row => ({
     title: 'Survey for ' + row.lead.customer.name,
-    fields: [['Status', state(row.status)], ['Appointment', localDate(row.scheduledAt)], ['Visited', localDate(row.visitedAt)],
+    fields: [['Status', state(row.status)], ['Surveyor', row.surveyor?.name], ['Appointment', localDate(row.scheduledAt)], ['Visited', localDate(row.visitedAt)],
       ['Roof direction', row.roofDirection], ['Tilt (degrees)', row.tiltDegrees], ['Cable run (m)', row.cableDistanceMeters],
       ['Shadow-free area (m²)', row.shadowFreeArea], ['Findings', row.findings], ['Review note', row.rejectionReason]], attachments: row.attachments,
   }),
@@ -70,6 +71,7 @@ const definition = {
   }),
   orders: row => ({
     title: 'Order for ' + row.customer.name,
+    invoiceOrder: row,
     fields: [['Reference', displayReference(row.orderNumber)], ['Quotation', displayReference(row.quotation?.quoteNumber)], ['Status', state(row.status)], ['Total', money(row.total)],
       ['Paid', money(row.paidTotal)], ['Remaining', row.status === 'CANCELLED' ? '—' : money(row.balance)],
       ['Confirmed', localDate(row.confirmedAt)], ['Installation', state(row.installationByOrder?.status)]],
@@ -79,6 +81,7 @@ const definition = {
   }),
   dispatches: row => ({
     title: 'Dispatch for ' + row.order.customer.name,
+    invoiceOrder: row.order,
     fields: [['Reference', displayReference(row.dispatchNumber)], ['Order', displayReference(row.order.orderNumber)], ['Status', state(row.status)], ['Recipient', row.recipientName],
       ['Dispatched', localDate(row.dispatchedAt)], ['Delivered', localDate(row.deliveredAt)]],
     groups: [['Required materials', ['Description', 'Quantity'], row.order.orderLinesByOrder
@@ -111,6 +114,7 @@ const definition = {
   }),
   invoices: row => ({
     title: 'Invoice for ' + row.customer.name,
+    invoice: row,
     fields: [['Reference', displayReference(row.invoiceNumber)], ['Status', state(row.status)], ['Subtotal', money(row.subtotal)], ['Tax', money(row.tax)],
       ['Total', money(row.total)], ['Due', localDate(row.dueAt)]],
     groups: [['Invoice lines', ['Description', 'Quantity', 'Total'], lines(row.invoiceLinesByInvoice)]],
@@ -188,6 +192,10 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
       )}
       {data && section === 'orders' && capabilities.includes('orders:share_tracking') && (
         <TrackingLink id={id} token={token} />
+      )}
+      {data && (data.invoice || data.invoiceOrder) && (
+        <InvoiceDocument invoice={data.invoice} order={data.invoiceOrder} token={token} capabilities={capabilities}
+          showInvoiceLink={section !== 'invoices'} />
       )}
     </header>
     {state.error && <ErrorState message={state.error} onRetry={retryDetails} className="m-4" />}

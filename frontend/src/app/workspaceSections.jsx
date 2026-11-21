@@ -49,8 +49,11 @@ export const sections = [
     title: 'Surveys',
     capability: 'surveys:read',
     icon: ClipboardDocumentCheckIcon,
+    search: true,
+    searchPlaceholder: 'Search customer, phone, or surveyor…',
     columns: [
       ['Customer', (row) => row.lead.customer.name],
+      ['Surveyor', (row) => row.surveyor?.name ?? '—'],
       ['Scheduled', (row) => date(row.scheduledAt)],
       ['Status', (row) => <StatusBadge status={row.status} />],
     ],
