@@ -121,3 +121,20 @@ test('staff administration persists edits and deactivation', async ({ page }) =>
     await db.$disconnect()
   }
 })
+
+test('staff sign-in keeps the form within a mobile viewport and can reveal a password', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 })
+  await page.goto('/login')
+  const password = page.getByLabel('Password', { exact: true })
+  await password.fill('example-password')
+  await expect(password).toHaveAttribute('type', 'password')
+  await page.getByRole('button', { name: 'Show password' }).click()
+  await expect(password).toHaveAttribute('type', 'text')
+  await expect(password).toHaveValue('example-password')
+  await page.getByRole('button', { name: 'Hide password' }).click()
+  await expect(password).toHaveAttribute('type', 'password')
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeInViewport()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(360)
+  await page.getByRole('link', { name: 'Request a solar quote' }).click()
+  await expect(page.getByRole('heading', { name: 'Request a solar quote' })).toBeVisible()
+})
