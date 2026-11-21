@@ -128,6 +128,25 @@ export function recordActions(section, row, capabilities) {
       ]
     }
   }
+  if (section === 'subsidies' && can('subsidies:manage')) {
+    const statuses = {
+      NOT_STARTED: ['DOCUMENTS_PENDING'], DOCUMENTS_PENDING: ['SUBMITTED'],
+      SUBMITTED: ['APPROVED', 'REJECTED'], REJECTED: ['DOCUMENTS_PENDING'], APPROVED: ['PAID'], PAID: [],
+    }
+    return [patch('subsidyUpdate', 'Update application', '/subsidies/' + id, [
+      choice('status', 'Application status', [...new Set([row.status, ...statuses[row.status]])]),
+      input('reference', 'Application reference', 'text', { optional: true, defaultValue: row.reference ?? '' }),
+      time('submittedAt', 'Submitted at'), time('decisionAt', 'Decision date'),
+      input('identity', 'Identity document', 'checkbox', { defaultChecked: row.documentChecklist?.identity }),
+      input('utilityBill', 'Utility bill', 'checkbox', { defaultChecked: row.documentChecklist?.utilityBill }),
+      input('installationCertificate', 'Installation certificate', 'checkbox', { defaultChecked: row.documentChecklist?.installationCertificate }),
+      input('bankDetails', 'Bank details', 'checkbox', { defaultChecked: row.documentChecklist?.bankDetails }),
+      input('notes', 'Notes', 'textarea', { optional: true, defaultValue: row.notes ?? '' }),
+    ], ({ status, reference, submittedAt, decisionAt, identity, utilityBill, installationCertificate, bankDetails, notes }) => ({
+      status, reference, submittedAt: toDate(submittedAt), decisionAt: toDate(decisionAt), notes,
+      documentChecklist: { identity, utilityBill, installationCertificate, bankDetails },
+    }))]
+  }
   if (section === 'invoices' && row.status === 'DRAFT' && can('invoices:manage')) {
     return [post('issueInvoice', 'Issue invoice', '/invoices/' + id + '/issue', [time('dueAt', 'Due date')], values => ({ dueAt: toDate(values.dueAt) }))]
   }
@@ -143,8 +162,8 @@ export function recordActions(section, row, capabilities) {
 function Field({ field, options }) {
   const { name, type, label, attributes = {}, multiple } = field
   const { optional, ...props } = attributes
-  const common = { name, required: !optional && (!['validUntil', 'dueAt'].includes(name)), ...props }
-  if (type === 'checkbox') return <label className="check"><input type="checkbox" name={name} />{label}</label>
+  const common = { name, required: !optional && (!['validUntil', 'dueAt', 'submittedAt', 'decisionAt'].includes(name)), ...props }
+  if (type === 'checkbox') return <label className="check"><input type="checkbox" name={name} {...props} />{label}</label>
   if (type === 'textarea') return <label>{label}<textarea {...common} /></label>
   if (type === 'select') return <label>{label}<select {...common} multiple={multiple} defaultValue={multiple ? [] : ''}>
     {!multiple && <option value="">Choose {label.toLowerCase()}</option>}

@@ -18,6 +18,7 @@ function query(period) {
 
 export default function Dashboard({ session }) {
   const [period, setPeriod] = useState('month')
+  const [exportError, setExportError] = useState('')
   const [retry, setRetry] = useState(0)
   const [state, setState] = useState({ loading: true })
   const financial = session.user.capabilities.includes('reports:financial')
@@ -38,6 +39,24 @@ export default function Dashboard({ session }) {
   const chart = data?.series.slice(-20) ?? []
   const maximum = Math.max(1, ...chart.map(point => Number(point.cash)))
 
+  async function exportReport() {
+    setExportError('')
+    const type = financial ? 'profitability' : 'operations'
+    try {
+      const file = await api('/reports/export?type=' + type + '&' + description, {
+        token: session.accessToken, download: true,
+      })
+      const objectUrl = URL.createObjectURL(file)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = type + '.csv'
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+    } catch (error) {
+      setExportError(error.message)
+    }
+  }
+
   return <>
     <header className="page-header"><div><h1>Operations overview</h1><p>SunPower Solutions</p></div>
       <label className="grid gap-1 text-sm font-semibold">Reporting period
@@ -47,6 +66,10 @@ export default function Dashboard({ session }) {
         </select>
       </label>
     </header>
+    {session.user.capabilities.includes('reports:export') && <div className="px-5 pt-4 sm:px-8">
+      <button className="secondary" onClick={exportReport}>Download CSV</button>
+      {exportError && <p className="notice mt-2" role="alert">{exportError}</p>}
+    </div>}
     {state.loading && <p role="status" className="feedback">Loading operational totals…</p>}
     {state.error && <div className="feedback"><p className="notice" role="alert">{state.error}</p>
       <button className="secondary" onClick={() => { setState({ loading: true }); setRetry(value => value + 1) }}>Try again</button></div>}
