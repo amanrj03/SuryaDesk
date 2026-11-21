@@ -78,30 +78,34 @@ export default function LandingPage({ signedIn }) {
           <a className="hover:underline" href="#project-tools">Project tools</a>
           <a className="hover:underline" href="#how-it-works">How it works</a>
         </nav>
-        <Link className="inline-flex items-center gap-1.5 rounded-full border border-[#cbd6cd] bg-white px-3.5 py-2 text-xs font-semibold transition hover:border-[#3c5449] sm:px-5 sm:text-sm"
-          to={signedIn ? '/workspace' : '/login'}>
-          {signedIn ? 'Open workspace' : 'Staff sign in'} <ArrowUpRightIcon className="size-3.5" aria-hidden="true" />
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link className="rounded-full bg-[#173a30] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#285243] sm:px-5 sm:text-sm"
+            to="/customer/login">Customer sign in</Link>
+          <Link className="inline-flex items-center gap-1.5 rounded-full border border-[#cbd6cd] bg-white px-3.5 py-2 text-xs font-semibold transition hover:border-[#3c5449] sm:px-5 sm:text-sm"
+            to={signedIn ? '/workspace' : '/login'}>
+            {signedIn ? 'Open workspace' : 'Staff sign in'} <ArrowUpRightIcon className="size-3.5" aria-hidden="true" />
+          </Link>
+        </div>
       </header>
 
       <main className="mx-auto max-w-[1440px] px-4 pb-14 sm:px-8 lg:px-12">
         <section className="relative isolate flex min-h-[32rem] items-end overflow-hidden rounded-[1.65rem] bg-[#173a30] text-white sm:min-h-[36rem] sm:items-center sm:rounded-[2.1rem]">
           <img src="/images/solar-rooftop.webp" alt="" fetchPriority="high"
-            className="absolute inset-0 -z-20 size-full object-cover object-[63%_center] lg:object-center" />
-          <div className="absolute inset-0 -z-10 bg-linear-to-t from-[#10251d] via-[#10251d]/65 to-transparent sm:bg-linear-to-r sm:from-[#10251d]/95 sm:via-[#10251d]/60" />
-          <div className="px-6 pt-24 pb-11 sm:max-w-[39rem] sm:p-12 lg:p-16">
-            <p className="mb-4 flex items-center gap-2 text-xs font-semibold tracking-[.16em] text-[#f5df91] uppercase">
-              <SunIcon className="size-5" aria-hidden="true" /> Rooftop solar
+            className="absolute inset-0 -z-20 size-full object-cover object-[63%_center] brightness-110 lg:object-center" />
+          <div className="absolute inset-0 -z-10 bg-linear-to-t from-[#10251d]/95 via-[#10251d]/55 to-transparent sm:bg-linear-to-r sm:from-[#10251d]/90 sm:via-[#10251d]/35" />
+          <div className="px-6 pt-24 pb-11 sm:max-w-[35rem] sm:p-12 lg:p-16">
+            <p className="mb-3 flex items-center gap-2 text-[0.6875rem] font-semibold tracking-[.13em] text-[#f5df91] uppercase">
+              <SunIcon className="size-4" aria-hidden="true" /> Rooftop solar
             </p>
-            <h1 className="text-[clamp(2.7rem,6vw,5.2rem)] leading-[0.99] font-bold tracking-[-.06em]">Solar for the place you call yours.</h1>
-            <p className="mt-5 max-w-sm text-base leading-relaxed text-[#eff2eb] sm:text-lg">
+            <h1 className="text-[clamp(2.125rem,4.7vw,3.8rem)] leading-[1.04] font-bold tracking-[-.045em]">Solar for the place you call yours.</h1>
+            <p className="mt-4 max-w-sm text-sm leading-relaxed text-[#eff2eb] sm:text-base">
               Plan a rooftop solar installation for your home or business, and follow every step through sign-off and support.
             </p>
-            <div className="mt-7 flex flex-wrap items-center gap-3">
-              <Link className="inline-flex items-center gap-2 rounded-full bg-[#f6df8a] px-5 py-3.5 text-sm font-bold text-[#152c25] transition hover:bg-[#fff0af]" to="/enquiry">
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Link className="inline-flex items-center gap-2 rounded-full bg-[#f6df8a] px-5 py-3 text-xs font-bold text-[#152c25] transition hover:bg-[#fff0af]" to="/enquiry">
                 Request a quote <ArrowRightIcon className="size-4" aria-hidden="true" />
               </Link>
-              <a className="rounded-full px-3 py-3 text-sm font-semibold underline decoration-white/55 underline-offset-5 hover:decoration-white" href="#lookup">Look up a project</a>
+              <a className="rounded-full px-3 py-3 text-xs font-semibold underline decoration-white/55 underline-offset-5 hover:decoration-white" href="#lookup">Look up a project</a>
             </div>
           </div>
         </section>
@@ -141,10 +145,27 @@ export default function LandingPage({ signedIn }) {
           </div>
         </section>
       </main>
-      <footer className="border-t border-[#e1e7d9]">
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-5 text-sm text-[#4b5f56] sm:px-8 lg:px-12">
-          <span className="font-semibold">SuryaDesk</span>
-          <Link to="/customer" className="font-semibold hover:underline">Sign in for service support</Link>
+      <footer className="border-t border-[#dbe3d9] bg-[#eaf0e7]">
+        <div className="mx-auto max-w-[1440px] px-4 pt-9 pb-5 sm:px-8 lg:px-12">
+          <div className="grid grid-cols-2 gap-x-5 gap-y-7 pb-8 sm:grid-cols-[1.4fr_1fr_1fr]">
+            <div className="col-span-2 sm:col-span-1">
+              <Link to="/" className="inline-block" aria-label="SuryaDesk home"><Brand /></Link>
+              <p className="mt-2 max-w-xs text-sm leading-relaxed text-[#4b5f56]">Rooftop solar for homes and businesses, from site survey to installation and support.</p>
+            </div>
+            <nav aria-label="Solar services" className="grid content-start gap-2 text-sm">
+              <h2 className="font-bold">Solar services</h2>
+              <Link className="hover:underline" to="/enquiry">Get a solar quote</Link>
+              <a className="hover:underline" href="#how-it-works">Installation process</a>
+              <a className="hover:underline" href="#lookup">Project lookup</a>
+            </nav>
+            <nav aria-label="Customer support" className="grid content-start gap-2 text-sm">
+              <h2 className="font-bold">Customer support</h2>
+              <Link className="hover:underline" to="/track">Follow your order</Link>
+              <Link className="hover:underline" to="/warranty">Check warranty coverage</Link>
+              <Link className="hover:underline" to="/customer">Sign in for service support</Link>
+            </nav>
+          </div>
+          <p className="border-t border-[#cbd6cd] pt-4 text-xs text-[#4b5f56]">© {new Date().getFullYear()} SuryaDesk</p>
         </div>
       </footer>
     </div>

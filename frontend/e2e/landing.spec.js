@@ -11,6 +11,7 @@ test('public dashboard supports direct lookups and each public page leads back h
   for (const [label, path] of [
     ['Request a quote', '/enquiry'],
     ['Staff sign in', '/login'],
+    ['Customer sign in', '/customer/login'],
     ['Customer portal', '/customer/login'],
     ['Track order', '/track'],
     ['Warranty status', '/warranty'],
@@ -20,6 +21,10 @@ test('public dashboard supports direct lookups and each public page leads back h
     await page.getByRole('link', { name: 'Back to home' }).click()
     await expect(home).toBeVisible()
   }
+
+  const footer = page.getByRole('contentinfo')
+  await expect(footer.getByRole('link', { name: 'Get a solar quote' })).toHaveAttribute('href', '/enquiry')
+  await expect(footer.getByRole('link', { name: 'Check warranty coverage' })).toHaveAttribute('href', '/warranty')
 
   await page.getByRole('button', { name: 'Check progress' }).click()
   await page.getByLabel('Tracking ID or link').fill('not a tracking ID')
