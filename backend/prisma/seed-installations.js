@@ -23,7 +23,7 @@ function pngChunk(type, data) {
   return Buffer.concat([length, tag, data, checksum])
 }
 
-function illustration(index, signature) {
+export function illustration(index, signature) {
   const header = Buffer.alloc(13)
   header.writeUInt32BE(width, 0)
   header.writeUInt32BE(height, 4)

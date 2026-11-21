@@ -10,6 +10,7 @@ import { seedCustomerAccounts } from './seed-customer-accounts.js'
 import { seedFinance } from './seed-finance.js'
 import { seedWarehouse } from './seed-warehouse.js'
 import { seedPendingOrderQuotes, seedSales } from './seed-sales.js'
+import { seedWorkflowScenarios } from './seed-workflow-scenarios.js'
 import { createDatabase } from '../src/lib/prisma.js'
 
 const roles = [
@@ -154,7 +155,15 @@ async function removeMedia(files) {
 const db = createDatabase(databaseUrl)
 const writtenMedia = []
 try {
-  if (process.argv.includes('--portal-accounts')) {
+  if (process.argv.includes('--workflow-scenarios')) {
+    try {
+      const added = await seedWorkflowScenarios(db, writtenMedia)
+      console.log('Workflow scenarios added:', added)
+    } catch (error) {
+      await removeMedia(writtenMedia)
+      throw error
+    }
+  } else if (process.argv.includes('--portal-accounts')) {
     await seedCustomerAccounts(db)
   } else if (process.argv.includes('--configure-demo-tax')) {
     await db.$transaction(configureSampleTaxes)

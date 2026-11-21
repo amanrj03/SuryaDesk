@@ -115,3 +115,20 @@ Run `npm.cmd --prefix backend run db:seed -- --replace-demo` with local PostgreS
 Use the status filters to find rejected and pending surveys, expired and accepted quotes, cancelled orders, unpaid and partially paid invoices, low-stock products, expired warranties, and covered or billable service tickets. The overview includes recent enquiries as well as historical project and expense records.
 
 For specific test cases, open `DEMO-TKT-0013` to inspect a covered serial replacement, `DEMO-TKT-0041` for an itemized billable service visit, `DEMO-INV-0102` for a draft invoice, and `DEMO-INVERTER-STRING` for an out-of-stock product.
+
+### Extended workflow data
+
+From `backend`, run `npm run db:seed -- --workflow-scenarios` after the base seed. This adds 56 synthetic enquiries across on-grid and off-grid projects using a separate `SCN-` reference range and stock. Running it again skips cases already present. Existing records and stock are preserved.
+
+| Search in Orders | Scenario |
+| --- | --- |
+| `SCN-016-ORD` | Fully paid, awaiting dispatch. Receipt available and no invoice yet. |
+| `SCN-020-ORD` | Dispatched with an outstanding balance. |
+| `SCN-021-ORD` | Paid first and dispatched second. Dispatch issued the invoice. |
+| `SCN-022-ORD` | Delivered with an outstanding balance. |
+| `SCN-024-ORD` | Installed and awaiting customer sign-off. |
+| `SCN-025-ORD` | Signed off with active warranties and a balance due. |
+| `SCN-027-ORD` | Paid and installed with a covered service ticket. |
+| `SCN-056-ORD` | Expired inverter warranty and a billable service ticket. |
+
+With `SEED_DEMO_PASSWORD` set when seeding, sign in to the customer portal using `scn-016@demo.suryadesk.test`, `scn-022@demo.suryadesk.test`, or `scn-027@demo.suryadesk.test` and that password. These addresses are synthetic and are intended for password sign-in.
