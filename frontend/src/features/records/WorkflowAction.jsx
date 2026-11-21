@@ -11,6 +11,14 @@ const number = (name, label, attributes = {}) => input(name, label, 'number', { 
 const toDate = text => text && new Date(text).toISOString()
 const staffRoles = ['ADMIN', 'DIRECTOR', 'SALES', 'SURVEYOR', 'WAREHOUSE', 'TECHNICIAN', 'SUPPORT', 'FINANCE']
 
+export function issueInvoiceAction(id) {
+  return {
+    key: 'issueInvoice', label: 'Issue invoice', method: 'POST',
+    path: '/invoices/' + encodeURIComponent(id) + '/issue',
+    fields: [time('dueAt', 'Due date')],
+    convert: values => ({ dueAt: toDate(values.dueAt) }),
+  }
+}
 
 function productFields(product = {}) {
   return [
@@ -231,9 +239,6 @@ function baseRecordActions(section, row, capabilities, detail) {
       submittedAt: toDate(submittedAt), decisionAt: toDate(decisionAt), notes,
       documentChecklist: { identity, utilityBill, installationCertificate, bankDetails },
     }))]
-  }
-  if (section === 'invoices' && row.status === 'DRAFT' && can('invoices:manage')) {
-    return [post('issueInvoice', 'Issue invoice', '/invoices/' + id + '/issue', [time('dueAt', 'Due date')], values => ({ dueAt: toDate(values.dueAt) }))]
   }
   if (section === 'installations' && row.status !== 'COMPLETED' && can('installations:manage') && !row.startedAt) {
     return [patch('scheduleJob', 'Schedule crew', '/installations/' + id, [

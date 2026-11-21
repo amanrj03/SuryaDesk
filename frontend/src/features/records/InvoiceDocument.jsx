@@ -3,14 +3,18 @@ import { Link } from 'react-router-dom'
 import { Notice } from '../../components/ui/Notice.jsx'
 import { api } from '../../lib/api.js'
 import { displayReference } from '../../lib/format.js'
+import WorkflowAction, { issueInvoiceAction } from './WorkflowAction.jsx'
 
 const allocated = ['READY_TO_DISPATCH', 'DISPATCHED', 'DELIVERED', 'INSTALLATION_IN_PROGRESS', 'COMPLETED']
 
-export function InvoiceDocument({ order, invoice, token, capabilities, showInvoiceLink = true }) {
+export function InvoiceDocument({ order, invoice, token, capabilities, showInvoiceLink = true, allowIssue = true }) {
   const [prepared, setPrepared] = useState(null)
+  const [issuing, setIssuing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const document = invoice ?? order?.invoiceByOrder ?? prepared
+  const saved = invoice ?? order?.invoiceByOrder
+  const document = prepared && (!saved || prepared.id === saved.id) ? prepared : saved
+  const canIssue = allowIssue && document?.status === 'DRAFT' && capabilities.includes('invoices:manage')
   const canPrepare = order && allocated.includes(order.status) && capabilities.includes('invoices:manage')
   if (!capabilities.includes('invoices:read') || (!document && !canPrepare)) return null
 
@@ -62,6 +66,7 @@ export function InvoiceDocument({ order, invoice, token, capabilities, showInvoi
           <button type="button" className="secondary" disabled={busy} onClick={() => openPdf(false)}>Download invoice PDF</button>
           <button type="button" className="secondary" disabled={busy} onClick={() => openPdf(true)}>Print invoice</button>
           {showInvoiceLink && <Link className="secondary" to={'/invoices/' + encodeURIComponent(document.id)}>View invoice</Link>}
+          {canIssue && <button type="button" className="secondary" disabled={busy} onClick={() => setIssuing(true)}>Issue invoice</button>}
         </>
       ) : (
         <button type="button" className="secondary" disabled={busy} onClick={prepare}>
@@ -70,6 +75,8 @@ export function InvoiceDocument({ order, invoice, token, capabilities, showInvoi
       )}
       {document?.status === 'DRAFT' && <span className="text-xs text-gray-600">Draft</span>}
       <Notice>{error}</Notice>
+      {issuing && canIssue && <WorkflowAction action={issueInvoiceAction(document.id)} token={token}
+        onClose={() => setIssuing(false)} onSaved={updated => { setPrepared(updated); setIssuing(false) }} />}
     </div>
   )
 }

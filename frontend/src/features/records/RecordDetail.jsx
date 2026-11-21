@@ -124,6 +124,7 @@ const definition = {
   }),
   tickets: row => ({
     title: 'Ticket for ' + row.customer.name,
+    invoice: row.invoiceByTicket,
     fields: [['Reference', displayReference(row.ticketNumber)], ['Status', state(row.status)], ['Serial', row.asset?.serialNumber],
       ['Coverage', state(row.coverageDecision)], ['Assigned to', row.assignedTo?.name], ['Reported', localDate(row.incidentAt)],
       ['Description', row.description], ['Labour charge', money(row.laborCharge)], ['Invoice', displayReference(row.invoiceByTicket?.invoiceNumber)],
@@ -232,7 +233,13 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
       )}
       {data && (data.invoice || data.invoiceOrder) && (
         <InvoiceDocument invoice={data.invoice} order={data.invoiceOrder} token={token} capabilities={capabilities}
-          showInvoiceLink={section !== 'invoices'} />
+          showInvoiceLink={section !== 'invoices'} allowIssue={section !== 'invoices'} />
+      )}
+      {section === 'invoices' && data?.invoice?.orderId && capabilities.includes('orders:read') && (
+        <Link className="secondary justify-self-start" to={'/orders/' + encodeURIComponent(data.invoice.orderId)}>View related order</Link>
+      )}
+      {section === 'invoices' && data?.invoice?.ticketId && capabilities.includes('tickets:read') && (
+        <Link className="secondary justify-self-start" to={'/tickets/' + encodeURIComponent(data.invoice.ticketId)}>View related ticket</Link>
       )}
     </header>
     {state.error && <ErrorState message={state.error} onRetry={retryDetails} className="m-4" />}
