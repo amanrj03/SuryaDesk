@@ -22,6 +22,7 @@ test('public enquiry survives refresh and can be qualified and scheduled from th
     await page.getByLabel('New password', { exact: true }).fill(password)
     await page.getByLabel('Confirm password').fill(password)
     await page.getByLabel('Installation address').fill('Test property in Pune')
+    await page.getByRole('checkbox', { name: /interested in government solar subsidy/ }).check()
     await page.getByRole('button', { name: 'Send verification code' }).click()
     await expect(page.getByRole('heading', { name: 'Verify your email address' })).toBeVisible()
     const response = await page.request.get('http://127.0.0.1:55300/__e2e/customer-code?email=' + encodeURIComponent(email))
@@ -65,6 +66,7 @@ test('public enquiry survives refresh and can be qualified and scheduled from th
     }
     let row = await search()
     await expect(row).toContainText('New')
+    await expect(row.getByRole('cell', { name: 'Interested', exact: true })).toBeVisible()
     await expect(row.getByRole('button', { name: 'Qualify enquiry' })).toBeVisible()
     await row.getByRole('button', { name: 'Mark contacted' }).click()
     const contact = page.getByRole('dialog', { name: /^Mark contacted/ })
@@ -94,6 +96,7 @@ test('public enquiry survives refresh and can be qualified and scheduled from th
     row = await search()
     await expect(row).toContainText('Survey scheduled')
     await row.getByRole('link', { name: 'View', exact: true }).click()
+    await expect(page.getByText('Subsidy interest', { exact: true }).locator('..')).toContainText('Interested')
     await expect(page.getByRole('table', { name: 'Activity' }))
       .toContainText('Customer shared the details on the follow-up call.')
   } finally {

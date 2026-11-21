@@ -56,6 +56,7 @@ const definition = {
   leads: row => ({
     title: row.customer.name,
     fields: [['Reference', displayReference(row.leadNumber)], ['Status', state(row.status)], ['Phone', row.customer.phone],
+      ['Subsidy interest', row.subsidyInterest ? 'Interested' : 'Not indicated'],
       ['Address', row.siteAddress ?? row.customer.address], ['Roof area', row.roofArea && row.roofArea + ' m²'], ['Monthly bill', money(row.monthlyBill)], ['Notes', row.notes]],
     groups: [['Activity', ['At', 'Notes'], activity(row.leadActivitiesByLead)]],
   }),

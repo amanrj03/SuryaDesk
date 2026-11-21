@@ -27,6 +27,7 @@ export const sections = [
       ['Customer', (row) => row.customer.name],
       ['Phone', (row) => row.customer.phone],
       ['Source', (row) => words(row.source)],
+      ['Subsidy interest', (row) => row.subsidyInterest ? 'Interested' : 'Not indicated'],
       ['Status', (row) => <StatusBadge status={row.status} />],
       ['Received', (row) => date(row.createdAt)],
     ],
