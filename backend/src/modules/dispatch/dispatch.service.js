@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { ApiError } from '../../utils/ApiError.js'
+import { issuePaidOrderInvoice } from '../invoices/invoices.service.js'
 
 const include = {
   order: { include: {
@@ -198,7 +199,9 @@ export function dispatchService(db) {
         })
         if (assets.count !== ids.length) throw unavailable()
         await tx.dispatchItem.updateMany({ where: { dispatchId: id }, data: { status: 'DISPATCHED' } })
-        return updateStatus(tx, row, 'DISPATCHED', 'DISPATCHED', user, { dispatchedAt })
+        const updated = await updateStatus(tx, row, 'DISPATCHED', 'DISPATCHED', user, { dispatchedAt })
+        const invoice = await issuePaidOrderInvoice(tx, row.orderId, user.id)
+        return invoice ? { ...updated, order: { ...updated.order, invoiceByOrder: invoice } } : updated
       })
     },
 

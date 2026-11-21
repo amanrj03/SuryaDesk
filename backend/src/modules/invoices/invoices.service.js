@@ -42,27 +42,37 @@ async function audit(tx, row, action, actorId) {
   } })
 }
 
-// The caller holds the order lock so the final payment and invoice commit together.
-export async function issuePaidOrderInvoice(tx, orderId, paidAt, actorId) {
+export const dispatchedOrderStatuses = ['DISPATCHED', 'DELIVERED', 'INSTALLATION_IN_PROGRESS', 'COMPLETED']
+
+// Both dispatch and payment call this while holding the order lock.
+export async function issuePaidOrderInvoice(tx, orderId, actorId) {
+  const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } })
+  if (!dispatchedOrderStatuses.includes(order.status)) return
+  const payments = await tx.payment.aggregate({
+    where: { orderId, voidedAt: null }, _sum: { amount: true }, _max: { receivedAt: true },
+  })
+  if (order.total.gt(payments._sum.amount ?? 0)) return
   const existing = await tx.invoice.findUnique({ where: { orderId } })
-  if (existing?.status === 'PAID' || existing?.status === 'VOID') return
+  if (existing?.status === 'PAID' || existing?.status === 'VOID') return existing
   const issuedAt = new Date()
+  const paidAt = payments._max.receivedAt ?? issuedAt
   if (existing) {
     const draft = existing.status === 'DRAFT'
     const invoice = await tx.invoice.update({ where: { id: existing.id }, data: {
       status: 'PAID', paidAt, ...(draft && { issuedAt, dueAt: null }),
     } })
     if (draft) await audit(tx, invoice, 'ISSUED', actorId)
-    return
+    return invoice
   }
-  const order = await tx.order.findUniqueOrThrow({ where: { id: orderId }, include: { orderLinesByOrder: true } })
+  const lines = await tx.orderLine.findMany({ where: { orderId } })
   const invoice = await tx.invoice.create({ data: {
     invoiceNumber: 'INV-' + randomUUID().toUpperCase(), orderId, customerId: order.customerId,
     subtotal: order.subtotal, tax: order.tax, total: order.total,
     status: 'PAID', issuedAt, paidAt,
-    invoiceLinesByInvoice: { createMany: { data: orderLines(order.orderLinesByOrder) } },
+    invoiceLinesByInvoice: { createMany: { data: orderLines(lines) } },
   } })
   await audit(tx, invoice, 'ISSUED', actorId)
+  return invoice
 }
 
 export function invoiceService(db) {
@@ -77,7 +87,7 @@ export function invoiceService(db) {
             throw invalid('Choose a confirmed order for this customer.')
           }
           if (forAllocatedOrder && order.invoiceByOrder && order.invoiceByOrder.status !== 'DRAFT') return order.invoiceByOrder
-          throw invalid('Order invoices are issued automatically when full payment is recorded.')
+          throw invalid('Order invoices are issued automatically after dispatch and full payment.')
         } else {
           await tx.$queryRaw`SELECT id FROM "ServiceTicket" WHERE id = ${ticketId} FOR UPDATE`
           const ticket = await tx.serviceTicket.findUnique({ where: { id: ticketId }, include: { invoiceByTicket: true } })
@@ -123,7 +133,7 @@ export function invoiceService(db) {
         const invoice = await tx.invoice.findUnique({ where: { id } })
         if (!invoice) throw missing()
         if (invoice.status !== 'DRAFT') throw invalid('Only draft invoices can be issued.')
-        if (invoice.orderId) throw invalid('Order invoices are issued automatically when full payment is recorded.')
+        if (invoice.orderId) throw invalid('Order invoices are issued automatically after dispatch and full payment.')
         const now = new Date()
         const due = dueAt ?? invoice.dueAt
         if (due && due < now) throw invalid('Choose a due date on or after issue.')

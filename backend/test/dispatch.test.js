@@ -7,6 +7,7 @@ import { ticketsService } from '../src/modules/tickets/tickets.service.js'
 import { dispatchService } from '../src/modules/dispatch/dispatch.service.js'
 import { warrantiesService } from '../src/modules/warranties/warranties.service.js'
 import { isCovered, warrantyEnd } from '../src/modules/warranties/coverage.js'
+import { paymentsService } from '../src/modules/payments/payments.service.js'
 
 test('warranty expiry clamps end-of-month dates in India and excludes the end instant', () => {
   const startAt = new Date('2024-02-29T01:30:00+05:30')
@@ -53,9 +54,16 @@ test('serialized dispatch, warranty activation, and assigned installation sign-o
       const items = [{ productId: product.id, quantity: 1, serialNumbers: [key] }]
       assert.equal((await service.allocate(row.id, { items }, user)).status, 'ALLOCATED')
       await assert.rejects(service.dispatch(row.id, {}, user), { code: 'INVALID_TRANSITION' })
-      await tx.payment.create({ data: { orderId: order.id, amount: 20, method: 'CASH', receivedAt: new Date(), recordedById: user.id } })
-      assert.equal((await service.dispatch(row.id, {}, user)).status, 'DISPATCHED')
+      const payments = paymentsService({ $transaction: callback => callback(tx) })
+      const paid = await payments.record(order.id, { amount: '100.00', method: 'CASH' }, user)
+      assert.equal(paid.balance.toFixed(2), '0.00')
+      assert.equal(await tx.invoice.count({ where: { orderId: order.id } }), 0)
+      const dispatched = await service.dispatch(row.id, {}, user)
+      assert.equal(dispatched.status, 'DISPATCHED')
+      assert.equal(dispatched.order.invoiceByOrder.status, 'PAID')
+      assert.deepEqual(dispatched.order.invoiceByOrder.paidAt, paid.payment.receivedAt)
       await service.dispatch(row.id, {}, user)
+      assert.equal(await tx.invoice.count({ where: { orderId: order.id } }), 1)
       assert.equal(await tx.stockMovement.count({ where: { orderId: order.id, type: 'DISPATCH' } }), 1)
       assert.equal(await tx.warranty.count({ where: { orderId: order.id } }), 0)
       await service.deliver(row.id, { recipientName: 'Customer' }, user)

@@ -62,6 +62,7 @@ test('concurrent payments cannot overpay an order and references make retries sa
       assert.equal((await invoices.detail(invoice.id)).status, 'DRAFT')
       const automatic = await payments.record(order.id, { amount: '10.00', method: 'CASH' }, user)
       assert.match(automatic.payment.reference, /^PAY-[0-9A-F-]{36}$/)
+      await db.order.update({ where: { id: order.id }, data: { status: 'DISPATCHED' } })
       const finalPayment = { amount: '19.75', method: 'BANK_TRANSFER', requestId: randomUUID() }
       const saved = await payments.record(order.id, finalPayment, user)
       assert.match(saved.payment.reference, /^PAY-[0-9A-F-]{36}$/)

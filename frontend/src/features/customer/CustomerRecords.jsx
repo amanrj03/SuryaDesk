@@ -109,7 +109,7 @@ export function Orders({ entries, save }) {
 }
 
 export function Invoices({ entries, save }) {
-  return <Records title="My invoices" entries={entries} empty="Order invoices appear here after full payment. For individual payment receipts, open My orders.">
+  return <Records title="My invoices" entries={entries} empty="Order invoices appear after dispatch and full payment. Payment receipts are available in My orders.">
     {row => <Card key={row.id} reference={row.invoiceNumber} status={row.status}>
       <p className="text-sm text-gray-600">Issued {formatDateTime(row.issuedAt)}{row.dueAt && ' · Due ' + formatDateTime(row.dueAt)}</p>
       <p className="my-2 font-semibold">{formatCurrency(row.total)}</p>

@@ -193,6 +193,11 @@ test('Express connects public intake to paid delivery, signed completion, and co
         const invoiceDetail = await request('GET', '/invoices/' + invoice.id)
         assert.equal(invoiceDetail.invoiceLinesByInvoice.length, 1)
         assert.equal(invoiceDetail.invoiceLinesByInvoice[0].taxAmount, '12.5')
+        await tx.order.update({ where: { id: order.id }, data: { status: 'READY_TO_DISPATCH' } })
+        assert.deepEqual((await portalData('/records')).invoices, [])
+        assert.equal((await portal('/invoices/' + invoice.id + '/pdf')).status, 404)
+        await portalPdf('/payments/' + final.payment.id + '/receipt')
+        await tx.order.update({ where: { id: order.id }, data: { status: 'DELIVERED' } })
         await portalPdf('/invoices/' + invoice.id + '/pdf')
         await portalPdf('/payments/' + final.payment.id + '/receipt')
         const paidOrder = paidRecords.orders[0]

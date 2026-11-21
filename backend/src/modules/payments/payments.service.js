@@ -52,7 +52,7 @@ export function paymentsService(db) {
           data: { ...data, amount, reference: paymentReference, receivedAt, orderId, recordedById: user.id },
         })
         const settled = after.equals(order.total)
-        if (settled) await issuePaidOrderInvoice(tx, orderId, receivedAt, user.id)
+        if (settled) await issuePaidOrderInvoice(tx, orderId, user.id)
         else await tx.invoice.updateMany({
           where: { orderId, status: { in: ['ISSUED', 'PARTIALLY_PAID'] } },
           data: { status: 'PARTIALLY_PAID', paidAt: null },

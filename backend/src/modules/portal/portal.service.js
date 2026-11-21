@@ -1,7 +1,7 @@
 import { paymentTotals } from '../payments/payments.service.js'
 import { pricingBreakdown } from '../../lib/line-pricing.js'
 import { quotesService } from '../quotes/quotes.service.js'
-import { invoiceService } from '../invoices/invoices.service.js'
+import { dispatchedOrderStatuses, invoiceService } from '../invoices/invoices.service.js'
 import { ticketsService } from '../tickets/tickets.service.js'
 import { ApiError } from '../../utils/ApiError.js'
 
@@ -40,7 +40,7 @@ function ownership(account) {
   const order = { quotation: { lead } }
   const service = { OR: [{ order }, ...(account.historicalAccess ? [{ customerId: account.customerId, orderId: null }] : [])] }
   const issued = { OR: [
-    { order, status: 'PAID' },
+    { order: { ...order, status: { in: dispatchedOrderStatuses } }, status: 'PAID' },
     { orderId: null, status: { in: issuedStatuses }, OR: [
       { ticket: service }, ...(account.historicalAccess ? [{ customerId: account.customerId, ticketId: null }] : []),
     ] },
