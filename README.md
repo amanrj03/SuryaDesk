@@ -37,7 +37,7 @@ The seed includes 25 staff, 200 customers, 300 enquiries, 195 surveys, 183 quota
 
 The demo can be used to exercise the workflow:
 
-- Sales can qualify an enquiry, schedule a survey, create and issue a package quotation, record acceptance, and convert it into an order.
+- Sales can qualify an enquiry, schedule a survey, create and issue a package quotation, and record customer acceptance to create the order.
 - Search for `QUO-0181`, `QUO-0182`, or `QUO-0183` to try **Create order** on an accepted quotation. For an existing seeded database, run `npm.cmd --prefix backend run db:seed -- --pending-order-quotes` to add these examples without resetting the demo.
 - Warehouse can record stock receipts, allocate the order bill of materials by quantity and serial, record dispatch, and confirm delivery. Eligible warranties start at delivery.
 - Assigned technicians can record the installation checklist, upload a photo, obtain a drawn signature, and complete the job.
@@ -58,7 +58,7 @@ Integration checks use the migrated local database and remove their synthetic fi
 
 ## Implementation notes
 
-- Confirming a quotation creates one order, one dispatch pick queue, and an installation placeholder. Warehouse allocates the full order bill of materials in a single dispatch and needs an advance or full payment for orders with a positive total.
+- Recording acceptance creates one order, one dispatch pick queue, and an installation placeholder in the same transaction. Staff with both issue and acceptance permissions can record those events together after sharing the quote and receiving approval. Warehouse allocates the full order bill of materials in a single dispatch and needs an advance or full payment for orders with a positive total.
 - Contract revenue excludes tax. Cash collections and invoice totals are reported separately. Job profitability uses fulfilled material costs, technician work logs, and explicitly recorded costs. Open jobs show a cost completeness indicator.
 - A delivery warranty uses India-local calendar months with an exclusive end timestamp. Covered replacements inherit any remaining term and preserve the links to the returned serial and original warranty.
 - The application records quote and invoice issue inside the staff workspace. It provides downloadable report CSVs and tracks subsidy paperwork locally. Staff handle external customer communication and government submission.

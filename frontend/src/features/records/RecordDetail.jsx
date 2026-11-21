@@ -148,7 +148,7 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
   const [state, setState] = useState({})
   const [retry, setRetry] = useState(0)
   const [mediaError, setMediaError] = useState('')
-  const [creatingOrder, setCreatingOrder] = useState(false)
+  const [quoteAction, setQuoteAction] = useState(null)
   const [surveyAction, setSurveyAction] = useState(null)
   const backButton = useRef(null)
 
@@ -196,8 +196,7 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
 
   const data = state.data
   const order = state.quote?.orderByQuotation
-  const createOrder = state.quote && recordActions('quotes', state.quote, capabilities)
-    .find(action => action.key === 'order')
+  const quoteActions = state.quote ? recordActions('quotes', state.quote, capabilities) : []
   const surveyActions = state.survey
     ? recordActions('surveys', state.survey, capabilities, { detail: true })
       .filter(action => ['approve', 'rejectSurvey', 'quote'].includes(action.key))
@@ -215,11 +214,15 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
           View order {displayReference(order.orderNumber)}
         </Link>
       )}
-      {createOrder && (
-        <button type="button" className="primary justify-self-start" onClick={() => setCreatingOrder(true)}>
-          Create order
-        </button>
-      )}
+      {quoteActions.length > 0 && <div className="flex flex-wrap gap-2">
+        {quoteActions.map(action => (
+          <button key={action.key} type="button"
+            className={['accept', 'order'].includes(action.key) ? 'primary' : 'secondary'}
+            onClick={() => setQuoteAction(action)}>
+            {action.label}
+          </button>
+        ))}
+      </div>}
       {data && section === 'orders' && capabilities.includes('orders:share_tracking') && (
         <TrackingLink id={id} token={token} />
       )}
@@ -267,8 +270,9 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
           retryDetails()
         }} />
     )}
-    {createOrder && creatingOrder && (
-      <WorkflowAction action={createOrder} token={token} onClose={() => setCreatingOrder(false)} />
+    {quoteAction && (
+      <WorkflowAction key={quoteAction.key} action={quoteAction} token={token} onClose={() => setQuoteAction(null)}
+        onSaved={() => { setQuoteAction(null); retryDetails() }} />
     )}
   </section>
 }

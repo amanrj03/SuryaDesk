@@ -10,7 +10,7 @@ export const create = z.strictObject({
   notes: notes.optional(), validUntil: date.optional(),
 })
 export const send = z.strictObject({ validUntil: date.optional() }).default({})
-export const accept = z.strictObject({ acceptedAt: date.optional() }).default({})
+export const accept = z.strictObject({ acceptedAt: date.optional(), issuedAndAccepted: z.boolean().optional() }).default({})
 export const reject = z.strictObject({ reason: notes.optional() }).default({})
 export const list = z.object({
   page: z.coerce.number().int().min(1).max(100000).default(1),

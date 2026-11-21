@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { ApiError } from '../../utils/ApiError.js'
 import { apportion, pricingBreakdown } from '../../lib/line-pricing.js'
+import { createAcceptedOrder } from '../orders/orders.service.js'
 
 const missing = entity => new ApiError(404, 'NOT_FOUND', entity + ' not found.')
 const invalid = message => new ApiError(409, 'INVALID_TRANSITION', message)
@@ -117,31 +118,44 @@ export function quotesService(db) {
     },
     async transition(id, status, options, user) {
       return db.$transaction(async tx => {
+        await tx.$queryRaw`SELECT id FROM "Quotation" WHERE id = ${id} FOR UPDATE`
         const quote = await tx.quotation.findUnique({ where: { id }, include: { lead: true } })
         if (!quote) throw missing('Quotation')
         const now = new Date()
         const sending = status === 'SENT'
-        const from = sending ? 'DRAFT' : 'SENT'
+        const accepting = status === 'ACCEPTED'
+        if (accepting && quote.status === 'ACCEPTED') {
+          await createAcceptedOrder(tx, id, {}, user)
+          return tx.quotation.findUnique({ where: { id }, include })
+        }
+        const issueTogether = accepting && quote.status === 'DRAFT' && options.issuedAndAccepted === true
+        if (issueTogether && !user.capabilities.includes('quotes:send')) {
+          throw new ApiError(403, 'FORBIDDEN', 'You do not have permission to issue quotations.')
+        }
+        const from = sending || issueTogether ? 'DRAFT' : 'SENT'
         if (quote.status !== from) throw invalid('This quotation cannot move to the requested status.')
         const validUntil = options.validUntil ?? quote.validUntil
         if (status !== 'REJECTED' && validUntil && validUntil <= now) throw invalid('This quotation has expired.')
-        if (sending || status === 'ACCEPTED') {
+        if (sending || accepting) {
           const leadChanged = await tx.lead.updateMany({
-            where: { id: quote.leadId, status: { in: sending ? ['SURVEY_APPROVED', 'QUOTED'] : ['QUOTED'] } },
-            data: { status: status === 'ACCEPTED' ? 'WON' : 'QUOTED' },
+            where: { id: quote.leadId, status: { in: sending || issueTogether ? ['SURVEY_APPROVED', 'QUOTED'] : ['QUOTED'] } },
+            data: { status: accepting ? 'WON' : 'QUOTED' },
           })
           if (!leadChanged.count) throw invalid('The lead is no longer open for this quotation.')
         }
         const acceptedAt = options.acceptedAt ?? now
-        if (status === 'ACCEPTED' && (acceptedAt > now || acceptedAt < quote.sentAt)) {
+        if (accepting && (acceptedAt > now || (!issueTogether && acceptedAt < quote.sentAt))) {
           throw invalid('Acceptance must be between quotation issue and the current time.')
         }
         const changed = await tx.quotation.updateMany({
           where: { id, status: from },
-          data: { status, ...(sending && { sentAt: now, validUntil }), ...(status === 'ACCEPTED' && { acceptedAt }) },
+          data: { status, ...(sending && { sentAt: now, validUntil }), ...(accepting && { acceptedAt }),
+            ...(issueTogether && { sentAt: acceptedAt }) },
         })
         if (!changed.count) throw invalid('This quotation changed during the request.')
-        await audit(tx, id, status, user.id, { from, ...(options.reason && { reason: options.reason }) })
+        if (issueTogether) await audit(tx, id, 'SENT', user.id, { from })
+        await audit(tx, id, status, user.id, { from: issueTogether ? 'SENT' : from, ...(options.reason && { reason: options.reason }) })
+        if (accepting) await createAcceptedOrder(tx, id, {}, user)
         return tx.quotation.findUnique({ where: { id }, include })
       })
     },

@@ -72,11 +72,22 @@ function baseRecordActions(section, row, capabilities, detail) {
   }
   if (section === 'quotes') {
     const url = '/quotes/' + id
-    if (row.status === 'DRAFT' && can('quotes:send')) return [post('send', 'Issue quotation', url + '/send', [time('validUntil', 'Valid until')],
-      ({ validUntil }) => ({ validUntil: toDate(validUntil) }))]
+    const withinValidity = !row.validUntil || new Date(row.validUntil).getTime() > Date.now()
+    const accept = issuedAndAccepted => ({
+      ...post('accept', issuedAndAccepted ? 'Issue, accept and create order' : 'Record acceptance and create order',
+        url + '/accept', [
+          input('confirmed', issuedAndAccepted ? 'I shared this quotation and the customer accepted it.'
+            : 'The customer accepted this quotation.', 'checkbox', { required: true }),
+        ], () => ({ issuedAndAccepted })),
+      successPath: quote => '/orders/' + encodeURIComponent(quote.orderByQuotation.id),
+    })
+    if (row.status === 'DRAFT' && can('quotes:send')) return [
+      post('send', 'Issue quotation', url + '/send', [time('validUntil', 'Valid until')],
+        ({ validUntil }) => ({ validUntil: toDate(validUntil) })),
+      ...(withinValidity && can('quotes:accept') ? [accept(true)] : []),
+    ]
     if (row.status === 'SENT' && can('quotes:accept')) {
-      const withinValidity = !row.validUntil || new Date(row.validUntil).getTime() > Date.now()
-      return [...(withinValidity ? [post('accept', 'Record acceptance', url + '/accept')] : []), post('rejectQuote', 'Record rejection', url + '/reject',
+      return [...(withinValidity ? [accept(false)] : []), post('rejectQuote', 'Record rejection', url + '/reject',
         [input('reason', 'Reason', 'textarea', { optional: true })])]
     }
     if (row.status === 'ACCEPTED' && !row.orderByQuotation && can('orders:create')) {

@@ -39,9 +39,14 @@ test('approved surveys produce immutable quotation prices and material costs', {
       const quote = await quotes.create(request, user)
       assert.equal(quote.tax.toFixed(2), '933.33')
       assert.equal(quote.total.toFixed(2), '10933.32')
-      await quotes.transition(quote.id, 'SENT', {}, user)
       await tx.product.update({ where: { id: product.id }, data: { cost: 4000, taxRate: 12, name: 'Renamed panel fixture' } })
-      const accepted = await quotes.transition(quote.id, 'ACCEPTED', {}, user)
+      await assert.rejects(quotes.transition(quote.id, 'ACCEPTED', {}, user), { code: 'INVALID_TRANSITION' })
+      const operator = { ...user, capabilities: ['quotes:send', 'quotes:accept'] }
+      await assert.rejects(quotes.transition(quote.id, 'ACCEPTED', { issuedAndAccepted: true },
+        { ...operator, capabilities: ['quotes:accept'] }), { code: 'FORBIDDEN' })
+      const accepted = await quotes.transition(quote.id, 'ACCEPTED', { issuedAndAccepted: true }, operator)
+      assert.equal(accepted.sentAt.getTime(), accepted.acceptedAt.getTime())
+      assert.ok(accepted.orderByQuotation?.id)
       const material = accepted.quotationLinesByQuotation.find(line => line.productId === product.id)
       assert.equal(material.unitCostSnapshot.toFixed(2), '2000.50')
       assert.equal(material.taxRateSnapshot.toFixed(2), '5.00')
@@ -54,7 +59,9 @@ test('approved surveys produce immutable quotation prices and material costs', {
       assert.ok(detail.pricing.lines.every(line => line.amount.greaterThan(0)))
       assert.equal(detail.pricing.lines.reduce((sum, line) => sum.plus(line.amount), quote.subtotal.minus(quote.subtotal))
         .toFixed(2), '9999.99')
-      await assert.rejects(quotes.transition(quote.id, 'ACCEPTED', {}, user), { code: 'INVALID_TRANSITION' })
+      const retried = await quotes.transition(quote.id, 'ACCEPTED', {}, operator)
+      assert.equal(retried.orderByQuotation.id, accepted.orderByQuotation.id)
+      assert.equal(await tx.order.count({ where: { quotationId: quote.id } }), 1)
       throw new Error('Rollback quotation fixture')
     }), { message: 'Rollback quotation fixture' })
   } finally {

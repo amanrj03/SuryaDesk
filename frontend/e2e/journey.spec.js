@@ -75,7 +75,7 @@ test('public enquiry survives refresh and can be qualified and scheduled from th
   }
 })
 
-test('an accepted quote opens its converted order and a partial payment updates the balance', async ({ page }) => {
+test('accepting a quote opens its order and a partial payment updates the balance', async ({ page }) => {
   const db = createDatabase(process.env.DATABASE_URL)
   const reference = 'E2E-' + randomUUID()
   let fixture
@@ -84,7 +84,7 @@ test('an accepted quote opens its converted order and a partial payment updates 
       const user = await tx.user.findUniqueOrThrow({ where: { email: 'finance@demo.suryadesk.test' } })
       const pack = await tx.solarPackage.findFirstOrThrow({ where: { isActive: true } })
       const lead = await tx.lead.create({ data: {
-        leadNumber: reference, source: 'WEB', status: 'WON', subsidyInterest: false,
+        leadNumber: reference, source: 'WEB', status: 'QUOTED', subsidyInterest: false,
         customer: { create: { name: 'Browser payment fixture', phone: '+910000000000', address: 'Pune' } },
       } })
       const survey = await tx.siteSurvey.create({
@@ -93,7 +93,7 @@ test('an accepted quote opens its converted order and a partial payment updates 
       const amounts = { subtotal: 77000, tax: 0, total: 77000 }
       const quote = await tx.quotation.create({ data: {
         ...amounts, quoteNumber: reference, leadId: lead.id, surveyId: survey.id, packageId: pack.id,
-        createdById: user.id, status: 'ACCEPTED',
+        createdById: user.id, status: 'SENT', sentAt: new Date(),
       } })
       return { lead, survey, quote }
     })
@@ -104,11 +104,13 @@ test('an accepted quote opens its converted order and a partial payment updates 
     await quoteSearch.fill(reference)
     await quoteSearch.press('Enter')
     const quoteRow = page.getByRole('row').filter({ hasText: reference })
-    await expect(quoteRow.getByRole('button', { name: 'Create order' })).toBeVisible()
+    const accept = 'Record acceptance and create order'
+    await expect(quoteRow.getByRole('button', { name: accept, exact: true })).toBeVisible()
     await quoteRow.getByRole('link', { name: 'View', exact: true }).click()
-    await page.getByRole('button', { name: 'Create order', exact: true }).click()
-    const createDialog = page.getByRole('dialog', { name: 'Create order' })
-    await createDialog.getByRole('button', { name: 'Create order', exact: true }).click()
+    await page.getByRole('button', { name: accept, exact: true }).click()
+    const createDialog = page.getByRole('dialog', { name: accept })
+    await createDialog.getByRole('checkbox', { name: 'The customer accepted this quotation.' }).check()
+    await createDialog.getByRole('button', { name: accept, exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Order for Browser payment fixture', exact: true })).toBeVisible()
     const order = await db.order.findUniqueOrThrow({ where: { quotationId: fixture.quote.id } })
     await expect(page).toHaveURL('/orders/' + order.id)
@@ -157,6 +159,7 @@ test('an accepted quote opens its converted order and a partial payment updates 
             db.installation.deleteMany({ where: { orderId: order.id } }),
             db.order.delete({ where: { id: order.id } }),
           ] : []),
+          db.auditLog.deleteMany({ where: { entityType: 'Quotation', entityId: quote.id } }),
           db.quotation.delete({ where: { id: quote.id } }),
           db.siteSurvey.delete({ where: { id: survey.id } }),
           db.lead.delete({ where: { id: lead.id } }),
