@@ -7,7 +7,7 @@ const required = ['visitedAt', 'roofDirection', 'tiltDegrees', 'cableDistanceMet
 const complete = survey => required.every(key => survey[key] != null)
 const include = { lead: { include: { customer: true } }, surveyor: { select: { id: true, name: true, email: true } } }
 
-function scope(user) {
+export function surveyScope(user) {
   const { capabilities } = user
   return capabilities.includes('surveys:record') && !capabilities.includes('surveys:approve')
     ? { surveyorId: user.id } : {}
@@ -59,7 +59,7 @@ export function surveysService(db) {
       } : null
       const where = {
         AND: [
-          scope(user),
+          surveyScope(user),
           { status, surveyorId },
           ...(searchFilter ? [searchFilter] : []),
         ],
@@ -74,7 +74,7 @@ export function surveysService(db) {
       return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } }
     },
     async detail(id, user) {
-      const survey = await db.siteSurvey.findFirst({ where: { id, ...scope(user) }, include })
+      const survey = await db.siteSurvey.findFirst({ where: { id, ...surveyScope(user) }, include })
       if (!survey) throw missing('Survey')
       const attachments = await db.attachment.findMany({
         where: { ownerId: id, ownerType: 'SURVEY' },
@@ -87,7 +87,7 @@ export function surveysService(db) {
         throw new ApiError(403, 'FORBIDDEN', 'You do not have permission to approve surveys.')
       }
       return db.$transaction(async tx => {
-        const survey = await tx.siteSurvey.findFirst({ where: { id, ...scope(user) }, include })
+        const survey = await tx.siteSurvey.findFirst({ where: { id, ...surveyScope(user) }, include })
         if (!survey) throw missing('Survey')
         if (!['SCHEDULED', 'IN_PROGRESS'].includes(survey.status) || survey.lead.status !== 'SURVEY_SCHEDULED') {
           throw transition('This survey is no longer open for recording.')

@@ -25,6 +25,7 @@ import { authService } from './modules/auth/auth.service.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { customerPortalRoutes } from './modules/portal/portal.routes.js'
 import { customerMailer } from './modules/portal/portal.mailer.js'
+import { workflowRoutes } from './modules/workflow/workflow.routes.js'
 
 export function createApp(config, database, { sendCustomerEmail = customerMailer(config) } = {}) {
   const { CORS_ORIGIN, JWT_SECRET } = config
@@ -46,6 +47,7 @@ export function createApp(config, database, { sendCustomerEmail = customerMailer
     const auth = authService(database, JWT_SECRET)
     app.use('/api/v1/auth', authRoutes(auth))
     app.use('/api/v1/customer-portal', customerPortalRoutes(database, auth, config, sendCustomerEmail))
+    app.use('/api/v1', workflowRoutes(database, auth))
     app.use('/api/v1', customersRoutes(database, auth))
     app.use('/api/v1', procurementRoutes(database, auth))
     app.use('/api/v1', usersRoutes(database, auth))

@@ -13,7 +13,7 @@ const transitions = {
   QUOTED: ['LOST'],
 }
 
-function scope(user) {
+export function leadScope(user) {
   return user.capabilities.includes('surveys:record') && !user.capabilities.includes('leads:write')
     ? { assignedToId: user.id } : {}
 }
@@ -33,7 +33,7 @@ export function leadsService(db) {
     async list({ page, limit, q, status, assignedToId }, user) {
       const search = { contains: q, mode: 'insensitive' }
       const where = {
-        AND: [scope(user), { status, assignedToId }],
+        AND: [leadScope(user), { status, assignedToId }],
         ...(q && { OR: [{ leadNumber: search }, { customer: { name: search } }, { customer: { phone: search } }] }),
       }
       const [data, total] = await db.$transaction([
@@ -48,7 +48,7 @@ export function leadsService(db) {
     },
     async detail(id, user) {
       const lead = await db.lead.findFirst({
-        where: { id, ...scope(user) },
+        where: { id, ...leadScope(user) },
         include: {
           customer: true, siteSurveysByLead: true,
           leadActivitiesByLead: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] },

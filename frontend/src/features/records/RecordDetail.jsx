@@ -7,6 +7,7 @@ import WorkflowAction, { quotationAfterApproval, recordActions } from './Workflo
 import { TrackingLink } from './TrackingLink.jsx'
 import { InvoiceDocument } from './InvoiceDocument.jsx'
 import { CustomerPortalAccess } from '../customer/CustomerPortalAccess.jsx'
+import { hasRelatedRecords, RelatedRecords } from './RelatedRecords.jsx'
 
 const localDate = value => value ? new Intl.DateTimeFormat('en-IN', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata',
@@ -201,7 +202,6 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
   }
 
   const data = state.data
-  const order = state.quote?.orderByQuotation
   const quoteActions = state.quote ? recordActions('quotes', state.quote, capabilities) : []
   const surveyActions = state.survey
     ? recordActions('surveys', state.survey, capabilities, { detail: true })
@@ -215,11 +215,7 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
       <h1 id="record-detail-heading" className="break-words text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
         {data?.title ?? 'Record details'}
       </h1>
-      {order && capabilities.includes('orders:read') && (
-        <Link className="secondary justify-self-start" to={'/orders/' + encodeURIComponent(order.id)}>
-          View order {displayReference(order.orderNumber)}
-        </Link>
-      )}
+      {data && hasRelatedRecords(section) && <RelatedRecords section={section} id={id} token={token} />}
       {quoteActions.length > 0 && <div className="flex flex-wrap gap-2">
         {quoteActions.map(action => (
           <button key={action.key} type="button"
@@ -234,10 +230,7 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
       )}
       {data && (data.invoice || data.invoiceOrder) && (
         <InvoiceDocument invoice={data.invoice} order={data.invoiceOrder} token={token} capabilities={capabilities}
-          showInvoiceLink={section !== 'invoices'} allowIssue={section !== 'invoices'} />
-      )}
-      {section === 'invoices' && data?.invoice?.orderId && capabilities.includes('orders:read') && (
-        <Link className="secondary justify-self-start" to={'/orders/' + encodeURIComponent(data.invoice.orderId)}>View related order</Link>
+          showInvoiceLink={!hasRelatedRecords(section)} allowIssue={section !== 'invoices'} />
       )}
       {section === 'invoices' && data?.invoice?.ticketId && capabilities.includes('tickets:read') && (
         <Link className="secondary justify-self-start" to={'/tickets/' + encodeURIComponent(data.invoice.ticketId)}>View related ticket</Link>

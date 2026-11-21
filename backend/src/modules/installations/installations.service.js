@@ -14,7 +14,7 @@ const include = {
 }
 const manager = user => user.capabilities.includes('installations:manage')
 const technician = user => user.capabilities.includes('installations:complete_assigned')
-function scope(user) {
+export function installationScope(user) {
   return technician(user) && !manager(user) ? assigned(user.id) : {}
 }
 
@@ -46,7 +46,7 @@ export function installationsService(db, clock = () => new Date()) {
       const search = { contains: q, mode: 'insensitive' }
       const where = {
         status,
-        AND: [scope(user), ...(technicianId ? [assigned(technicianId)] : [])],
+        AND: [installationScope(user), ...(technicianId ? [assigned(technicianId)] : [])],
         ...(q && { OR: [
           { order: { orderNumber: search } },
           { order: { customer: { name: search } } },
@@ -64,7 +64,7 @@ export function installationsService(db, clock = () => new Date()) {
     },
 
     async detail(id, user) {
-      const job = await db.installation.findFirst({ where: { id, ...scope(user) }, include })
+      const job = await db.installation.findFirst({ where: { id, ...installationScope(user) }, include })
       if (!job) throw missing()
       const attachments = await db.attachment.findMany({
         where: { ownerId: id, ownerType: 'INSTALLATION' },

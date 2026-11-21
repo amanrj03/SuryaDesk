@@ -101,9 +101,13 @@ test('Express connects public intake to paid delivery, signed completion, and co
         await patch(approval, { email, approved: false })
         assert.equal((await portalData('/records')).requests.length, 1)
         const [lead] = await request('GET', '/leads?q=' + enquiry.leadNumber)
+        const related = (section, id) => request('GET', '/workflow/' + section + '/' + id + '/related')
+        assert.deepEqual(await related('leads', lead.id), [])
         await patch('/leads/' + lead.id, { status: 'CONTACTED' })
         await patch('/leads/' + lead.id, { status: 'QUALIFIED', roofArea: 40, monthlyBill: '2100.00', gridSuitable: true })
         const survey = await post('/leads/' + lead.id + '/surveys', { surveyorId: admin.id, scheduledAt: new Date().toISOString() })
+        assert.deepEqual((await related('leads', lead.id)).map(link => link.section), ['surveys'])
+        assert.deepEqual((await related('surveys', survey.id)).map(link => link.section), ['leads'])
         await patch('/surveys/' + survey.id, { status: 'SUBMITTED', visitedAt: new Date().toISOString(),
           roofDirection: 'S', tiltDegrees: 12, cableDistanceMeters: 15, shadowFreeArea: 40,
           gridSuitable: true, findings: 'Clear roof and cable route.' })
@@ -191,6 +195,20 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.equal(invoice.status, 'PAID')
         assert.equal(invoice.total, '262.5')
         const invoiceDetail = await request('GET', '/invoices/' + invoice.id)
+        const workflow = await related('invoices', invoice.id)
+        assert.deepEqual(workflow.map(link => [link.section, link.id]), [
+          ['leads', lead.id], ['surveys', survey.id], ['quotes', quote.id], ['orders', order.id],
+          ['dispatches', order.dispatchesByOrder[0].id], ['installations', order.installationByOrder.id],
+        ])
+        const staffToken = token
+        const salesEmail = 'sales-' + email
+        await tx.user.create({ data: { name: 'Sales fixture', email: salesEmail, role: 'SALES', passwordHash: admin.passwordHash } })
+        token = (await post('/auth/login', { email: salesEmail, password })).accessToken
+        assert.deepEqual((await related('orders', order.id)).map(link => link.section), ['leads', 'surveys', 'quotes'])
+        assert.equal((await fetch(url + '/workflow/invoices/' + invoice.id + '/related', {
+          headers: { Authorization: 'Bearer ' + token },
+        })).status, 403)
+        token = staffToken
         assert.equal(invoiceDetail.invoiceLinesByInvoice.length, 1)
         assert.equal(invoiceDetail.invoiceLinesByInvoice[0].taxAmount, '12.5')
         await tx.order.update({ where: { id: order.id }, data: { status: 'READY_TO_DISPATCH' } })
