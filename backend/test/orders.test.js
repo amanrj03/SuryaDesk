@@ -43,6 +43,9 @@ test('an accepted quotation converts once and creates both fulfillment queues', 
       assert.equal(first.order.dispatchesByOrder[0].status, 'DRAFT')
       assert.equal(first.order.installationByOrder.status, 'UNSCHEDULED')
 
+      const cost = await orders.cost(first.order.id, { category: 'TRANSPORT', description: 'Truck hire', amount: '112.50' }, user)
+      assert.equal(cost.amount.toFixed(2), '112.50')
+      assert.equal(await tx.jobCost.count({ where: { orderId: first.order.id } }), 1)
       const subsidies = subsidiesService({ $transaction: callback => callback(tx) })
       const subsidy = await subsidies.create({ orderId: first.order.id }, user)
       assert.equal(subsidy.data.status, 'NOT_STARTED')

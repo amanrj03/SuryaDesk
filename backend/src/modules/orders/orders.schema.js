@@ -9,3 +9,10 @@ export const query = z.object({
   q: z.string().trim().max(120).optional(),
   status: z.enum(OrderStatus).optional(),
 })
+
+export const cost = z.strictObject({
+  category: z.enum(['TRANSPORT', 'LABOR', 'MATERIAL', 'OTHER']),
+  description: z.string().trim().min(1).max(500),
+  amount: z.string().trim().regex(/^\d{1,10}(?:\.\d{1,2})?$/).refine(value => Number(value) > 0),
+  incurredAt: z.iso.datetime({ offset: true }).transform(value => new Date(value)).optional(),
+})

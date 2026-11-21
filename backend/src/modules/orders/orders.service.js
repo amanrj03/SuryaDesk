@@ -52,6 +52,22 @@ export function ordersService(db) {
       ], { isolationLevel: 'RepeatableRead' })
       return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } }
     },
+    async cost(orderId, { incurredAt = new Date(), ...data }, user) {
+      return db.$transaction(async tx => {
+        await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${orderId} FOR UPDATE`
+        const order = await tx.order.findUnique({ where: { id: orderId } })
+        if (!order) throw notFound()
+        if (order.status === 'CANCELLED' || incurredAt > new Date() || incurredAt < order.confirmedAt) {
+          throw new ApiError(409, 'INVALID_TRANSITION', 'Choose a valid cost date within an active job.')
+        }
+        const cost = await tx.jobCost.create({ data: { ...data, orderId, incurredAt, recordedById: user.id } })
+        await tx.auditLog.create({ data: {
+          actorId: user.id, entityType: 'Order', entityId: orderId, action: 'JOB_COST_RECORDED',
+          summary: { costId: cost.id, category: cost.category, amount: cost.amount.toFixed(2) },
+        } })
+        return cost
+      })
+    },
     async detail(id) {
       const order = await db.order.findUnique({ where: { id }, include: detail })
       if (!order) throw notFound()

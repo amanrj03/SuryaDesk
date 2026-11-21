@@ -11,6 +11,8 @@ export function ordersRoutes(db, auth) {
   const orders = ordersController(ordersService(db))
   router.post('/quotes/:id/convert-to-order', staff, authorize('orders:create'),
     validate({ params: schema.params, body: schema.convert }), orders.convert)
+  router.post('/orders/:id/costs', staff, authorize('reports:financial'),
+    validate({ params: schema.params, body: schema.cost }), orders.cost)
   router.get('/orders', staff, authorize('orders:read'), validate({ query: schema.query }), orders.list)
   router.get('/orders/:id', staff, authorize('orders:read'), validate({ params: schema.params }), orders.detail)
   return router
