@@ -10,9 +10,10 @@ export async function api(path, { token, download = false, method = 'GET', body,
     body: body === undefined || multipart ? body : JSON.stringify(body),
   })
   if (download && response.ok) return response.blob()
-  const result = await response.json()
-  if (!response.ok || !result.success) {
-    throw new Error(result.error?.message ?? 'The request could not be completed.')
+  if (response.status === 401 && token) window.dispatchEvent(new Event('suryadesk:session-expired'))
+  const result = response.headers.get('content-type')?.includes('application/json') ? await response.json() : null
+  if (!response.ok || !result?.success) {
+    throw new Error(result?.error?.message ?? 'The service is unavailable or returned an unexpected response. Try again.')
   }
   return result
 }

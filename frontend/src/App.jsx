@@ -201,10 +201,27 @@ function LeadEditor({ lead, token, onClose, onSaved }) {
   </section>
 }
 
+const statuses = {
+  leads: 'NEW CONTACTED QUALIFIED SURVEY_SCHEDULED SURVEY_PENDING_APPROVAL SURVEY_APPROVED QUOTED WON LOST',
+  surveys: 'SCHEDULED IN_PROGRESS SUBMITTED APPROVED REJECTED',
+  quotes: 'DRAFT SENT ACCEPTED REJECTED EXPIRED',
+  orders: 'CONFIRMED AWAITING_STOCK READY_TO_DISPATCH DISPATCHED DELIVERED INSTALLATION_IN_PROGRESS COMPLETED CANCELLED',
+  assets: 'IN_STOCK RESERVED DISPATCHED DELIVERED INSTALLED UNDER_REPAIR REPLACED',
+  dispatches: 'DRAFT ALLOCATED DISPATCHED DELIVERED CANCELLED',
+  warranties: 'ACTIVE EXPIRED VOID REPLACED',
+  installations: 'UNSCHEDULED SCHEDULED IN_PROGRESS PENDING_SIGNOFF COMPLETED',
+  tickets: 'OPEN TRIAGED ASSIGNED IN_PROGRESS RESOLVED_PENDING_CONFIRMATION CLOSED',
+  invoices: 'DRAFT ISSUED PARTIALLY_PAID PAID VOID',
+  subsidies: 'NOT_STARTED DOCUMENTS_PENDING SUBMITTED APPROVED REJECTED PAID',
+  purchases: 'DRAFT ORDERED PARTIALLY_RECEIVED RECEIVED CANCELLED',
+}
+
 function Records({ section, token, capabilities }) {
   const [page, setPage] = useState(1)
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('')
+  const [status, setStatus] = useState('')
+  const choices = statuses[section.path]?.split(' ')
   const [retry, setRetry] = useState(0)
   const [state, setState] = useState({ busy: true })
   const [selected, setSelected] = useState(null)
@@ -220,11 +237,12 @@ function Records({ section, token, capabilities }) {
     const controller = new AbortController()
     const params = new URLSearchParams({ page: String(page), limit: '20' })
     if (search) params.set('q', search)
+    if (status) params.set('status', status)
     api('/' + section.path + '?' + params, { token, signal: controller.signal })
       .then(result => setState({ result }))
       .catch(error => { if (!controller.signal.aborted) setState({ error: error.message }) })
     return () => controller.abort()
-  }, [section.path, token, page, search, retry])
+  }, [section.path, token, page, search, status, retry])
 
   function refresh() {
     setSelected(null)
@@ -255,15 +273,23 @@ function Records({ section, token, capabilities }) {
       {detail && <RecordDetail key={detail} id={detail} section={section.path} token={token} onClose={() => setDetail(null)} />}
       {selected && <Editor key={selected.id} lead={selected} job={selected} token={token} onClose={() => setSelected(null)} onSaved={refresh} />}
       {action && <WorkflowAction key={action.path + action.key} action={action} token={token} onSaved={refresh} onClose={() => setAction(null)} />}
-      {section.search && <form className="toolbar" onSubmit={event => {
+      {(section.search || choices) && <form className="toolbar" onSubmit={event => {
         event.preventDefault()
         setState({ busy: true })
         setSearch(query.trim())
         setPage(1)
         setRetry(value => value + 1)
       }}>
-        <input aria-label={'Search ' + section.title.toLowerCase()} placeholder="Search records" maxLength={120} value={query} onChange={event => setQuery(event.target.value)} />
-        <button className="secondary">Search</button>
+        {section.search && <input aria-label={'Search ' + section.title.toLowerCase()} placeholder="Search records" maxLength={120} value={query} onChange={event => setQuery(event.target.value)} />}
+        {choices && <select aria-label="Filter by status" className="max-w-56" value={status} onChange={event => {
+          setPage(1)
+          setState({ busy: true })
+          setStatus(event.target.value)
+        }}>
+          <option value="">All statuses</option>
+          {choices.map(value => <option key={value} value={value}>{words(value)}</option>)}
+        </select>}
+        {section.search && <button className="secondary">Search</button>}
       </form>}
       {state.busy && <p className="feedback" role="status">Loading {section.title.toLowerCase()}…</p>}
       {state.error && <div className="feedback"><Notice>{state.error}</Notice><button className="secondary" onClick={() => {
@@ -343,6 +369,11 @@ function Workspace({ session, onLogout }) {
 
 export default function App() {
   const [session, setSession] = useState(null)
+  useEffect(() => {
+    const expired = () => setSession(null)
+    window.addEventListener('suryadesk:session-expired', expired)
+    return () => window.removeEventListener('suryadesk:session-expired', expired)
+  }, [])
   return <Routes>
     <Route path="/enquiry" element={<Enquiry />} />
     <Route path="/request-quote" element={<Navigate to="/enquiry" replace />} />

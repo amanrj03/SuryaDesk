@@ -6,6 +6,7 @@ const choice = (name, label, options) => ({ name, label, type: 'select', options
 const time = (name, label) => input(name, label, 'datetime-local')
 const number = (name, label, attributes = {}) => input(name, label, 'number', { step: '.01', ...attributes })
 const toDate = text => text && new Date(text).toISOString()
+const staffRoles = ['ADMIN', 'DIRECTOR', 'SALES', 'SURVEYOR', 'WAREHOUSE', 'TECHNICIAN', 'SUPPORT', 'FINANCE']
 
 
 function productFields(product = {}) {
@@ -72,7 +73,8 @@ function baseRecordActions(section, row, capabilities) {
     if (row.status === 'DRAFT' && can('quotes:send')) return [post('send', 'Issue quotation', url + '/send', [time('validUntil', 'Valid until')],
       ({ validUntil }) => ({ validUntil: toDate(validUntil) }))]
     if (row.status === 'SENT' && can('quotes:accept')) {
-      return [post('accept', 'Record acceptance', url + '/accept'), post('rejectQuote', 'Record rejection', url + '/reject',
+      const withinValidity = !row.validUntil || new Date(row.validUntil).getTime() > Date.now()
+      return [...(withinValidity ? [post('accept', 'Record acceptance', url + '/accept')] : []), post('rejectQuote', 'Record rejection', url + '/reject',
         [input('reason', 'Reason', 'textarea', { optional: true })])]
     }
     if (row.status === 'ACCEPTED' && can('orders:create')) return [post('order', 'Create order', url + '/convert-to-order')]
@@ -107,6 +109,14 @@ function baseRecordActions(section, row, capabilities) {
           serialNumbers: values.serialNumbers?.split(/\r?\n/).map(value => value.trim()).filter(Boolean) ?? [] }))
       })
     }
+  }
+  if (section === 'users' && can('users:manage')) {
+    return [patch('editStaff', 'Edit staff account', '/users/' + id, [
+      input('name', 'Name', 'text', { defaultValue: row.name }),
+      { ...choice('role', 'Role', staffRoles), attributes: { defaultValue: row.role } },
+      input('isActive', 'Active account', 'checkbox', { defaultChecked: row.isActive }),
+      number('hourlyCost', 'Hourly cost (INR)', { min: 0, defaultValue: row.hourlyCost, optional: true }),
+    ], values => values)]
   }
   if (section === 'products' && can('catalog:manage')) {
     return [patch('editProduct', 'Edit product', '/products/' + id, productFields(row), values => {
@@ -283,7 +293,7 @@ export function collectionActions(section, capabilities) {
   }))
   if (section === 'users' && can('users:manage')) return post('user', 'Add staff account', '/users', [
     input('name', 'Name'), input('email', 'Work email', 'email'), input('password', 'Temporary password', 'password', { minLength: 12 }),
-    choice('role', 'Role', ['ADMIN', 'DIRECTOR', 'SALES', 'SURVEYOR', 'WAREHOUSE', 'TECHNICIAN', 'SUPPORT', 'FINANCE']),
+    choice('role', 'Role', staffRoles),
   ])
   return []
 }

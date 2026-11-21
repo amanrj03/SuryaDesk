@@ -42,14 +42,14 @@ textarea { @apply min-h-20 resize-y; }
 .sidebar {
   @apply flex flex-col gap-6 border-b border-white bg-gradient-to-b from-[#eaf3fa] to-[#dfedf9] p-5 lg:sticky lg:top-0 lg:h-screen lg:border-r lg:border-b-0;
 }
-.sidebar nav { @apply flex flex-wrap gap-2 lg:grid; }
+.sidebar nav { @apply flex min-h-0 gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-x-hidden lg:overflow-y-auto; }
 .sidebar nav a {
-  @apply flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-white/65;
+  @apply flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-white/65;
 }
 .sidebar nav a.active { @apply bg-white/90 text-blue-800 shadow-sm; }
 .sidebar nav svg, .account svg { @apply size-5 shrink-0; }
 .account {
-  @apply flex items-center justify-between gap-2 rounded-xl border border-white bg-white/65 px-3 py-2 lg:mt-auto;
+  @apply flex items-center justify-between gap-2 rounded-xl border border-white bg-white/65 shrink-0 px-3 py-2 lg:mt-auto;
 }
 .account span { @apply block text-sm text-slate-600; }
 .account button { @apply rounded-lg p-2 hover:bg-white; }
