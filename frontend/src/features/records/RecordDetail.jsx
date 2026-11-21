@@ -263,9 +263,12 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
           </tfoot>}
         </table>
       </section>)}
-      {data.attachments?.length > 0 && <div><h2 className="mb-2 font-semibold">Evidence</h2>
-        {data.attachments.map(item => <button type="button" className="secondary mb-1 mr-1" key={item.id}
-          onClick={() => item.mimeType.startsWith('image/') ? setPreview(item) : download(item)}>{evidenceName(item)}</button>)}</div>}
+      {data.attachments && <section aria-label="Evidence">
+        <h2 className="mb-2 font-semibold">Evidence</h2>
+        {data.attachments.length ? data.attachments.map(item => <button type="button" className="secondary mb-1 mr-1" key={item.id}
+          onClick={() => item.mimeType.startsWith('image/') ? setPreview(item) : download(item)}>{evidenceName(item)}</button>)
+          : <p className="text-sm text-gray-600">No evidence uploaded.</p>}
+      </section>}
       {mediaError && <p className="notice" role="alert">{mediaError}</p>}
       {surveyActions.length > 0 && <div className="flex flex-wrap gap-2 border-t border-gray-200 pt-4">
         {surveyActions.map(action => (
