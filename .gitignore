@@ -1,0 +1,19 @@
+/documentation.md
+/problem statement.md
+/problemstatement.md
+/UI_inspration/
+/UI_INSPIRATION/
+/PROGRESS.md
+/.postgres/
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+build/
+coverage/
+*.log
+*.dump
+.DS_Store
+/backend/uploads/
+/backend/storage/
