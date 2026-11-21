@@ -1,6 +1,7 @@
 import express from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
+import { ticketsRoutes } from './modules/tickets/tickets.routes.js'
 import { installationsRoutes } from './modules/installations/installations.routes.js'
 import { attachmentsRoutes } from './modules/attachments/attachments.routes.js'
 import { warrantiesRoutes } from './modules/warranties/warranties.routes.js'
@@ -34,6 +35,7 @@ export function createApp({ CORS_ORIGIN, JWT_SECRET }, database) {
   if (database) {
     const auth = authService(database, JWT_SECRET)
     app.use('/api/v1/auth', authRoutes(auth))
+    app.use('/api/v1', ticketsRoutes(database, auth))
     app.use('/api/v1', installationsRoutes(database, auth))
     app.use('/api/v1', attachmentsRoutes(database, auth))
     app.use('/api/v1', warrantiesRoutes(database, auth))
