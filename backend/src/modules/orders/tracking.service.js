@@ -27,6 +27,11 @@ export function trackingService(db, secret) {
         where: { id: claims.sub },
         select: {
           orderNumber: true, status: true, confirmedAt: true,
+          quotation: { select: {
+            sentAt: true, acceptedAt: true,
+            lead: { select: { createdAt: true } },
+            survey: { select: { visitedAt: true, approvedAt: true } },
+          } },
           dispatchesByOrder: {
             select: { dispatchedAt: true, deliveredAt: true },
             where: { status: { in: ['DISPATCHED', 'DELIVERED'] } },
@@ -43,9 +48,20 @@ export function trackingService(db, secret) {
       })
       if (!order) throw invalid()
       const now = new Date()
-      const { dispatchesByOrder, installationByOrder, warrantiesByOrder, ...summary } = order
+      const { quotation, dispatchesByOrder, installationByOrder, warrantiesByOrder, ...summary } = order
+      const dispatch = dispatchesByOrder[0] ?? null
       return {
-        ...summary, dispatch: dispatchesByOrder[0] ?? null, installation: installationByOrder,
+        ...summary, dispatch, installation: installationByOrder,
+        timeline: [
+          { stage: 'ENQUIRY_RECEIVED', at: quotation.lead.createdAt },
+          { stage: 'SITE_SURVEYED', at: quotation.survey.visitedAt },
+          { stage: 'SURVEY_APPROVED', at: quotation.survey.approvedAt },
+          { stage: 'QUOTATION_ISSUED', at: quotation.sentAt },
+          { stage: 'QUOTATION_ACCEPTED', at: quotation.acceptedAt },
+          { stage: 'ORDER_CONFIRMED', at: order.confirmedAt },
+          { stage: 'DISPATCHED', at: dispatch?.dispatchedAt ?? null },
+          { stage: 'DELIVERED', at: dispatch?.deliveredAt ?? null },
+        ],
         warranties: warrantiesByOrder.map(({ asset, status, startAt, endAt }) => ({
           serialNumber: asset.serialNumber, product: asset.product.name, startAt, endAt,
           status: isCovered({ status, startAt, endAt }, now) ? 'ACTIVE'

@@ -109,7 +109,17 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.match(pdf.headers.get('content-disposition'), /attachment;.*\.pdf/)
         assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0, 5).toString(), '%PDF-')
         await post(dispatch + '/dispatch')
+        const tracking = await post('/orders/' + order.id + '/tracking-link')
+        const inTransit = await post('/public/tracking', { token: tracking.token })
+        assert.deepEqual(inTransit.timeline.map(event => event.stage), [
+          'ENQUIRY_RECEIVED', 'SITE_SURVEYED', 'SURVEY_APPROVED', 'QUOTATION_ISSUED',
+          'QUOTATION_ACCEPTED', 'ORDER_CONFIRMED', 'DISPATCHED', 'DELIVERED',
+        ])
+        assert.ok(inTransit.timeline.slice(0, -1).every(event => event.at))
+        assert.equal(inTransit.timeline.at(-1).at, null)
         const delivered = await post(dispatch + '/deliver', { recipientName: key })
+        const tracked = await post('/public/tracking', { token: tracking.token })
+        assert.equal(tracked.timeline.at(-1).at, delivered.deliveredAt)
         const coverage = await request('GET', '/assets/' + key + '/warranty')
         assert.equal(coverage.coveredAsOf, true)
         assert.equal(coverage.warranty.startAt, delivered.deliveredAt)
