@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import test from 'node:test'
 import { createDatabase } from '../src/lib/prisma.js'
+import { inventoryService } from '../src/modules/inventory/inventory.service.js'
 import { procurementService } from '../src/modules/procurement/procurement.service.js'
 
 test('purchase receipts post stock at the agreed cost and cannot exceed an order', {
@@ -34,6 +35,12 @@ test('purchase receipts post stock at the agreed cost and cannot exceed an order
       const movements = await tx.stockMovement.findMany({ where: { referenceId: purchase.id } })
       assert.equal(movements.length, 2)
       assert.ok(movements.every(row => row.unitCost.toFixed(2) === '52.50'))
+      const inventory = inventoryService({ $transaction: callback => callback(tx) })
+      await tx.stockBalance.update({ where: { productId: item.id }, data: { reserved: 1 } })
+      await assert.rejects(inventory.adjust({ productId: item.id, delta: -2, reason: 'Count' }, actor), { code: 'INSUFFICIENT_STOCK' })
+      const adjustment = await inventory.adjust({ productId: item.id, delta: -1, reason: 'Damaged packaging' }, actor)
+      assert.equal(adjustment.balance.onHand, 1)
+      assert.equal(adjustment.balance.reserved, 1)
       throw new Error('Rollback procurement fixture')
     }), { message: 'Rollback procurement fixture' })
   } finally { await db.$disconnect() }

@@ -50,6 +50,35 @@ export function inventoryService(db) {
       }, { isolationLevel: 'RepeatableRead' })
     },
 
+
+    async adjust({ productId, delta, reason }, user) {
+      return db.$transaction(async tx => {
+        await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${productId} FOR UPDATE`
+        const product = await tx.product.findUnique({ where: { id: productId } })
+        if (!product?.isActive) throw new ApiError(404, 'NOT_FOUND', 'Active product not found.')
+        if (product.serialized) {
+          throw new ApiError(400, 'VALIDATION_ERROR', 'Serial-tracked stock requires a receipt, dispatch, or replacement.')
+        }
+        await tx.stockBalance.upsert({
+          where: { productId }, create: { productId, reserved: 0, onHand: 0 }, update: {},
+        })
+        const changed = await tx.$executeRaw`
+          UPDATE "StockBalance" SET "onHand" = "onHand" + ${delta}, "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "productId" = ${productId} AND "onHand" + ${delta} >= reserved
+        `
+        if (!changed) throw new ApiError(409, 'INSUFFICIENT_STOCK', 'The correction would consume reserved stock.')
+        const movement = await tx.stockMovement.create({ data: {
+          productId, quantity: delta, type: 'ADJUSTMENT', reason, actorId: user.id, unitCost: product.cost,
+        } })
+        await tx.auditLog.create({ data: {
+          actorId: user.id, entityType: 'Product', entityId: productId, action: 'STOCK_ADJUSTED',
+          summary: { movementId: movement.id, delta, reason },
+        } })
+        const balance = await tx.stockBalance.findUnique({ where: { productId } })
+        return { movement, balance }
+      })
+    },
+
     async receive({ productId, quantity, unitCost, serialNumbers, reference }, user) {
       try {
         return await db.$transaction(async tx => {

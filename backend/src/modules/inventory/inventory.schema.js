@@ -16,3 +16,8 @@ export const receipt = z.strictObject({
   serialNumbers: z.array(serial).max(10000).default([]).refine(items => items.length === new Set(items).size, 'Serial numbers must be unique.'),
   reference: z.string().trim().min(1).max(120).optional(),
 })
+
+export const adjustment = z.strictObject({
+  productId: id, delta: z.number().int().min(-10000).max(10000).refine(value => value !== 0),
+  reason: z.string().trim().min(1).max(500),
+})

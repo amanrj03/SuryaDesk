@@ -11,6 +11,8 @@ export function inventoryRoutes(db, auth) {
   const controller = inventoryController(inventoryService(db))
   router.get('/inventory', staff, authorize('inventory:read'), validate({ query: schema.inventory }), controller.inventory)
   router.get('/assets', staff, authorize('inventory:read'), validate({ query: schema.assets }), controller.assets)
+  router.post('/inventory/adjustments', staff, authorize('inventory:write'),
+    validate({ body: schema.adjustment }), controller.adjust)
   router.post('/inventory/receipts', staff, authorize('inventory:write'), validate({ body: schema.receipt }), controller.receive)
   return router
 }
