@@ -40,6 +40,11 @@ export function paymentsService(db) {
         const receivedAt = data.receivedAt ?? new Date()
         if (receivedAt > new Date()) throw new ApiError(400, 'VALIDATION_ERROR', 'Payment date cannot be in the future.')
         const payment = await tx.payment.create({ data: { ...data, amount, receivedAt, orderId, recordedById: user.id } })
+        const settled = after.equals(order.total)
+        await tx.invoice.updateMany({
+          where: { orderId, status: { in: ['ISSUED', 'PARTIALLY_PAID'] } },
+          data: { status: settled ? 'PAID' : 'PARTIALLY_PAID', paidAt: settled ? receivedAt : null },
+        })
         await tx.auditLog.create({ data: {
           actorId: user.id, entityType: 'Order', entityId: orderId, action: 'PAYMENT_RECORDED',
           summary: { paymentId: payment.id, amount: amount.toFixed(2) },

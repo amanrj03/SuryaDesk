@@ -1,6 +1,7 @@
 import express from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
+import { invoiceRoutes } from './modules/invoices/invoices.routes.js'
 import { reportsRoutes } from './modules/reports/reports.routes.js'
 import { ticketsRoutes } from './modules/tickets/tickets.routes.js'
 import { installationsRoutes } from './modules/installations/installations.routes.js'
@@ -36,6 +37,7 @@ export function createApp({ CORS_ORIGIN, JWT_SECRET }, database) {
   if (database) {
     const auth = authService(database, JWT_SECRET)
     app.use('/api/v1/auth', authRoutes(auth))
+    app.use('/api/v1', invoiceRoutes(database, auth))
     app.use('/api/v1', reportsRoutes(database, auth))
     app.use('/api/v1', ticketsRoutes(database, auth))
     app.use('/api/v1', installationsRoutes(database, auth))
