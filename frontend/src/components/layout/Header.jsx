@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Bars3Icon,
-  ChevronDownIcon,
   MagnifyingGlassIcon,
   PlusIcon,
   ArrowRightStartOnRectangleIcon,
@@ -69,7 +68,6 @@ export function Header({ user, navigationOpen, onToggleNavigation, onLogout }) {
             height="288"
             className="hidden h-9 w-auto max-w-[170px] object-contain sm:block"
           />
-          <ChevronDownIcon className="hidden size-3.5 text-gray-400 sm:block" />
         </Link>
       </div>
 

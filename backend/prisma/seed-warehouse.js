@@ -1,11 +1,13 @@
+import { day, daysFrom, seedNow } from './seed-clock.js'
 import { dispatchService } from '../src/modules/dispatch/dispatch.service.js'
 
 const stock = {
-  PANEL: 320, INVERTER: 60, BATTERY: 50, CONTROLLER: 70,
-  STAND: 210, WIRING: 160, BOX: 140, SWITCH: 140, EARTH: 140, CONNECTOR: 420,
+  PANEL: 680, INVERTER: 95, BATTERY: 85, CONTROLLER: 100,
+  STAND: 320, WIRING: 210, BOX: 130, SWITCH: 135, EARTH: 145, CONNECTOR: 680,
+  'PANEL-BIFACIAL': 18, 'INVERTER-HYBRID': 2, 'BATTERY-RACK': 1, 'CONTROLLER-MPPT': 10,
+  'STAND-CORRUGATED': 22, 'WIRING-6MM': 4, 'BOX-4STRING': 8, 'SWITCH-AC': 16, 'EARTH-ROD': 16, 'METER-DIN': 9,
 }
-const date = new Date('2026-04-02T04:30:00.000Z')
-const day = 86400_000
+const date = daysFrom(seedNow, -960)
 
 async function stockIntake(db, actor) {
   await db.$transaction(async tx => {
@@ -37,7 +39,7 @@ async function stockIntake(db, actor) {
 
 async function ship(db, actor) {
   const rows = await db.order.findMany({
-    where: { id: { startsWith: 'DEMO-ORDER-' } }, orderBy: { id: 'asc' }, take: 44,
+    where: { id: { startsWith: 'DEMO-ORDER-' } }, orderBy: { id: 'asc' }, take: 84,
     include: { dispatchesByOrder: true, customer: true, orderLinesByOrder: { include: { product: true } } },
   })
   const dispatch = dispatchService(db)
@@ -58,12 +60,32 @@ async function ship(db, actor) {
       }
       if (items.length !== order.orderLinesByOrder.filter(line => line.lineKind === 'MATERIAL' && line.productId).length) continue
       await dispatch.allocate(row.id, { items }, actor)
+      const reservedAt = daysFrom(order.confirmedAt, 2)
+      await db.stockMovement.updateMany({
+        where: { orderId: order.id, type: 'RESERVE' }, data: { createdAt: reservedAt },
+      })
+      await db.auditLog.updateMany({
+        where: { entityType: 'Dispatch', entityId: row.id, action: 'ALLOCATED' }, data: { createdAt: reservedAt },
+      })
     }
     const dispatchedAt = new Date(order.confirmedAt.getTime() + 4 * day)
-    if (index < 36 && ['ALLOCATED', 'DRAFT'].includes(row.status)) await dispatch.dispatch(row.id, { dispatchedAt }, actor)
-    if (index < 24 && ['DISPATCHED', 'ALLOCATED', 'DRAFT'].includes(row.status)) {
+    const shipped = index < 36 || (index >= 44 && index < 78)
+    const fulfilled = index < 32 || (index >= 44 && index < 72)
+    if (shipped && ['ALLOCATED', 'DRAFT'].includes(row.status)) {
+      await dispatch.dispatch(row.id, { dispatchedAt }, actor)
+      await db.auditLog.updateMany({
+        where: { entityType: 'Dispatch', entityId: row.id, action: 'DISPATCHED' }, data: { createdAt: dispatchedAt },
+      })
+      await db.stockMovement.updateMany({
+        where: { orderId: order.id, type: 'DISPATCH' }, data: { createdAt: dispatchedAt },
+      })
+    }
+    if (fulfilled && ['DISPATCHED', 'ALLOCATED', 'DRAFT'].includes(row.status)) {
       const deliveredAt = new Date(dispatchedAt.getTime() + day)
       await dispatch.deliver(row.id, { recipientName: order.customer.name, deliveredAt }, actor)
+      await db.auditLog.updateMany({
+        where: { entityType: 'Dispatch', entityId: row.id, action: 'DELIVERED' }, data: { createdAt: deliveredAt },
+      })
     }
   }
 }

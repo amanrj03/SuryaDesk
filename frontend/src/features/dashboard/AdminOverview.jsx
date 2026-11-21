@@ -9,10 +9,10 @@ import {
   ClockIcon,
   ArrowUpRightIcon,
 } from '@heroicons/react/24/outline'
-import { Card, InkCard, Panel, ListRow, AccentCard } from './components/ui/Surface.jsx'
-import { Badge, Chip } from './components/ui/Badge.jsx'
-import { Avatar } from './components/ui/Avatar.jsx'
-import { splitCurrency, formatCompactCurrency } from './lib/format.js'
+import { Card, InkCard, Panel, ListRow, AccentCard } from '../../components/ui/Surface.jsx'
+import { Badge, Chip } from '../../components/ui/Badge.jsx'
+import { Avatar } from '../../components/ui/Avatar.jsx'
+import { splitCurrency, formatCompactCurrency } from '../../lib/format.js'
 
 const groups = [
   {

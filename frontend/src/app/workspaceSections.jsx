@@ -1,0 +1,272 @@
+import { StatusBadge } from '../components/ui/Badge.jsx'
+import { words } from '../lib/format.js'
+import { ClipboardDocumentCheckIcon, CubeIcon, DocumentTextIcon, InboxStackIcon, ShoppingBagIcon, CreditCardIcon, TruckIcon, ShieldCheckIcon, Squares2X2Icon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline'
+
+const date = (value) =>
+  value
+    ? new Intl.DateTimeFormat('en-IN', {
+      dateStyle: 'medium',
+      timeZone: 'Asia/Kolkata',
+    }).format(new Date(value))
+    : '—'
+
+const currency = (value) =>
+  value == null
+    ? '—'
+    : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(value))
+
+export const sections = [
+  {
+    path: 'leads',
+    title: 'Enquiries',
+    capability: 'leads:read',
+    icon: InboxStackIcon,
+    search: true,
+    columns: [
+      ['Reference', (row) => row.leadNumber],
+      ['Customer', (row) => row.customer.name],
+      ['Phone', (row) => row.customer.phone],
+      ['Source', (row) => words(row.source)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Received', (row) => date(row.createdAt)],
+    ],
+  },
+  {
+    path: 'customers',
+    title: 'Customers',
+    capabilities: ['leads:write', 'tickets:create', 'reports:view', 'orders:create'],
+    icon: InboxStackIcon,
+    search: true,
+    columns: [
+      ['Customer', (row) => row.name],
+      ['Phone', (row) => row.phone],
+      ['Email', (row) => row.email],
+      ['Address', (row) => row.address],
+    ],
+  },
+  {
+    path: 'surveys',
+    title: 'Surveys',
+    capability: 'surveys:read',
+    icon: ClipboardDocumentCheckIcon,
+    columns: [
+      ['Customer', (row) => row.lead.customer.name],
+      ['Scheduled', (row) => date(row.scheduledAt)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+    ],
+  },
+  {
+    path: 'packages',
+    title: 'Packages',
+    capability: 'catalog:read',
+    icon: CubeIcon,
+    search: true,
+    columns: [
+      ['Code', (row) => row.code],
+      ['Package', (row) => row.name],
+      ['System', (row) => words(row.type)],
+      ['Capacity', (row) => (row.capacityKw ? row.capacityKw + ' kW' : '—')],
+      ['Price', (row) => currency(row.basePrice)],
+    ],
+  },
+  {
+    path: 'products',
+    title: 'Products',
+    capability: 'catalog:read',
+    icon: CubeIcon,
+    search: true,
+    columns: [
+      ['SKU', (row) => row.sku],
+      ['Product', (row) => row.name],
+      ['Category', (row) => words(row.category)],
+      ['Sale price', (row) => currency(row.salePrice)],
+      ['Status', (row) => (row.isActive ? 'Active' : 'Inactive')],
+    ],
+  },
+  {
+    path: 'quotes',
+    title: 'Quotations',
+    capability: 'quotes:read',
+    icon: DocumentTextIcon,
+    search: true,
+    columns: [
+      ['Reference', (row) => row.quoteNumber],
+      ['Customer', (row) => row.lead.customer.name],
+      ['Total', (row) => currency(row.total)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Created', (row) => date(row.createdAt)],
+    ],
+  },
+  {
+    path: 'orders',
+    title: 'Orders',
+    capability: 'orders:read',
+    icon: ShoppingBagIcon,
+    search: true,
+    columns: [
+      ['Reference', (row) => row.orderNumber],
+      ['Customer', (row) => row.customer.name],
+      ['Total', (row) => currency(row.total)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Confirmed', (row) => date(row.confirmedAt)],
+    ],
+  },
+  {
+    path: 'inventory',
+    title: 'Inventory',
+    capability: 'inventory:read',
+    icon: Squares2X2Icon,
+    search: true,
+    columns: [
+      ['SKU', (row) => row.sku],
+      ['Product', (row) => row.name],
+      ['In stock', (row) => row.onHand],
+      ['Reserved', (row) => row.reserved],
+      ['Available', (row) => row.available],
+      ['Reorder', (row) => (row.lowStock ? 'Required' : '—')],
+    ],
+  },
+  {
+    path: 'assets',
+    title: 'Equipment serials',
+    capability: 'inventory:read',
+    icon: CubeIcon,
+    search: true,
+    columns: [
+      ['Serial', (row) => row.serialNumber],
+      ['Product', (row) => row.product.name],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Order', (row) => row.order?.orderNumber],
+      ['Customer', (row) => row.customer?.name],
+    ],
+  },
+  {
+    path: 'dispatches',
+    title: 'Dispatch',
+    capability: 'dispatch:prepare',
+    icon: TruckIcon,
+    columns: [
+      ['Reference', (row) => row.dispatchNumber],
+      ['Customer', (row) => row.order.customer.name],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Delivered', (row) => date(row.deliveredAt)],
+    ],
+  },
+  {
+    path: 'warranties',
+    title: 'Warranties',
+    capability: 'warranties:read',
+    icon: ShieldCheckIcon,
+    search: true,
+    columns: [
+      ['Serial', (row) => row.asset.serialNumber],
+      ['Product', (row) => row.asset.product.name],
+      ['Customer', (row) => row.customer.name],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Expires', (row) => date(row.endAt)],
+    ],
+  },
+  {
+    path: 'installations',
+    title: 'Installations',
+    capability: 'installations:read',
+    icon: WrenchScrewdriverIcon,
+    columns: [
+      ['Customer', (row) => row.order.customer.name],
+      ['Capacity', (row) => row.capacityKw + ' kW'],
+      ['Scheduled', (row) => date(row.scheduledAt)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+    ],
+  },
+  {
+    path: 'tickets',
+    title: 'Service tickets',
+    capability: 'tickets:read',
+    icon: ClipboardDocumentCheckIcon,
+    search: true,
+    columns: [
+      ['Reference', (row) => row.ticketNumber],
+      ['Customer', (row) => row.customer.name],
+      ['Fault', (row) => row.faultCode || '—'],
+      ['Priority', (row) => words(row.priority)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+    ],
+  },
+  {
+    path: 'invoices',
+    title: 'Invoices',
+    capability: 'invoices:read',
+    icon: DocumentTextIcon,
+    search: true,
+    columns: [
+      ['Reference', (row) => row.invoiceNumber],
+      ['Customer', (row) => row.customer.name],
+      ['Total', (row) => currency(row.total)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Issued', (row) => date(row.issuedAt)],
+    ],
+  },
+  {
+    path: 'subsidies',
+    title: 'Subsidies',
+    capability: 'subsidies:read',
+    icon: ClipboardDocumentCheckIcon,
+    columns: [
+      ['Order', (row) => row.order.orderNumber],
+      ['Customer', (row) => row.order.customer.name],
+      ['Reference', (row) => row.reference || '—'],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+    ],
+  },
+  {
+    path: 'suppliers',
+    title: 'Suppliers',
+    capability: 'inventory:read',
+    icon: CubeIcon,
+    search: true,
+    columns: [
+      ['Code', (row) => row.code],
+      ['Supplier', (row) => row.name],
+      ['Email', (row) => row.email],
+      ['Phone', (row) => row.phone],
+    ],
+  },
+  {
+    path: 'purchases',
+    title: 'Purchase orders',
+    capability: 'inventory:read',
+    icon: TruckIcon,
+    search: true,
+    columns: [
+      ['Reference', (row) => row.purchaseNumber],
+      ['Supplier', (row) => row.supplier.name],
+      ['Expected', (row) => date(row.expectedAt)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+    ],
+  },
+  {
+    path: 'users',
+    title: 'Staff',
+    capability: 'users:manage',
+    icon: ClipboardDocumentCheckIcon,
+    search: true,
+    columns: [
+      ['Name', (row) => row.name],
+      ['Email', (row) => row.email],
+      ['Role', (row) => words(row.role)],
+      ['Account', (row) => (row.isActive ? 'Active' : 'Inactive')],
+    ],
+  },
+  {
+    path: 'payments',
+    title: 'Payments',
+    capability: 'payments:read',
+    icon: CreditCardIcon,
+    columns: [
+      ['Reference', (row) => row.reference || '—'],
+      ['Amount', (row) => currency(row.amount)],
+      ['Method', (row) => words(row.method)],
+      ['Received', (row) => date(row.receivedAt)],
+    ],
+  },
+]

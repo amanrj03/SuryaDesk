@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from 'react'
-import { api } from './api.js'
+import { api } from '../../lib/api.js'
 
 const localDate = value => value ? new Intl.DateTimeFormat('en-IN', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata',

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { deflateSync } from 'node:zlib'
@@ -59,13 +59,13 @@ function key(id, kind) {
   return hash.replace(/^(........)(....)(....)(....)(............)$/, '$1-$2-$3-$4-$5')
 }
 
-export async function seedInstallations(db) {
+export async function seedInstallations(db, writtenMedia) {
   const root = resolve(process.env.UPLOAD_DIR ?? 'uploads')
   const admin = await db.user.findUniqueOrThrow({ where: { email: 'admin@demo.suryadesk.test' } })
   const actor = { ...admin, capabilities: roleCapabilities[admin.role] }
   const rows = await db.installation.findMany({
     where: { orderId: { startsWith: 'DEMO-ORDER-' }, order: { status: { in: ['DELIVERED', 'COMPLETED'] } } },
-    orderBy: { orderId: 'asc' }, take: 12,
+    orderBy: { orderId: 'asc' }, take: 49,
     include: { order: { include: { customer: true, dispatchesByOrder: true } } },
   })
   await mkdir(root, { recursive: true })
@@ -79,11 +79,21 @@ export async function seedInstallations(db) {
     const existing = await db.attachment.count({ where: { ownerType: 'INSTALLATION', ownerId: job.id } })
     if (existing) continue
 
+    if (index >= 40) {
+      const service = installationsService(db)
+      await service.update(job.id, {
+        startedAt, generationReading: job.capacityKw.mul('0.81'),
+        ...(index >= 45 && { finishedAt }),
+      }, actor)
+      continue
+    }
+
     const files = []
     for (const [kind, signature] of [['roof-illustration', false], ['signature-sample', true]]) {
-      const storageKey = key(job.id, kind)
+      const storageKey = key(job.id + (writtenMedia ? randomUUID() : ''), kind)
       const content = illustration(index, signature)
       await writeFile(resolve(root, storageKey), content, { mode: 0o600 })
+      writtenMedia?.push(storageKey)
       files.push({ id: 'DEMO-' + storageKey, storageKey, ownerType: 'INSTALLATION', ownerId: job.id,
         originalName: kind + '-demo.png', mimeType: 'image/png', sizeBytes: content.length,
         uploadedById: admin.id, createdAt: finishedAt })
@@ -97,6 +107,11 @@ export async function seedInstallations(db) {
         checklist: { mounting: true, electrical: true, earthing: true, generation: true },
         generationTestPassed: true, signatureAttachmentId: files[1].id,
       }, actor)
+      await tx.jobCost.create({ data: {
+        orderId: job.orderId, recordedById: admin.id, category: 'TRANSPORT',
+        description: index % 7 === 0 ? 'Second mobilization and lift rental' : 'Crew travel and material handling',
+        amount: index % 7 === 0 ? 18500 : 850 + index * 35, incurredAt: finishedAt,
+      } })
       await tx.installation.update({ where: { id: job.id }, data: {
         signedAt: new Date(finishedAt.getTime() + 300_000), notes: 'Demo completion with synthetic roof illustration and signature sample.',
       } })

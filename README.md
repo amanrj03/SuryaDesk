@@ -31,7 +31,7 @@ Open `http://localhost:5173` for the staff workspace or `http://localhost:5173/e
 
 Role accounts use `<role>@demo.suryadesk.test` for admin, director, sales, surveyor, warehouse, technician, support, and finance. Use the password configured for the first seed. If you omit it, the seed prints a generated password when it first creates the accounts. Reruns preserve existing users and records.
 
-The seed includes staff, 200 customers, 300 enquiries, 150 surveys, 180 quotations, 120 orders, 200 payments, 20 system packages, 500 serialized units, 20 suppliers, 60 purchase orders, shipment and warranty history, crew schedules, 12 completed installations with 24 labeled synthetic evidence files, invoices, subsidies, and 100 service tickets. Names, prices, systems, and contact information are illustrative. The database also contains covered and billable service cases. Choose **Last 365 days** on the overview to inspect historical collections and profitability.
+The seed includes 25 staff, 200 customers, 300 enquiries, 195 surveys, 180 quotations, 120 orders, 20 package templates, 21 products, 991 serialized units, 20 suppliers, 60 purchase orders, 40 signed installations with 80 labeled synthetic evidence files, and 100 service tickets. Equipment sizing, financial amounts, customer details, and work logs are fictional. Choose **Last 365 days** on the overview to inspect historical collections and profitability.
 
 The demo can be used to exercise the workflow:
 
@@ -90,3 +90,15 @@ Sign in at `http://127.0.0.1:55173/login` as `admin@demo.suryadesk.test`. To ret
 2. Open Dispatch, set the status filter to Allocated, and inspect `DEMO-DSP-0037` for an allocated pick with serials. In Equipment serials, look up `SD-INVERTER-00001` for delivered warranty coverage.
 3. Inspect `DEMO-ORD-0001` and its completed installation evidence. In Service tickets, find `DEMO-TKT-0041` and its chargeable service invoice `DEMO-SVC-0041`.
 4. Open Overview, choose Last 365 days, inspect job profitability and technician costs, then download the CSV.
+
+### Local demo sign-in
+
+When the frontend runs in Vite development mode on loopback, the sign-in page shows **Demo accounts** if `SEED_DEMO_PASSWORD` is configured in `backend/.env` or the development environment. Select a role to fill its seeded email and password, then click **Sign in**. Use the password from the original seed because rerunning the seed preserves existing accounts. The picker is unavailable in production builds.
+
+### Refresh the demo dataset
+
+Run `npm.cmd --prefix backend run db:seed -- --replace-demo` with local PostgreSQL running. This replaces the marked demo business records and regenerates synthetic installation evidence. Existing staff accounts are kept. Foreign-key conflicts, manual uploads on demo records, or stock activity outside the seed prevent the reset from committing.
+
+Use the status filters to find rejected and pending surveys, expired and accepted quotes, cancelled orders, unpaid and partially paid invoices, low-stock products, expired warranties, and covered or billable service tickets. The overview includes recent enquiries as well as historical project and expense records.
+
+For specific test cases, open `DEMO-TKT-0013` to inspect a covered serial replacement, `DEMO-TKT-0041` for an itemized billable service visit, `DEMO-INV-0102` for a draft invoice, and `DEMO-INVERTER-STRING` for an out-of-stock product.

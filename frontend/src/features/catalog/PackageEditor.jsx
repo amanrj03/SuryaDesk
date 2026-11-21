@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from 'react'
-import { api } from './api.js'
+import { api } from '../../lib/api.js'
 
 const categories = [
   ['ON_GRID', 'On-grid system'], ['OFF_GRID', 'Off-grid system'],

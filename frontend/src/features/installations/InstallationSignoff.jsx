@@ -1,5 +1,5 @@
 ﻿import { useRef, useState } from 'react'
-import { api } from './api.js'
+import { api } from '../../lib/api.js'
 
 const checks = [
   ['mounting', 'Mounting and panels secured'], ['electrical', 'Electrical connections checked'],

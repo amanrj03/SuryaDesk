@@ -4,14 +4,14 @@ import {
   ArrowDownTrayIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/outline'
-import { api } from './api.js'
+import { api } from '../../lib/api.js'
 import AdminOverview from './AdminOverview.jsx'
-import { PageHeader, Toolbar } from './components/ui/PageHeader.jsx'
-import { Card, Panel } from './components/ui/Surface.jsx'
-import { Avatar } from './components/ui/Avatar.jsx'
-import { Button } from './components/ui/Button.jsx'
-import { TableSkeleton, ErrorState } from './components/ui/States.jsx'
-import { BarChart } from './components/charts/BarChart.jsx'
+import { PageHeader, Toolbar } from '../../components/ui/PageHeader.jsx'
+import { Card, Panel } from '../../components/ui/Surface.jsx'
+import { Avatar } from '../../components/ui/Avatar.jsx'
+import { Button } from '../../components/ui/Button.jsx'
+import { TableSkeleton, ErrorState } from '../../components/ui/States.jsx'
+import { BarChart } from '../../components/charts/BarChart.jsx'
 
 const money = (value) =>
   new Intl.NumberFormat('en-IN', {

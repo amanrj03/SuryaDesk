@@ -1,39 +1,15 @@
 import { useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import {
   ChevronUpIcon,
   ArrowRightStartOnRectangleIcon,
   ChartBarSquareIcon,
-  InboxStackIcon,
-  ClipboardDocumentCheckIcon,
-  CubeIcon,
-  ShoppingBagIcon,
-  Squares2X2Icon,
-  TruckIcon,
-  ShieldCheckIcon,
-  WrenchScrewdriverIcon,
-  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 import { cn } from '../../lib/cn.js'
 import { Avatar } from '../ui/Avatar.jsx'
 import { words } from '../../lib/format.js'
 
-// Dual structure: icon rail on left (desktop only, decorative/aria-hidden)
-const ICON_RAIL = [
-  { to: '/overview', label: 'Overview', icon: ChartBarSquareIcon },
-  { to: '/leads', label: 'Enquiries', icon: InboxStackIcon },
-  { to: '/customers', label: 'Customers', icon: InboxStackIcon },
-  { to: '/surveys', label: 'Surveys', icon: ClipboardDocumentCheckIcon },
-  { to: '/packages', label: 'Packages', icon: CubeIcon },
-  { to: '/orders', label: 'Orders', icon: ShoppingBagIcon },
-  { to: '/inventory', label: 'Inventory', icon: Squares2X2Icon },
-  { to: '/installations', label: 'Installations', icon: WrenchScrewdriverIcon },
-  { to: '/warranties', label: 'Warranties', icon: ShieldCheckIcon },
-  { to: '/invoices', label: 'Invoices', icon: DocumentTextIcon },
-]
-
 export function Sidebar({ user, sections = [], onLogout }) {
-  const { pathname } = useLocation()
   const hasReports = user?.capabilities?.includes('reports:view')
   const allowed = sections.filter((section) =>
     (section.capabilities ?? [section.capability]).some((cap) =>
@@ -71,45 +47,8 @@ export function Sidebar({ user, sections = [], onLogout }) {
   ]
 
   return (
-    <aside className="sidebar flex w-full flex-col justify-between py-1 px-1 lg:min-h-full lg:py-2 lg:pl-2 lg:pr-1">
+    <aside className="sidebar flex w-full flex-col justify-between py-1 px-1 lg:min-h-full lg:py-2 lg:px-2">
       <div className="flex w-full items-center justify-between gap-2 lg:items-stretch lg:gap-3">
-        {/* Left vertical Icon Rail: DESKTOP ONLY, aria-hidden so no strict-mode duplicate links */}
-        <div
-          className="hidden shrink-0 flex-col items-center gap-3.5 pt-0.5 text-gray-600 lg:flex"
-          aria-hidden="true"
-        >
-          <div className="flex size-7 items-center justify-center rounded-lg bg-white p-0.5 shadow-2xs border border-white/60">
-            <img
-              src="/logo.png"
-              alt="SuryaDesk"
-              width="222"
-              height="195"
-              className="size-full object-contain"
-            />
-          </div>
-          {ICON_RAIL.filter(({ to }) => to === '/overview' ? hasReports : allowed.some(({ path }) => '/' + path === to)).map((entry) => {
-            const Icon = entry.icon
-            const active =
-              pathname === entry.to ||
-              (entry.to !== '/overview' && pathname.startsWith(entry.to))
-
-            return (
-              <NavLink
-                key={entry.to}
-                to={entry.to}
-                tabIndex={-1}
-                aria-hidden="true"
-                className={cn(
-                  'transition-colors p-1 rounded-lg pointer-events-auto',
-                  active ? 'text-[#E62E6B] bg-white/70' : 'text-gray-400 hover:text-gray-800',
-                )}
-              >
-                <Icon className="size-4.5" />
-              </NavLink>
-            )
-          })}
-        </div>
-
         {/* Primary Workspace Navigation */}
         <nav
           aria-label="Workspace"

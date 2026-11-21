@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client'
 
-const day = 86400_000
+import { day, seedNow } from './seed-clock.js'
 const reference = (prefix, order) => prefix + order.id.slice(-4)
 const tracked = ['DOCUMENTS_PENDING', 'SUBMITTED', 'APPROVED', 'REJECTED', 'PAID']
 
@@ -15,27 +15,26 @@ export async function seedFinance(db) {
   let subsidyCount = 0
   for (const order of rows) {
     const paid = order.paymentsByOrder.reduce((sum, payment) => sum.plus(payment.amount), new Prisma.Decimal(0))
-    const issueAt = new Date(order.confirmedAt.getTime() + day)
+    const issueAt = new Date(Math.min(seedNow.getTime(), order.confirmedAt.getTime() + day))
     const appStage = tracked[subsidyCount % tracked.length]
     await db.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${order.id} FOR UPDATE`
-      if (order.status === 'CANCELLED') return
       if (!await tx.invoice.findUnique({ where: { orderId: order.id } })) {
         const complete = paid.gte(order.total)
         await tx.invoice.create({ data: {
           invoiceNumber: reference('DEMO-INV-', order), customerId: order.customerId, orderId: order.id,
           subtotal: order.subtotal, tax: order.tax, total: order.total, issuedAt: issueAt,
           dueAt: new Date(issueAt.getTime() + 30 * day),
-          status: complete ? 'PAID' : paid.gt(0) ? 'PARTIALLY_PAID' : 'ISSUED',
+          status: order.status === 'CANCELLED' ? 'VOID' : complete ? 'PAID' : paid.gt(0) ? 'PARTIALLY_PAID' : Number(order.id.slice(-4)) % 3 === 0 ? 'DRAFT' : 'ISSUED',
           paidAt: complete ? new Date(Math.max(issueAt.getTime(), order.paymentsByOrder.at(-1)?.receivedAt.getTime() ?? 0)) : null,
           invoiceLinesByInvoice: { createMany: { data: order.orderLinesByOrder.map(line => ({
             description: line.descriptionSnapshot, quantity: line.quantity, unitPrice: line.unitPriceSnapshot, lineTotal: line.lineTotal,
           })) } },
         } })
       }
-      if (order.quotation.lead.subsidyInterest) {
-        const status = order.status === 'COMPLETED' ? appStage : 'DOCUMENTS_PENDING'
-        const submitted = status !== 'DOCUMENTS_PENDING'
+      if (order.status !== 'CANCELLED' && order.quotation.lead.subsidyInterest) {
+        const status = order.status === 'COMPLETED' ? appStage : subsidyCount % 3 === 0 ? 'NOT_STARTED' : 'DOCUMENTS_PENDING'
+        const submitted = !['NOT_STARTED', 'DOCUMENTS_PENDING'].includes(status)
         const decided = submitted && status !== 'SUBMITTED'
         await tx.subsidyApplication.upsert({ where: { orderId: order.id }, update: {}, create: {
           orderId: order.id, status, createdAt: issueAt,

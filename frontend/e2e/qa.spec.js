@@ -154,3 +154,14 @@ test('header enquiry search and mobile navigation work', async ({ page }) => {
   await page.getByRole('button', { name: 'Open navigation' }).click()
   await expect(navigation).toBeVisible()
 })
+
+test('the local demo picker fills the selected role and signs in using the seeded password', async ({ page }) => {
+  await page.goto('/login')
+  const accounts = page.getByRole('region', { name: 'Demo accounts' })
+  await expect(accounts.getByRole('button')).toHaveCount(8)
+  await accounts.getByRole('button', { name: 'Sales' }).click()
+  await expect(page.getByLabel('Work email')).toHaveValue('sales@demo.suryadesk.test')
+  await expect(page.getByLabel('Password', { exact: true })).not.toHaveValue('')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await expect(page).toHaveURL(/\/leads$/)
+})

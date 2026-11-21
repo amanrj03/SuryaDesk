@@ -1,8 +1,11 @@
 ﻿import { randomBytes } from 'node:crypto'
+import { unlink } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { clearDemoData } from './clear-demo-data.js'
 import bcrypt from 'bcrypt'
 import { seedInstallations } from './seed-installations.js'
 import { seedProcurement } from './seed-procurement.js'
-import { seedOperations } from './seed-operations.js'
+import { seedOperations, seedServiceAssetCases } from './seed-operations.js'
 import { seedFinance } from './seed-finance.js'
 import { seedWarehouse } from './seed-warehouse.js'
 import { seedSales } from './seed-sales.js'
@@ -24,6 +27,17 @@ const materials = [
   ['BOX', 'Weatherproof wiring box', 'WIRING', 1600, 2400, false, 0, 10],
   ['SWITCH', 'DC disconnect switch', 'SWITCH', 1400, 2100, false, 0, 10],
   ['EARTH', 'Earthing and surge protection kit', 'SAFETY', 2400, 3850, false, 0, 10],
+  ['PANEL-BIFACIAL', '580 W bifacial TOPCon solar module', 'PANEL', 8600, 12150, true, 300, 8],
+  ['INVERTER-HYBRID', '5 kW single phase hybrid inverter', 'INVERTER', 43500, 59750, true, 60, 4],
+  ['INVERTER-STRING', '10 kW three phase string inverter', 'INVERTER', 51000, 67900, true, 60, 2],
+  ['BATTERY-RACK', '48 V 5 kWh rack lithium battery', 'BATTERY', 59500, 72500, true, 60, 3],
+  ['CONTROLLER-MPPT', '60 A MPPT controller', 'CONTROLLER', 4900, 7800, true, 24, 3],
+  ['STAND-CORRUGATED', 'Rail clamp kit for corrugated roof', 'STAND', 1450, 2360, false, 0, 12],
+  ['WIRING-6MM', '6 mm DC cable roll', 'WIRING', 5800, 7800, false, 0, 8],
+  ['BOX-4STRING', 'Four string combiner box', 'WIRING', 2300, 3675, false, 0, 6],
+  ['SWITCH-AC', 'Four pole AC isolator', 'SWITCH', 820, 1390, false, 0, 5],
+  ['EARTH-ROD', 'Copper bonded earth electrode', 'SAFETY', 690, 1120, false, 0, 10],
+  ['METER-DIN', 'Three phase generation meter', 'OTHER', 1900, 2925, false, 0, 5],
   ['CONNECTOR', 'Solar connector pair', 'WIRING', 140, 240, false, 0, 30],
 ]
 
@@ -97,16 +111,54 @@ if (process.env.NODE_ENV === 'production' || !databaseUrl ||
   !['localhost', '127.0.0.1', '[::1]'].includes(new URL(databaseUrl).hostname)) {
   throw new Error('Demo seeding requires a local development PostgreSQL database.')
 }
+async function populate(client, writtenMedia) {
+  await seed(client)
+  await seedSales(client)
+  await seedWarehouse(client)
+  await seedOperations(client)
+  await seedInstallations(client, writtenMedia)
+  await seedServiceAssetCases(client)
+  await seedFinance(client)
+  await seedProcurement(client)
+}
+
+async function removeMedia(files) {
+  const root = resolve(process.env.UPLOAD_DIR ?? 'uploads')
+  for (const key of files) {
+    if (!/^[a-f0-9-]{36}$/.test(key)) continue
+    await unlink(resolve(root, key)).catch(error => {
+      if (error.code !== 'ENOENT') console.warn('Could not remove an obsolete demo attachment:', error.code)
+    })
+  }
+}
+
 const db = createDatabase(databaseUrl)
+const writtenMedia = []
 try {
-  await seed(db)
-  await seedSales(db)
-  await seedWarehouse(db)
-  await seedFinance(db)
-  await seedOperations(db)
-  await seedInstallations(db)
-  await seedProcurement(db)
-  console.log('Relational SuryaDesk demo records seeded.')
+  if (process.argv.includes('--replace-demo')) {
+    let removedMedia
+    try {
+      removedMedia = await db.$transaction(async tx => {
+        const obsolete = await clearDemoData(tx)
+        const client = new Proxy(tx, {
+          get(target, property) {
+            if (property === '$transaction') return callback => callback(tx)
+            return Reflect.get(target, property)
+          },
+        })
+        await populate(client, writtenMedia)
+        return obsolete
+      }, { timeout: 120_000 })
+    } catch (error) {
+      await removeMedia(writtenMedia)
+      throw error
+    }
+    await removeMedia(removedMedia)
+    console.log('Replaced the demo dataset. Existing staff accounts were retained.')
+  } else {
+    await populate(db)
+    console.log('Relational SuryaDesk demo records seeded.')
+  }
 } finally {
   await db.$disconnect()
 }

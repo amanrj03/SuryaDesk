@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from 'react'
-import { api } from './api.js'
+import { api } from '../../lib/api.js'
 
 const input = (name, label, type = 'text', attributes = {}) => ({ name, label, type, attributes })
 const choice = (name, label, options) => ({ name, label, type: 'select', options })

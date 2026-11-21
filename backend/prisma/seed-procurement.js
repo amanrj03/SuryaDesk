@@ -1,7 +1,7 @@
 import { procurementService } from '../src/modules/procurement/procurement.service.js'
 
 const regions = ['Konkan', 'Deccan', 'Malabar', 'Sahyadri', 'Vindhya', 'Marwar', 'Udupi', 'Kutch', 'Godavari', 'Kaveri']
-const day = 86400_000
+import { day, daysFrom, seedNow } from './seed-clock.js'
 
 export async function seedProcurement(db) {
   const actor = await db.user.findUniqueOrThrow({ where: { email: 'warehouse@demo.suryadesk.test' } })
@@ -19,7 +19,7 @@ export async function seedProcurement(db) {
       email: 'supplier' + number + '@demo.suryadesk.test', phone: '+9100001000' + number,
     } }))
   }
-  const start = new Date('2026-08-01T05:00:00Z')
+  const start = daysFrom(seedNow, -67)
   for (let index = 0; index < 60; index++) {
     const purchaseNumber = 'DEMO-PO-' + String(index + 1).padStart(3, '0')
     const part = parts[index % parts.length]
@@ -28,7 +28,7 @@ export async function seedProcurement(db) {
     const quantity = 12 + index % 31
     const row = await db.purchaseOrder.upsert({ where: { purchaseNumber }, update: {}, create: {
       purchaseNumber, supplierId: suppliers[index % suppliers.length].id, createdById: actor.id,
-      status: orderedAt ? 'ORDERED' : 'DRAFT', createdAt, orderedAt,
+      status: index >= 55 ? 'CANCELLED' : orderedAt ? 'ORDERED' : 'DRAFT', createdAt, orderedAt,
       expectedAt: new Date(createdAt.getTime() + 10 * day),
       lines: { create: { productId: part.id, quantity, unitCost: part.cost } },
     } })
