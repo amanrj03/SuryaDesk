@@ -9,6 +9,8 @@ const schema = z.object({
 const runtime = schema.extend({
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   JWT_SECRET: z.string().min(32),
+  CUSTOMER_EMAIL_FROM: z.string().trim().min(1).optional(),
+  RESEND_API_KEY: z.string().trim().min(1).optional(),
 })
 
 export function readRuntimeConfig(environment = process.env) {

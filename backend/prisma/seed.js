@@ -6,6 +6,7 @@ import bcrypt from 'bcrypt'
 import { seedInstallations } from './seed-installations.js'
 import { seedProcurement } from './seed-procurement.js'
 import { seedInstallationSchedule, seedOperations, seedServiceAssetCases } from './seed-operations.js'
+import { seedCustomerAccounts } from './seed-customer-accounts.js'
 import { seedFinance } from './seed-finance.js'
 import { seedWarehouse } from './seed-warehouse.js'
 import { seedPendingOrderQuotes, seedSales } from './seed-sales.js'
@@ -137,6 +138,7 @@ async function populate(client, writtenMedia) {
   await seedServiceAssetCases(client)
   await seedFinance(client)
   await seedProcurement(client)
+  await seedCustomerAccounts(client)
 }
 
 async function removeMedia(files) {
@@ -152,7 +154,9 @@ async function removeMedia(files) {
 const db = createDatabase(databaseUrl)
 const writtenMedia = []
 try {
-  if (process.argv.includes('--configure-demo-tax')) {
+  if (process.argv.includes('--portal-accounts')) {
+    await seedCustomerAccounts(db)
+  } else if (process.argv.includes('--configure-demo-tax')) {
     await db.$transaction(configureSampleTaxes)
     console.log('Configured illustrative rates on local sample catalog items with no rate.')
   } else if (process.argv.includes('--pending-order-quotes')) {

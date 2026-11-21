@@ -7,7 +7,7 @@ const forbidden = () => new ApiError(403, 'FORBIDDEN', 'Only assigned technician
 const invalid = message => new ApiError(409, 'INVALID_TRANSITION', message)
 const assigned = technicianId => ({ installationAssignmentsByInstallation: { some: { technicianId } } })
 const include = {
-  order: { include: { customer: true } },
+  order: { include: { customer: true, quotation: { select: { lead: { select: { siteAddress: true } } } } } },
   installationAssignmentsByInstallation: { include: {
     technician: { select: { id: true, name: true, email: true } },
   } },

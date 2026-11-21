@@ -23,8 +23,11 @@ import { leadsRoutes } from './modules/leads/leads.routes.js'
 import { authRoutes } from './modules/auth/auth.routes.js'
 import { authService } from './modules/auth/auth.service.js'
 import { errorHandler } from './middleware/errorHandler.js'
+import { customerPortalRoutes } from './modules/portal/portal.routes.js'
+import { customerMailer } from './modules/portal/portal.mailer.js'
 
-export function createApp({ CORS_ORIGIN, JWT_SECRET }, database) {
+export function createApp(config, database, { sendCustomerEmail = customerMailer(config) } = {}) {
+  const { CORS_ORIGIN, JWT_SECRET } = config
   const app = express()
   app.disable('x-powered-by')
   app.use(helmet())
@@ -42,6 +45,7 @@ export function createApp({ CORS_ORIGIN, JWT_SECRET }, database) {
   if (database) {
     const auth = authService(database, JWT_SECRET)
     app.use('/api/v1/auth', authRoutes(auth))
+    app.use('/api/v1/customer-portal', customerPortalRoutes(database, auth, config, sendCustomerEmail))
     app.use('/api/v1', customersRoutes(database, auth))
     app.use('/api/v1', procurementRoutes(database, auth))
     app.use('/api/v1', usersRoutes(database, auth))

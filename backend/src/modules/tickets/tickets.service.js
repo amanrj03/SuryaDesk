@@ -59,7 +59,10 @@ export function ticketsService(db) {
           coverageDecision: asset ? covered ? 'COVERED' : 'NOT_COVERED' : 'PENDING',
           coverageReason: asset ? covered ? 'Serial covered at incident time.' : 'No coverage for this serial at incident time.' : undefined,
         }, include })
-        await audit(tx, ticket.id, 'OPENED', user.id, { coverageDecision: ticket.coverageDecision })
+        await audit(tx, ticket.id, 'OPENED', user.id, {
+          coverageDecision: ticket.coverageDecision,
+          ...(user.customerAccountId && { customerAccountId: user.customerAccountId }),
+        })
         return ticket
       })
     },
@@ -220,7 +223,9 @@ export function ticketsService(db) {
         if (ticket.status !== 'RESOLVED_PENDING_CONFIRMATION') throw invalid('Resolve the ticket before recording customer confirmation.')
         const time = confirmedAt ?? new Date()
         if (time < ticket.resolvedAt || time > new Date()) throw validation('Enter a valid confirmation date.')
-        await audit(tx, id, 'CLOSED', user.id, { customerConfirmationName })
+        await audit(tx, id, 'CLOSED', user.id, {
+          customerConfirmationName, ...(user.customerAccountId && { customerAccountId: user.customerAccountId }),
+        })
         return tx.serviceTicket.update({ where: { id }, include, data: { status: 'CLOSED', customerConfirmationName, confirmedAt: time } })
       })
     },

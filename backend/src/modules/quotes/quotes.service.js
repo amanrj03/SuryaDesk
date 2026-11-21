@@ -154,7 +154,11 @@ export function quotesService(db) {
         })
         if (!changed.count) throw invalid('This quotation changed during the request.')
         if (issueTogether) await audit(tx, id, 'SENT', user.id, { from })
-        await audit(tx, id, status, user.id, { from: issueTogether ? 'SENT' : from, ...(options.reason && { reason: options.reason }) })
+        await audit(tx, id, status, user.id, {
+          from: issueTogether ? 'SENT' : from,
+          ...(options.reason && { reason: options.reason }),
+          ...(user.customerAccountId && { customerAccountId: user.customerAccountId }),
+        })
         if (accepting) await createAcceptedOrder(tx, id, {}, user)
         return tx.quotation.findUnique({ where: { id }, include })
       })

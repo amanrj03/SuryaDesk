@@ -259,6 +259,7 @@ model Customer {
   warrantiesByCustomer       Warranty[]        @relation("Warranty_customer")
   serviceTicketsByCustomer   ServiceTicket[]   @relation("ServiceTicket_customer")
   invoicesByCustomer         Invoice[]         @relation("Invoice_customer")
+  portalAccounts             CustomerAccount[]
 
   @@index([phone])
 }
@@ -284,11 +285,54 @@ model Lead {
   leadActivitiesByLead LeadActivity[] @relation("LeadActivity_lead")
   siteSurveysByLead    SiteSurvey[]   @relation("SiteSurvey_lead")
   quotationsByLead     Quotation[]    @relation("Quotation_lead")
+  portalAccountId       String?
+  siteAddress           String?
+  portalAccount         CustomerAccount? @relation(fields: [portalAccountId], references: [id], onDelete: SetNull)
 
+  @@index([portalAccountId])
   @@index([status])
   @@index([createdAt])
   @@index([customerId])
   @@index([assignedToId])
+}
+
+model CustomerAccount {
+  id               String            @id @default(cuid())
+  email            String            @unique
+  passwordHash     String
+  name             String
+  phone            String
+  address          String
+  customerId       String
+  historicalAccess Boolean           @default(false)
+  verifiedAt       DateTime          @default(now())
+  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  leads            Lead[]
+  sessions         CustomerSession[]
+
+  @@index([customerId])
+}
+
+model CustomerSession {
+  id        String          @id @default(cuid())
+  accountId String
+  expiresAt DateTime
+  account   CustomerAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+}
+
+model CustomerChallenge {
+  email       String
+  purpose     String
+  digest      String
+  expiresAt   DateTime
+  resendAfter DateTime
+  attempts    Int     @default(0)
+  payload     Json?
+
+  @@id([email, purpose])
+  @@index([expiresAt])
 }
 
 model LeadActivity {

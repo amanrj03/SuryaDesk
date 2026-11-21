@@ -4,6 +4,7 @@ import { ApiError } from '../../utils/ApiError.js'
 const include = {
   order: { include: {
     customer: true, orderLinesByOrder: true,
+    quotation: { select: { lead: { select: { siteAddress: true } } } },
     invoiceByOrder: { select: { id: true, invoiceNumber: true, status: true } },
   } },
   dispatchItemsByDispatch: { include: { asset: true, product: true } },

@@ -29,7 +29,10 @@ test('Express connects public intake to paid delivery, signed completion, and co
           return Reflect.get(target, property, receiver)
         },
       })
-      const app = createApp({ CORS_ORIGIN: 'http://localhost:5173', JWT_SECRET: process.env.JWT_SECRET }, database)
+      const messages = new Map()
+      const app = createApp({ CORS_ORIGIN: 'http://localhost:5173', JWT_SECRET: process.env.JWT_SECRET }, database, {
+        sendCustomerEmail: async ({ email, message }) => messages.set(email, message),
+      })
       const server = app.listen(0, '127.0.0.1')
       await once(server, 'listening')
       const url = 'http://127.0.0.1:' + server.address().port + '/api/v1'
@@ -47,14 +50,56 @@ test('Express connects public intake to paid delivery, signed completion, and co
       }
       const post = (path, body = {}) => request('POST', path, body)
       const patch = (path, body) => request('PATCH', path, body)
+      let cookie
+      const portal = (path, { method = 'GET', body, session = cookie } = {}) => fetch(url + '/customer-portal' + path, {
+        method, body: body instanceof FormData ? body : JSON.stringify(body),
+        headers: {
+          ...(session && { Cookie: session }),
+          ...(body != null && !(body instanceof FormData) && { 'Content-Type': 'application/json' }),
+        },
+      })
+      async function portalData(path, options, status = 200) {
+        const response = await portal(path, options)
+        const result = await response.json()
+        assert.equal(response.status, status, path + ' ' + JSON.stringify(result))
+        return result.data
+      }
+      async function portalPdf(path) {
+        const response = await portal(path)
+        assert.equal(response.status, 200)
+        assert.equal(Buffer.from(await response.arrayBuffer()).subarray(0, 5).toString(), '%PDF-')
+      }
+      const code = () => messages.get(email).match(/\b\d{6}\b/)?.[0]
       try {
-        const enquiry = await post('/public/enquiries', { name: key, phone: '+910000000000', address: 'Test residence', desiredKw: '2.00' })
+        const legacy = await post('/public/enquiries', { name: key, email, phone: '+910000000000', address: 'Test residence' })
+        const legacyLead = await tx.lead.findUniqueOrThrow({ where: { leadNumber: legacy.leadNumber } })
+        const signup = { name: key, phone: '+910000000000', email, address: 'Test residence', desiredKw: '2.00', password, confirmPassword: password }
+        assert.equal((await portal('/records')).status, 401)
+        const { requestId } = await portalData('/enquiries/start', { method: 'POST', body: signup }, 202)
+        assert.equal(await tx.customerAccount.count({ where: { email } }), 0)
+        const activationBody = { email, requestId, code: code() }
+        assert.equal((await portal('/enquiries/verify', { method: 'POST', body: { ...activationBody, requestId: randomUUID() } })).status, 400)
+        const activation = await portal('/enquiries/verify', { method: 'POST', body: activationBody })
+        assert.equal(activation.status, 201, await activation.clone().text())
+        cookie = activation.headers.get('set-cookie').split(';')[0]
+        const enquiry = (await activation.json()).data
+        assert.equal((await portal('/enquiries/verify', { method: 'POST', body: activationBody })).status, 400)
+        assert.equal((await portalData('/records')).requests.length, 1)
+        assert.equal(await tx.customer.count({ where: { email } }), 1)
         const received = await post('/public/tracking', { token: enquiry.leadNumber.toLowerCase() })
         assert.equal(received.trackingId, enquiry.leadNumber)
         assert.equal(received.status, 'NEW')
         assert.ok(received.timeline[0].at)
         assert.ok(received.timeline.slice(1).every(event => event.at === null))
         token = (await post('/auth/login', { email, password })).accessToken
+        const approval = '/customer-portal/staff/customers/' + legacyLead.customerId + '/access'
+        assert.equal((await portal('/staff/customers/' + legacyLead.customerId + '/access', {
+          method: 'PATCH', body: { email, approved: true },
+        })).status, 401)
+        await patch(approval, { email, approved: true })
+        assert.equal((await portalData('/records')).requests.length, 2)
+        await patch(approval, { email, approved: false })
+        assert.equal((await portalData('/records')).requests.length, 1)
         const [lead] = await request('GET', '/leads?q=' + enquiry.leadNumber)
         await patch('/leads/' + lead.id, { status: 'CONTACTED' })
         await patch('/leads/' + lead.id, { status: 'QUALIFIED', roofArea: 40, monthlyBill: '2100.00', gridSuitable: true })
@@ -78,11 +123,13 @@ test('Express connects public intake to paid delivery, signed completion, and co
         const pack = await post('/packages', { code: key, name: 'Journey package', type: 'PANEL_SET',
           basePrice: '250.00', components: [{ productId: product.id, quantity: 1 }] })
         const quote = await post('/quotes', { leadId: lead.id, surveyId: survey.id, packageId: pack.id })
+        assert.deepEqual((await portalData('/records')).requests[0].quotationsByLead, [])
+        assert.equal((await portal('/quotations/' + quote.id + '/pdf')).status, 404)
         await post('/quotes/' + quote.id + '/send')
-        const accepted = await post('/quotes/' + quote.id + '/accept')
-        assert.ok(accepted.orderByQuotation?.id)
+        await portalPdf('/quotations/' + quote.id + '/pdf')
+        await portalData('/quotations/' + quote.id + '/decision', { method: 'POST', body: { status: 'ACCEPTED' } })
         const order = await post('/quotes/' + quote.id + '/convert-to-order')
-        assert.equal(order.id, accepted.orderByQuotation.id)
+        assert.equal(order.id, (await portalData('/records')).orders[0].id)
         assert.equal((await post('/public/tracking', { token: enquiry.leadNumber })).orderNumber, order.orderNumber)
         const pendingWarranties = await post('/public/warranties', { orderNumber: order.orderNumber })
         assert.equal(pendingWarranties.signedAt, null)
@@ -105,6 +152,7 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.deepEqual(await request('GET', assetQuery), [])
         const invoice = await post('/invoices/for-order/' + order.id)
         assert.equal(invoice.status, 'DRAFT')
+        assert.equal((await portal('/invoices/' + invoice.id + '/pdf')).status, 404)
         assert.equal(invoice.invoiceLinesByInvoice.length, 1)
         assert.equal(invoice.invoiceLinesByInvoice[0].taxAmount, '12.5')
         assert.equal(invoice.total, '262.5')
@@ -117,6 +165,11 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.match(pdf.headers.get('content-type'), /^application\/pdf/)
         assert.match(pdf.headers.get('content-disposition'), /attachment;.*\.pdf/)
         assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0, 5).toString(), '%PDF-')
+        await post('/invoices/' + invoice.id + '/issue')
+        await portalPdf('/invoices/' + invoice.id + '/pdf')
+        const paidOrder = (await portalData('/records')).orders[0]
+        assert.equal(paidOrder.balance, '0')
+        await portalPdf('/payments/' + paidOrder.paymentsByOrder[0].id + '/receipt')
         await post(dispatch + '/dispatch')
         const tracking = await post('/orders/' + order.id + '/tracking-link')
         const inTransit = await post('/public/tracking', { token: tracking.token })
@@ -166,12 +219,55 @@ test('Express connects public intake to paid delivery, signed completion, and co
         const coverage = await request('GET', '/assets/' + key + '/warranty')
         assert.equal(coverage.coveredAsOf, true)
         assert.equal(coverage.warranty.startAt, signed.signedAt)
-        const ticket = await post('/tickets', { customerId: order.customerId, assetId: coverage.asset.id,
-          description: 'Test alarm on supplied panel circuit', priority: 'LOW' })
+        const asset = (await portalData('/records')).assets[0]
+        assert.equal(asset.warrantyByAsset.startAt, signed.signedAt)
+        await portalPdf('/warranties/' + asset.id + '/pdf')
+        const ticket = await portalData('/tickets', { method: 'POST', body: {
+          assetId: coverage.asset.id, description: 'Test alarm on supplied panel circuit',
+        } }, 201)
+        const photo = new FormData()
+        photo.append('file', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Yv1cAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'issue.png')
+        const ticketPhoto = await portalData('/tickets/' + ticket.id + '/photo', { method: 'POST', body: photo }, 201)
+        assert.equal((await portal('/photos/' + ticketPhoto.id)).status, 200)
+        const otherEmail = randomUUID() + '@example.invalid'
+        await tx.customerAccount.create({ data: {
+          email: otherEmail, name: 'Unrelated account', phone: '+910000000001', address: 'Another property',
+          passwordHash: await bcrypt.hash(password, 4),
+          customer: { create: { name: 'Unrelated account', phone: '+910000000001', address: 'Another property' } },
+        } })
+        const otherLogin = await portal('/login', { method: 'POST', body: { email: otherEmail, password } })
+        assert.equal(otherLogin.status, 200)
+        const otherSession = otherLogin.headers.get('set-cookie').split(';')[0]
+        assert.deepEqual((await portalData('/records', { session: otherSession })).orders, [])
+        for (const path of [
+          '/quotations/' + quote.id + '/pdf', '/invoices/' + invoice.id + '/pdf', '/warranties/' + asset.id + '/pdf',
+          '/payments/' + paidOrder.paymentsByOrder[0].id + '/receipt', '/photos/' + ticketPhoto.id,
+        ]) {
+          assert.equal((await portal(path, { session: otherSession })).status, 404, path)
+        }
+        assert.equal((await portal('/tickets/' + ticket.id + '/confirm', { session: otherSession, method: 'POST' })).status, 404)
         const resolution = await post('/tickets/' + ticket.id + '/resolve', { coverageDecision: 'COVERED', resolutionNotes: 'Reconnected the circuit.' })
         assert.equal(resolution.invoiceByTicket, null)
-        const closed = await post('/tickets/' + ticket.id + '/confirm', { customerConfirmationName: key })
+        const closed = await portalData('/tickets/' + ticket.id + '/confirm', { method: 'POST' })
         assert.equal(closed.status, 'CLOSED')
+        await portalData('/enquiries', { method: 'POST', body: { address: 'Another site', notes: 'Second rooftop' } }, 201)
+        assert.equal((await portalData('/records')).requests.length, 2)
+        assert.equal(await tx.customer.count({ where: { email } }), 1)
+        await portalData('/logout', { method: 'POST' })
+        assert.equal((await portal('/records')).status, 401)
+        const passwordLogin = await portal('/login', { method: 'POST', body: { email, password } })
+        assert.equal(passwordLogin.status, 200)
+        cookie = passwordLogin.headers.get('set-cookie').split(';')[0]
+        await portalData('/otp/request', { method: 'POST', body: { email } }, 202)
+        const otp = { email, code: code() }
+        const otpLogin = await portal('/otp/verify', { method: 'POST', body: otp })
+        assert.equal(otpLogin.status, 200)
+        assert.equal((await portal('/otp/verify', { method: 'POST', body: otp })).status, 400)
+        await portalData('/password/request', { method: 'POST', body: { email } }, 202)
+        const replacement = randomUUID()
+        await portalData('/password/reset', { method: 'POST', body: { email, code: code(), password: replacement, confirmPassword: replacement } })
+        assert.equal((await portal('/profile')).status, 401)
+        assert.equal((await portal('/login', { method: 'POST', body: { email, password: replacement } })).status, 200)
       } finally {
         await new Promise(resolve => server.close(resolve))
       }
@@ -181,5 +277,46 @@ test('Express connects public intake to paid delivery, signed completion, and co
     await db.$disconnect()
     for (const name of await readdir(root)) await unlink(join(root, name))
     await rmdir(root)
+  }
+})
+
+test('customer codes enforce expiry, resend cooldown, and verification limits', {
+  skip: !process.env.DATABASE_URL,
+}, async () => {
+  const db = createDatabase(process.env.DATABASE_URL)
+  const email = randomUUID() + '@example.invalid'
+  try {
+    await assert.rejects(db.$transaction(async tx => {
+      const { customerAuthService } = await import('../src/modules/portal/customer-auth.service.js')
+      const messages = []
+      const proxy = new Proxy(tx, { get(target, property, receiver) {
+        return property === '$transaction' ? action => action(tx) : Reflect.get(target, property, receiver)
+      } })
+      const service = customerAuthService(proxy, process.env.JWT_SECRET, async ({ message }) => messages.push(message))
+      const password = randomUUID()
+      const signup = { email, password, confirmPassword: password, name: 'Verification fixture',
+        phone: '+910000000000', address: 'Test property', subsidyInterest: false }
+      const { requestId } = await service.signup(signup)
+      const code = () => messages.at(-1).match(/\b\d{6}\b/)[0]
+      await service.resendSignup({ email, requestId })
+      assert.equal(messages.length, 1)
+      const wrongCode = code() === '000000' ? '000001' : '000000'
+      for (let i = 0; i < 5; i++) {
+        await assert.rejects(service.activate({ email, requestId, code: wrongCode }), { code: 'INVALID_CODE' })
+      }
+      await assert.rejects(service.activate({ email, requestId, code: code() }), { code: 'INVALID_CODE' })
+      const where = { email_purpose: { email, purpose: 'signup' } }
+      const past = new Date(Date.now() - 1000)
+      await tx.customerChallenge.update({ where, data: { expiresAt: past, resendAfter: past, attempts: 0 } })
+      await assert.rejects(service.activate({ email, requestId, code: code() }), { code: 'INVALID_CODE' })
+      await service.resendSignup({ email, requestId })
+      assert.equal(messages.length, 2)
+      const account = await service.activate({ email, requestId, code: code() })
+      assert.ok(account.lead.leadNumber)
+      assert.equal(await tx.customerAccount.count({ where: { email } }), 1)
+      throw new Error('Rollback OTP fixture')
+    }), { message: 'Rollback OTP fixture' })
+  } finally {
+    await db.$disconnect()
   }
 })

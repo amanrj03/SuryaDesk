@@ -58,10 +58,10 @@ function authorizeOwner(db, ownerType, ownerId, user, write) {
   return ownerType === 'INSTALLATION' ? allow(db, ownerId, user, write) : allowRelated(db, ownerType, ownerId, user, write)
 }
 
-export function attachmentsService(db, uploadDirectory = process.env.UPLOAD_DIR ?? 'uploads') {
+export function attachmentsService(db, uploadDirectory = process.env.UPLOAD_DIR ?? 'uploads', checkOwner = authorizeOwner) {
   return {
-    async upload(owner, file, user) {
-      await authorizeOwner(db, owner.ownerType, owner.ownerId, user, true)
+    async upload(owner, file, user, uploadedById = user.id) {
+      await checkOwner(db, owner.ownerType, owner.ownerId, user, true)
       const pdf = owner.ownerType === 'SUBSIDY' && file?.buffer.toString('ascii', 0, 5) === '%PDF-'
       const mimeType = pdf ? 'application/pdf' : file && imageType(file.buffer)
       const suffix = file?.originalname.match(permittedSuffix)?.[0].toLowerCase().slice(1)
@@ -77,17 +77,17 @@ export function attachmentsService(db, uploadDirectory = process.env.UPLOAD_DIR 
       await writeFile(target, file.buffer, { flag: 'wx', mode: 0o600 })
       try {
         return await db.attachment.create({ data: {
-          ...owner, originalName, mimeType, storageKey, sizeBytes: file.size, uploadedById: user.id,
+          ...owner, originalName, mimeType, storageKey, sizeBytes: file.size, uploadedById,
         }, select: preview })
       } catch (error) {
         await unlink(target)
         throw error
       }
     },
-    async open(id, user) {
-      const row = await db.attachment.findUnique({ where: { id } })
+    async open(id, user, where) {
+      const row = await db.attachment.findUnique({ where: { ...where, id } })
       if (!row || !/^[a-f0-9-]{36}$/.test(row.storageKey)) throw notFound()
-      await authorizeOwner(db, row.ownerType, row.ownerId, user, false)
+      await checkOwner(db, row.ownerType, row.ownerId, user, false)
       return { path: resolve(uploadDirectory, row.storageKey), mimeType: row.mimeType }
     },
   }

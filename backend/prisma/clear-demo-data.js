@@ -65,6 +65,7 @@ export async function clearDemoData(tx) {
   await tx.siteSurvey.deleteMany({ where: { id: surveys } })
   await tx.leadActivity.deleteMany({ where: { leadId: leads } })
   await tx.lead.deleteMany({ where: { id: leads } })
+  await tx.customerAccount.deleteMany({ where: { customerId: customers, id: prefix('DEMO-PORTAL-'), leads: { none: {} } } })
   await tx.customer.deleteMany({ where: { id: customers } })
   await tx.purchaseOrderLine.deleteMany({ where: { purchaseOrderId: purchases } })
   await tx.purchaseOrder.deleteMany({ where: { id: purchases } })
