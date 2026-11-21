@@ -4,6 +4,7 @@ import { ErrorState } from '../../components/ui/States.jsx'
 import { displayContactEmail, displayPackageDescription, displayReference } from '../../lib/format.js'
 import { Link } from 'react-router-dom'
 import WorkflowAction, { recordActions } from './WorkflowAction.jsx'
+import { TrackingLink } from './TrackingLink.jsx'
 
 const localDate = value => value ? new Intl.DateTimeFormat('en-IN', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata',
@@ -180,6 +181,9 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
         <button type="button" className="primary justify-self-start" onClick={() => setCreatingOrder(true)}>
           Create order
         </button>
+      )}
+      {data && section === 'orders' && capabilities.includes('orders:share_tracking') && (
+        <TrackingLink id={id} token={token} />
       )}
     </header>
     {state.error && <ErrorState message={state.error} onRetry={retryDetails} className="m-4" />}

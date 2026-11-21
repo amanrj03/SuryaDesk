@@ -53,7 +53,7 @@ export function Header({ user, navigationOpen, onToggleNavigation, onLogout }) {
           <Bars3Icon className="size-5" />
         </button>
 
-        <Link to="/" className="flex items-center gap-1.5" aria-label="SuryaDesk Home">
+        <Link to="/workspace" className="flex items-center gap-1.5" aria-label="SuryaDesk Home">
           <img
             src="/logo.png"
             alt="SuryaDesk"

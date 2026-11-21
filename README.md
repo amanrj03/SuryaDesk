@@ -25,7 +25,9 @@ Prerequisites are Node.js 22.12+ on the 22.x release line, npm, and a running lo
    npm.cmd --prefix frontend run dev
    ```
 
-Open `http://localhost:5173` for the staff workspace or `http://localhost:5173/enquiry` for the public form. The frontend proxies `/api` to the local Express server. If port 5173 is already in use, append `-- --port 55173` to the frontend dev command. If you change the API port, set `SURYADESK_API_TARGET` for the Vite process to the corresponding URL. In a production-style build, serve the SPA and proxy `/api` to Express on the same origin, or supply `VITE_API_BASE` when building and configure the API CORS origin accordingly.
+Open `http://localhost:5173` for the public landing page. It links to **Request a quote**, **Track order**, and **Staff sign in**. The frontend proxies `/api` to the local Express server. If port 5173 is already in use, append `-- --port 55173` to the frontend dev command. If you change the API port, set `SURYADESK_API_TARGET` for the Vite process to the corresponding URL. In a production-style build, serve the SPA and proxy `/api` to Express on the same origin, or supply `VITE_API_BASE` when building and configure the API CORS origin accordingly.
+
+Admin, Sales, and Finance can open an order and select **Share tracking link**. Customers can open that link directly or paste it into **Track order**. The link is private to its holder, covers one order and its equipment warranties, and expires after 30 days. Staff share it through their usual customer communication channel.
 
 ## Demo data
 

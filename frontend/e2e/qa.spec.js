@@ -8,13 +8,55 @@ async function signIn(page) {
   await expect(page.getByRole('heading', { name: 'Operations overview' })).toBeVisible()
 }
 
-test('all administrator modules load live records and open actions in modal dialogs', async ({ page }, info) => {
+async function verifyCustomerTracking(page, browser) {
+  await page.getByRole('link', { name: 'Orders', exact: true }).click()
+  const search = page.getByRole('textbox', { name: 'Search orders' })
+  await search.fill('ORD-0001')
+  await search.press('Enter')
+  await page.getByRole('row').filter({ hasText: 'ORD-0001' }).getByRole('link', { name: 'View', exact: true }).click()
+  await expect(page).toHaveURL(/\/orders\/.+/)
+  const orderPath = new URL(page.url()).pathname
+  await page.getByRole('button', { name: 'Share tracking link' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Share tracking link' })
+  const link = await dialog.getByRole('textbox', { name: 'Tracking link' }).inputValue()
+  expect(new URL(link).pathname).toBe('/track')
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+
+  const customer = await browser.newPage({ baseURL: new URL(link).origin })
+  try {
+    await customer.goto('/')
+    await expect(customer.getByRole('link', { name: 'Request a quote' })).toHaveAttribute('href', '/enquiry')
+    await customer.getByRole('link', { name: 'Track order' }).click()
+    await customer.getByRole('textbox', { name: 'Tracking link' }).fill(link)
+    const response = customer.waitForResponse(item => item.url().endsWith('/api/v1/public/tracking') && item.ok())
+    await customer.getByRole('button', { name: 'Check status' }).click()
+    await expect(customer.getByRole('heading', { name: 'ORD-0001', exact: true })).toBeVisible()
+    const warranties = customer.getByRole('region', { name: 'Equipment warranties' })
+    await expect(warranties.getByRole('listitem').first()).toBeVisible()
+    const { data } = await (await response).json()
+    expect(Object.keys(data).sort()).toEqual(['confirmedAt', 'dispatch', 'installation', 'orderNumber', 'status', 'warranties'])
+    expect(data.warranties[0]).toHaveProperty('serialNumber')
+    const token = new URLSearchParams(new URL(link).hash.slice(1)).get('token')
+    const rejected = await customer.request.post('/api/v1/public/tracking', { data: { token: token + 'tampered' } })
+    expect(rejected.status()).toBe(404)
+    const staffRoute = await customer.request.post('/api/v1' + orderPath + '/tracking-link', {
+      headers: { Authorization: 'Bearer ' + token },
+    })
+    expect(staffRoute.status()).toBe(401)
+  } finally {
+    await customer.close()
+  }
+}
+
+test('all administrator modules load live records and open actions in modal dialogs', async ({ page, browser }, info) => {
   test.setTimeout(90000)
   let opened = 0
   let viewed = 0
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
   await signIn(page)
+  await test.step('customer can track one order and its warranties from the public landing page', () =>
+    verifyCustomerTracking(page, browser))
   const nav = page.getByRole('navigation', { name: 'Workspace' })
   await expect(nav.getByRole('link')).toHaveCount(20)
   const links = await nav.getByRole('link').evaluateAll(items => items.map(item => ({

@@ -22,7 +22,7 @@ export default function Login({ onLogin }) {
       const body = Object.fromEntries(new FormData(event.currentTarget))
       const { data } = await api('/auth/login', { method: 'POST', body })
       onLogin(data)
-      navigate('/', { replace: true })
+      navigate('/workspace', { replace: true })
     } catch (failure) {
       setError(failure.message)
     } finally {
