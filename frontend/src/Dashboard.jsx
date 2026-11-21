@@ -1,5 +1,6 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from './api.js'
+import AdminOverview from './AdminOverview.jsx'
 
 const money = value => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(value))
 const metrics = [
@@ -22,6 +23,7 @@ export default function Dashboard({ session }) {
   const [page, setPage] = useState(1)
   const [retry, setRetry] = useState(0)
   const [state, setState] = useState({ loading: true })
+  const admin = session.user.capabilities.includes('reports:admin_overview')
   const financial = session.user.capabilities.includes('reports:financial')
   const description = useMemo(() => query(period), [period])
 
@@ -31,10 +33,13 @@ export default function Dashboard({ session }) {
     Promise.all([
       api('/reports/overview?' + description, options),
       financial && api('/reports/profitability?limit=20&page=' + page + '&' + description, options),
-    ]).then(([overview, profitability]) => setState({ data: overview.data, rows: profitability?.data, meta: profitability?.meta }))
+      admin && api('/reports/admin-overview?' + description, options),
+    ]).then(([overview, profitability, administration]) => setState({
+      data: overview.data, rows: profitability?.data, meta: profitability?.meta, administration: administration?.data,
+    }))
       .catch(error => { if (!controller.signal.aborted) setState({ error: error.message }) })
     return () => controller.abort()
-  }, [description, financial, page, retry, session.accessToken])
+  }, [admin, description, financial, page, retry, session.accessToken])
 
   const data = state.data
   const chart = data?.series.slice(-20) ?? []
@@ -75,8 +80,9 @@ export default function Dashboard({ session }) {
     {state.error && <div className="feedback"><p className="notice" role="alert">{state.error}</p>
       <button className="secondary" onClick={() => { setState({ loading: true }); setRetry(value => value + 1) }}>Try again</button></div>}
     {data && <>
+      {state.administration && <AdminOverview data={state.administration} money={money} />}
       <section className="dashboard-metrics" aria-label="Key totals">
-        {metrics.map(([key, label, format]) => <article key={key}><h2>{label}</h2><p>{format(data[key])}</p></article>)}
+        {metrics.filter(([key]) => !admin || ['cashCollected', 'invoicesIssued', 'purchases'].includes(key)).map(([key, label, format]) => <article key={key}><h2>{label}</h2><p>{format(data[key])}</p></article>)}
       </section>
       <section className="records p-5" aria-labelledby="cash-chart">
         <h2 id="cash-chart">Daily cash collections</h2>
