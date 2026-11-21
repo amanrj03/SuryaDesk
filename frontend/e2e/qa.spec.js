@@ -111,6 +111,7 @@ test('all administrator modules load live records and open actions in modal dial
   await page.getByLabel('Filter by status').selectOption('SUBMITTED')
   const submitted = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Submitted', exact: true }) }).first()
   await expect(submitted.getByRole('button', { name: 'Approve survey', exact: true })).toHaveCount(0)
+  const details = page.waitForResponse(response => /\/api\/v1\/surveys\/[^/]+$/.test(response.url()) && response.ok())
   await submitted.getByRole('link', { name: 'View', exact: true }).click()
   await expect(page.getByText('Findings', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Approve survey', exact: true })).toBeVisible()
@@ -118,6 +119,15 @@ test('all administrator modules load live records and open actions in modal dial
   const reject = page.getByRole('dialog', { name: 'Reject survey' })
   await expect(reject.getByLabel('Reason')).toHaveAttribute('required', '')
   await reject.getByRole('button', { name: 'Close', exact: true }).click()
+  const { data: survey } = await (await details).json()
+  await page.route('**/api/v1/surveys/' + survey.id + '/approve', route => route.fulfill({
+    json: { success: true, data: { ...survey, status: 'APPROVED', lead: { ...survey.lead, status: 'SURVEY_APPROVED' } } },
+  }), { times: 1 })
+  await page.getByRole('button', { name: 'Approve survey', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Approve survey' }).getByRole('button', { name: 'Approve survey', exact: true }).click()
+  const quotation = page.getByRole('dialog', { name: 'Create quotation' })
+  await expect(quotation.getByLabel('Solar package')).toBeVisible()
+  await quotation.getByRole('button', { name: 'Close', exact: true }).click()
   console.log('Verified action dialogs:', opened, 'and detail pages:', viewed)
   await nav.getByRole('link', { name: 'Customers', exact: true }).click()
   const customerSearch = page.getByRole('textbox', { name: 'Search customers' })

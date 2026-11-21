@@ -9,7 +9,7 @@ import { InvoiceDocument } from './InvoiceDocument.jsx'
 import DispatchAllocation from '../dispatch/DispatchAllocation.jsx'
 import PackageEditor from '../catalog/PackageEditor.jsx'
 import { hasDetail } from './RecordDetail.jsx'
-import WorkflowAction, { collectionActions, recordActions } from './WorkflowAction.jsx'
+import WorkflowAction, { collectionActions, quotationAfterApproval, recordActions } from './WorkflowAction.jsx'
 import { Notice } from '../../components/ui/Notice.jsx'
 import { api } from '../../lib/api.js'
 
@@ -82,6 +82,12 @@ export default function Records({ section, token, capabilities }) {
     closePanel()
     setState({ busy: true })
     setRetry((value) => value + 1)
+  }
+
+  function actionSaved(data) {
+    const quote = section.path === 'surveys' ? quotationAfterApproval(panel.action, data, capabilities) : null
+    refresh()
+    if (quote) setPanel({ type: 'action', action: quote })
   }
 
   function go(nextPage) {
@@ -323,7 +329,7 @@ export default function Records({ section, token, capabilities }) {
       {panel?.type === 'action' && (panel.action.key === 'allocate' ? (
         <DispatchAllocation dispatchId={panel.action.dispatchId} token={token} onClose={closePanel} onSaved={refresh} />
       ) : (
-        <WorkflowAction action={panel.action} token={token} onClose={closePanel} onSaved={refresh} />
+        <WorkflowAction key={panel.action.key} action={panel.action} token={token} onClose={closePanel} onSaved={actionSaved} />
       ))}
     </div>
   )

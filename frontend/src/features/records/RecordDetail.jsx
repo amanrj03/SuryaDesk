@@ -3,7 +3,7 @@ import { api } from '../../lib/api.js'
 import { ErrorState } from '../../components/ui/States.jsx'
 import { displayContactEmail, displayPackageDescription, displayReference } from '../../lib/format.js'
 import { Link } from 'react-router-dom'
-import WorkflowAction, { recordActions } from './WorkflowAction.jsx'
+import WorkflowAction, { quotationAfterApproval, recordActions } from './WorkflowAction.jsx'
 import { TrackingLink } from './TrackingLink.jsx'
 import { InvoiceDocument } from './InvoiceDocument.jsx'
 
@@ -254,8 +254,11 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
       </div>}
     </div>}
     {surveyAction && (
-      <WorkflowAction action={surveyAction} token={token} onClose={() => setSurveyAction(null)}
-        onSaved={() => { setSurveyAction(null); retryDetails() }} />
+      <WorkflowAction key={surveyAction.key} action={surveyAction} token={token} onClose={() => setSurveyAction(null)}
+        onSaved={survey => {
+          setSurveyAction(quotationAfterApproval(surveyAction, survey, capabilities))
+          retryDetails()
+        }} />
     )}
     {createOrder && creatingOrder && (
       <WorkflowAction action={createOrder} token={token} onClose={() => setCreatingOrder(false)} />

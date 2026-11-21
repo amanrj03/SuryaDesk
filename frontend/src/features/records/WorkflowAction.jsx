@@ -63,11 +63,11 @@ function baseRecordActions(section, row, capabilities, detail) {
         post('rejectSurvey', 'Reject survey', url + '/approve', [input('rejectionReason', 'Reason', 'textarea')], values => ({ ...values, approved: false }))]
     }
     if (row.status === 'APPROVED' && ['SURVEY_APPROVED', 'QUOTED'].includes(row.lead.status) && can('quotes:create')) {
-      return [post('quote', 'Create quotation', '/quotes', [
+      return [{ ...post('quote', 'Create quotation', '/quotes', [
         { ...choice('packageId', 'Solar package', []), source: '/packages?limit=100' },
         input('includeInstallation', 'Include installation', 'checkbox'), time('validUntil', 'Valid until'),
       ], ({ validUntil, ...values }) => ({ ...values, validUntil: toDate(validUntil),
-        leadId: row.lead.id, surveyId: id }))]
+        leadId: row.lead.id, surveyId: id })), successPath: quote => '/quotes/' + encodeURIComponent(quote.id) }]
     }
   }
   if (section === 'quotes') {
@@ -308,6 +308,11 @@ function Field({ field, options }) {
   return <label>{label}<input type={type} {...common} /></label>
 }
 
+export function quotationAfterApproval(action, survey, capabilities) {
+  if (!['record', 'approve'].includes(action.key) || survey?.status !== 'APPROVED') return null
+  return recordActions('surveys', survey, capabilities).find(candidate => candidate.key === 'quote') ?? null
+}
+
 export default function WorkflowAction({ action, token, onClose, onSaved }) {
   const navigate = useNavigate()
   const [paymentRequestId] = useState(() => action.key === 'payment' ? crypto.randomUUID() : undefined)
@@ -346,7 +351,7 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
       if (action.approveOnSubmit && event.nativeEvent.submitter?.value === 'approve') body.approveOnSubmit = true
       const result = await api(action.path, { token, method: action.method, body })
       if (action.successPath) navigate(action.successPath(result.data))
-      else onSaved()
+      else onSaved(result.data)
     } catch (failure) {
       setError(failure.message)
     } finally {
