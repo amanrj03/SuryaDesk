@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { ApiError } from '../../utils/ApiError.js'
-import { issuePaidOrderInvoice } from '../invoices/invoices.service.js'
+import { issuePaidOrderInvoice, withOrderInvoiceEligibility } from '../invoices/invoices.service.js'
 
 const include = {
   order: { include: {
@@ -59,17 +59,22 @@ export function dispatchService(db) {
     async list({ page, limit, status, orderId }) {
       return db.$transaction(async tx => {
         const where = { status, orderId }
-        const data = await tx.dispatch.findMany({ where, include, skip: (page - 1) * limit, take: limit,
+        const rows = await tx.dispatch.findMany({ where, include, skip: (page - 1) * limit, take: limit,
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
         const total = await tx.dispatch.count({ where })
+        const orders = await withOrderInvoiceEligibility(tx, rows.map(row => row.order))
+        const data = rows.map((row, index) => ({ ...row, order: orders[index] }))
         return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } }
       }, { isolationLevel: 'RepeatableRead' })
     },
 
     async detail(id) {
-      const row = await db.dispatch.findUnique({ where: { id }, include })
-      if (!row) throw missing('Dispatch')
-      return row
+      return db.$transaction(async tx => {
+        const row = await tx.dispatch.findUnique({ where: { id }, include })
+        if (!row) throw missing('Dispatch')
+        const [order] = await withOrderInvoiceEligibility(tx, [row.order])
+        return { ...row, order }
+      }, { isolationLevel: 'RepeatableRead' })
     },
 
     async allocationOptions(id) {

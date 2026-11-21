@@ -13,7 +13,7 @@ export function InvoiceDocument({ order, invoice, token, capabilities, showInvoi
   const saved = invoice ?? order?.invoiceByOrder
   const document = issued && issued.id === saved?.id ? issued : saved
   const canIssue = allowIssue && !order && document?.status === 'DRAFT' && !document.orderId && capabilities.includes('invoices:manage')
-  if (!document || !capabilities.includes('invoices:read') || (order && document.status === 'DRAFT')) return null
+  if (!document || !capabilities.includes('invoices:read')) return null
 
   async function openPdf(print) {
     const preview = print ? window.open('', '_blank') : null
@@ -45,8 +45,12 @@ export function InvoiceDocument({ order, invoice, token, capabilities, showInvoi
 
   return (
     <div data-invoice-actions className="flex flex-wrap items-center gap-2">
-      <button type="button" className="secondary" disabled={busy} onClick={() => openPdf(false)}>Download invoice PDF</button>
-      <button type="button" className="secondary" disabled={busy} onClick={() => openPdf(true)}>Print invoice</button>
+      {document.downloadable ? <>
+        <button type="button" className="secondary" disabled={busy} onClick={() => openPdf(false)}>Download invoice PDF</button>
+        <button type="button" className="secondary" disabled={busy} onClick={() => openPdf(true)}>Print invoice</button>
+      </> : (order || document.orderId) && <span className="text-xs text-gray-600">
+        PDF available after dispatch and full payment.
+      </span>}
       {showInvoiceLink && <Link className="secondary" to={'/invoices/' + encodeURIComponent(document.id)}>View invoice</Link>}
       {canIssue && <button type="button" className="secondary" disabled={busy} onClick={() => setIssuing(true)}>Issue invoice</button>}
       {document?.status === 'DRAFT' && <span className="text-xs text-gray-600">Draft</span>}

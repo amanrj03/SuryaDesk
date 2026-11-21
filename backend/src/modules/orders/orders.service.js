@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { ApiError } from '../../utils/ApiError.js'
 import { paymentTotals } from '../payments/payments.service.js'
 import { pricingBreakdown } from '../../lib/line-pricing.js'
+import { withOrderInvoiceEligibility } from '../invoices/invoices.service.js'
 
 const related = {
   customer: true,
@@ -25,7 +26,9 @@ async function withPaymentTotals(tx, orders) {
     _sum: { amount: true },
   })
   const totalsByOrder = new Map(payments.map(row => [row.orderId, row._sum.amount]))
-  return orders.map(order => ({ ...order, ...paymentTotals(order.total, totalsByOrder.get(order.id)) }))
+  return withOrderInvoiceEligibility(tx, orders.map(order => ({
+    ...order, ...paymentTotals(order.total, totalsByOrder.get(order.id)),
+  })))
 }
 
 export async function createAcceptedOrder(tx, quotationId, { notes }, user) {

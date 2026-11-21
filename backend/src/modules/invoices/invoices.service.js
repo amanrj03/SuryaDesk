@@ -43,6 +43,30 @@ async function audit(tx, row, action, actorId) {
 }
 
 export const dispatchedOrderStatuses = ['DISPATCHED', 'DELIVERED', 'INSTALLATION_IN_PROGRESS', 'COMPLETED']
+export const issuedInvoiceStatuses = ['ISSUED', 'PARTIALLY_PAID', 'PAID']
+export const invoicePendingMessage = 'Order invoice PDFs are available only after dispatch and full payment.'
+
+function isSettledDispatch(order, paidTotal) {
+  return dispatchedOrderStatuses.includes(order.status) && order.total.lte(paidTotal ?? 0)
+}
+
+export function canDownloadInvoice(invoice, order, paidTotal) {
+  return order ? invoice.status === 'PAID' && isSettledDispatch(order, paidTotal)
+    : issuedInvoiceStatuses.includes(invoice.status)
+}
+
+export async function withOrderInvoiceEligibility(tx, orders) {
+  const ids = orders.filter(row => row.invoiceByOrder?.status === 'PAID' && row.paidTotal === undefined).map(row => row.id)
+  const payments = ids.length ? await tx.payment.groupBy({
+    by: ['orderId'], where: { orderId: { in: ids }, voidedAt: null }, _sum: { amount: true },
+  }) : []
+  const totals = new Map(payments.map(row => [row.orderId, row._sum.amount]))
+  return orders.map(row => row.invoiceByOrder ? {
+    ...row, invoiceByOrder: {
+      ...row.invoiceByOrder, downloadable: canDownloadInvoice(row.invoiceByOrder, row, row.paidTotal ?? totals.get(row.id)),
+    },
+  } : row)
+}
 
 // Both dispatch and payment call this while holding the order lock.
 export async function issuePaidOrderInvoice(tx, orderId, actorId) {
@@ -51,7 +75,7 @@ export async function issuePaidOrderInvoice(tx, orderId, actorId) {
   const payments = await tx.payment.aggregate({
     where: { orderId, voidedAt: null }, _sum: { amount: true }, _max: { receivedAt: true },
   })
-  if (order.total.gt(payments._sum.amount ?? 0)) return
+  if (!isSettledDispatch(order, payments._sum.amount)) return
   const existing = await tx.invoice.findUnique({ where: { orderId } })
   if (existing?.status === 'PAID' || existing?.status === 'VOID') return existing
   const issuedAt = new Date()
@@ -73,6 +97,21 @@ export async function issuePaidOrderInvoice(tx, orderId, actorId) {
   } })
   await audit(tx, invoice, 'ISSUED', actorId)
   return invoice
+}
+
+async function readInvoice(tx, where) {
+  const invoice = await tx.invoice.findFirst({ where, include: {
+    ...include,
+    order: { select: { ...include.order.select, status: true, total: true, orderLinesByOrder: { orderBy: { id: 'asc' } } } },
+  } })
+  if (!invoice) throw missing()
+  const payment = invoice.order && invoice.status === 'PAID' ? await tx.payment.aggregate({
+    where: { orderId: invoice.orderId, voidedAt: null }, _sum: { amount: true },
+  }) : null
+  const downloadable = canDownloadInvoice(invoice, invoice.order, payment?._sum.amount)
+  if (!invoice.order) return { ...invoice, downloadable }
+  const { orderLinesByOrder, orderNumber, confirmedAt } = invoice.order
+  return { ...invoice, downloadable, order: { orderNumber, confirmedAt }, pricing: legacyOrderPricing(invoice, orderLinesByOrder) }
 }
 
 export function invoiceService(db) {
@@ -119,14 +158,17 @@ export function invoiceService(db) {
       }, { isolationLevel: 'RepeatableRead' })
     },
     async detail(id) {
-      const invoice = await db.invoice.findUnique({ where: { id }, include: {
-        ...include,
-        order: { select: { ...include.order.select, orderLinesByOrder: { orderBy: { id: 'asc' } } } },
-      } })
-      if (!invoice) throw missing()
-      if (!invoice.order) return invoice
-      const { orderLinesByOrder, ...order } = invoice.order
-      return { ...invoice, order, pricing: legacyOrderPricing(invoice, orderLinesByOrder) }
+      return db.$transaction(tx => readInvoice(tx, { id }), { isolationLevel: 'RepeatableRead' })
+    },
+    async download(id, scope) {
+      return db.$transaction(async tx => {
+        const invoice = await readInvoice(tx, { ...scope, id })
+        if (!invoice.downloadable) {
+          if (scope) throw missing()
+          throw invalid(invoice.orderId ? invoicePendingMessage : 'The service invoice must be issued before downloading its PDF.')
+        }
+        return invoice
+      }, { isolationLevel: 'RepeatableRead' })
     },
     async issue(id, { dueAt }, user) {
       return db.$transaction(async tx => {
@@ -145,7 +187,7 @@ export function invoiceService(db) {
         if (!updated.count) throw invalid('This invoice has already been issued.')
         const result = await tx.invoice.findUnique({ where: { id }, include })
         await audit(tx, result, 'ISSUED', user.id)
-        return result
+        return { ...result, downloadable: canDownloadInvoice(result, null) }
       })
     },
   }

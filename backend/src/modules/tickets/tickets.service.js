@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { roleCapabilities } from '../../config/permissions.js'
 import { ApiError } from '../../utils/ApiError.js'
 import { isCovered } from '../warranties/coverage.js'
+import { canDownloadInvoice } from '../invoices/invoices.service.js'
 
 const include = {
   customer: true, asset: { include: { product: true, warrantyByAsset: true } },
@@ -90,7 +91,11 @@ export function ticketsService(db) {
         where: { ownerType: 'TICKET', ownerId: id },
         select: { id: true, originalName: true, mimeType: true, sizeBytes: true },
       })
-      return { ...ticket, timeline, attachments }
+      const invoice = ticket.invoiceByTicket
+      return {
+        ...ticket, timeline, attachments,
+        invoiceByTicket: invoice && { ...invoice, downloadable: canDownloadInvoice(invoice, null) },
+      }
     },
     async update(id, data, user) {
       return db.$transaction(async tx => {
