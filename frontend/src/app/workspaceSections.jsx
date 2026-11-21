@@ -158,6 +158,8 @@ export const sections = [
     title: 'Dispatch',
     capability: 'dispatch:prepare',
     icon: TruckIcon,
+    search: true,
+    searchPlaceholder: 'Search dispatch, order, or customer…',
     columns: [
       ['Reference', (row) => (
         <span

@@ -56,9 +56,24 @@ function quantities(items) {
 
 export function dispatchService(db) {
   return {
-    async list({ page, limit, status, orderId }) {
+    async list({ page, limit, status, orderId, q }) {
       return db.$transaction(async tx => {
-        const where = { status, orderId }
+        const search = q ? { contains: q, mode: 'insensitive' } : null
+        const searchFilter = search ? {
+          OR: [
+            { dispatchNumber: search },
+            { order: { orderNumber: search } },
+            { order: { customer: { name: search } } },
+            { order: { customer: { phone: search } } },
+            { recipientName: search },
+          ],
+        } : null
+        const where = {
+          AND: [
+            { status, orderId },
+            ...(searchFilter ? [searchFilter] : []),
+          ],
+        }
         const rows = await tx.dispatch.findMany({ where, include, skip: (page - 1) * limit, take: limit,
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
         const total = await tx.dispatch.count({ where })
