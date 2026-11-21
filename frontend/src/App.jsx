@@ -8,7 +8,8 @@ import {
 import { api } from './api.js'
 import Dashboard from './Dashboard.jsx'
 import InstallationSignoff from './InstallationSignoff.jsx'
-import WorkflowAction, { recordActions } from './WorkflowAction.jsx'
+import RecordDetail, { hasDetail } from './RecordDetail.jsx'
+import WorkflowAction, { collectionActions, recordActions } from './WorkflowAction.jsx'
 
 const date = value => value ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeZone: 'Asia/Kolkata' }).format(new Date(value)) : '—'
 const currency = value => value == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(value))
@@ -16,6 +17,9 @@ const words = value => value?.toLowerCase().replaceAll('_', ' ').replace(/^./, f
 const sections = [
   { path: 'leads', title: 'Enquiries', capability: 'leads:read', icon: InboxStackIcon, search: true,
     columns: [['Reference', row => row.leadNumber], ['Customer', row => row.customer.name], ['Phone', row => row.customer.phone], ['Source', row => words(row.source)], ['Status', row => <Status value={row.status} />], ['Received', row => date(row.createdAt)]] },
+  { path: 'customers', title: 'Customers', capabilities: ['leads:write', 'tickets:create', 'reports:view', 'orders:create'],
+    icon: InboxStackIcon, search: true, columns: [['Customer', row => row.name], ['Phone', row => row.phone],
+      ['Email', row => row.email], ['Address', row => row.address]] },
   { path: 'surveys', title: 'Surveys', capability: 'surveys:read', icon: ClipboardDocumentCheckIcon,
     columns: [['Customer', row => row.lead.customer.name], ['Scheduled', row => date(row.scheduledAt)], ['Status', row => <Status value={row.status} />]] },
   { path: 'packages', title: 'Packages', capability: 'catalog:read', icon: CubeIcon, search: true,
@@ -38,6 +42,12 @@ const sections = [
     columns: [['Reference', row => row.invoiceNumber], ['Customer', row => row.customer.name], ['Total', row => currency(row.total)], ['Status', row => <Status value={row.status} />], ['Issued', row => date(row.issuedAt)]] },
   { path: 'subsidies', title: 'Subsidies', capability: 'subsidies:read', icon: ClipboardDocumentCheckIcon,
     columns: [['Order', row => row.order.orderNumber], ['Customer', row => row.order.customer.name], ['Reference', row => row.reference || '—'], ['Status', row => <Status value={row.status} />]] },
+  { path: 'suppliers', title: 'Suppliers', capability: 'inventory:read', icon: CubeIcon, search: true,
+    columns: [['Code', row => row.code], ['Supplier', row => row.name], ['Email', row => row.email], ['Phone', row => row.phone]] },
+  { path: 'purchases', title: 'Purchase orders', capability: 'inventory:read', icon: TruckIcon, search: true,
+    columns: [['Reference', row => row.purchaseNumber], ['Supplier', row => row.supplier.name], ['Expected', row => date(row.expectedAt)], ['Status', row => <Status value={row.status} />]] },
+  { path: 'users', title: 'Staff', capability: 'users:manage', icon: ClipboardDocumentCheckIcon, search: true,
+    columns: [['Name', row => row.name], ['Email', row => row.email], ['Role', row => words(row.role)], ['Account', row => row.isActive ? 'Active' : 'Inactive']] },
   { path: 'payments', title: 'Payments', capability: 'payments:read', icon: CreditCardIcon,
     columns: [['Reference', row => row.reference || '—'], ['Amount', row => currency(row.amount)], ['Method', row => words(row.method)], ['Received', row => date(row.receivedAt)]] },
 ]
@@ -194,7 +204,8 @@ function Records({ section, token, capabilities }) {
   const canEditLead = section.path === 'leads' && capabilities.includes('leads:write')
   const canSign = section.path === 'installations' && capabilities.includes('installations:complete_assigned')
   const [action, setAction] = useState(null)
-  const hasActions = canEditLead || canSign || state.result?.data.some(row => recordActions(section.path, row, capabilities).length)
+  const [detail, setDetail] = useState(null)
+  const hasActions = hasDetail(section.path) || canEditLead || canSign || state.result?.data.some(row => recordActions(section.path, row, capabilities).length)
   const Editor = canEditLead ? LeadEditor : InstallationSignoff
   useEffect(() => {
     const controller = new AbortController()
@@ -209,6 +220,7 @@ function Records({ section, token, capabilities }) {
   function refresh() {
     setSelected(null)
     setAction(null)
+    setDetail(null)
     setState({ busy: true })
     setRetry(value => value + 1)
   }
@@ -223,6 +235,10 @@ function Records({ section, token, capabilities }) {
       {state.result && <p>{state.result.meta.total} {state.result.meta.total === 1 ? 'record' : 'records'}</p>}
     </header>
     <div className="records">
+      {collectionActions(section.path, capabilities).map(candidate => <div className="toolbar" key={candidate.key}>
+        <button className="primary" onClick={() => { setDetail(null); setSelected(null); setAction(candidate) }}>{candidate.label}</button>
+      </div>)}
+      {detail && <RecordDetail key={detail} id={detail} section={section.path} token={token} onClose={() => setDetail(null)} />}
       {selected && <Editor key={selected.id} lead={selected} job={selected} token={token} onClose={() => setSelected(null)} onSaved={refresh} />}
       {action && <WorkflowAction key={action.path + action.key} action={action} token={token} onSaved={refresh} onClose={() => setAction(null)} />}
       {section.search && <form className="toolbar" onSubmit={event => {
@@ -242,8 +258,10 @@ function Records({ section, token, capabilities }) {
       {state.result && (!state.result.data.length
         ? <p className="feedback">No {section.title.toLowerCase()} found.</p>
         : <><div className="overflow-x-auto"><table><thead><tr>{section.columns.map(([label]) => <th key={label}>{label}</th>)}{hasActions && <th scope="col">Action</th>}</tr></thead>
-          <tbody>{state.result.data.map(row => <tr key={row.id}>{section.columns.map(([label, value]) => <td key={label}>{value(row)}</td>)}{hasActions && <td>{(canEditLead || (canSign && row.status !== 'COMPLETED' && ['DELIVERED', 'INSTALLATION_IN_PROGRESS'].includes(row.order.status) && row.installationAssignmentsByInstallation.length > 0)) &&
-            <button className="secondary mb-1" onClick={() => { setAction(null); setSelected(row) }}>{canEditLead ? 'Edit' : 'Sign off'}</button>}
+          <tbody>{state.result.data.map(row => <tr key={row.id}>{section.columns.map(([label, value]) => <td key={label}>{value(row)}</td>)}{hasActions && <td>{hasDetail(section.path) && <button className="secondary mb-1 mr-1" onClick={() => {
+            setAction(null); setSelected(null); setDetail(row.id)
+          }}>View</button>}{(canEditLead || (canSign && row.status !== 'COMPLETED' && ['DELIVERED', 'INSTALLATION_IN_PROGRESS'].includes(row.order.status) && row.installationAssignmentsByInstallation.length > 0)) &&
+            <button className="secondary mb-1" onClick={() => { setDetail(null); setAction(null); setSelected(row) }}>{canEditLead ? 'Edit' : 'Sign off'}</button>}
             {recordActions(section.path, row, capabilities).map(candidate => <button className="secondary mb-1 ml-1" key={candidate.key}
               onClick={() => { setSelected(null); setAction(candidate) }}>{candidate.label}</button>)}</td>}</tr>)}</tbody>
         </table></div>
@@ -256,7 +274,7 @@ function Records({ section, token, capabilities }) {
 }
 
 function Workspace({ session, onLogout }) {
-  const allowed = sections.filter(section => session.user.capabilities.includes(section.capability))
+  const allowed = sections.filter(section => (section.capabilities ?? [section.capability]).some(capability => session.user.capabilities.includes(capability)))
   const hasReports = session.user.capabilities.includes('reports:view')
   const [error, setError] = useState('')
   async function logout() {

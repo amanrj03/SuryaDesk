@@ -67,6 +67,20 @@ export function recordActions(section, row, capabilities) {
     if (can('subsidies:manage')) actions.push(post('subsidy', 'Start subsidy application', '/subsidies', [], () => ({ orderId: id })))
     return actions
   }
+  if (section === 'purchases' && can('inventory:write')) {
+    const url = '/purchases/' + id
+    if (row.status === 'DRAFT') return [post('orderPurchase', 'Mark ordered', url + '/order')]
+    if (['ORDERED', 'PARTIALLY_RECEIVED'].includes(row.status)) {
+      return row.lines.filter(line => line.received < line.quantity).map(line => {
+        const remaining = line.quantity - line.received
+        return post('receive-' + line.id, 'Receive ' + line.product.name, url + '/receive', [
+          number('quantity', 'Quantity received', { min: 1, max: remaining, step: 1, defaultValue: remaining }),
+          ...(line.product.serialized ? [input('serialNumbers', 'Serials (one per line)', 'textarea')] : []),
+        ], values => ({ productId: line.productId, quantity: Number(values.quantity),
+          serialNumbers: values.serialNumbers?.split(/\r?\n/).map(value => value.trim()).filter(Boolean) ?? [] }))
+      })
+    }
+  }
   if (section === 'inventory' && can('inventory:write')) {
     return [post('receipt', 'Receive stock', '/inventory/receipts', [
       number('quantity', 'Quantity received', { min: 1, max: 10000, step: 1 }),
@@ -100,6 +114,12 @@ export function recordActions(section, row, capabilities) {
       input('recipientName', 'Recipient name', 'text', { defaultValue: row.order.customer.name, maxLength: 120 }),
     ])]
   }
+  if (section === 'customers' && can('tickets:create')) {
+    return [post('customerTicket', 'Open service ticket', '/tickets', [
+      input('description', 'Describe the issue', 'textarea', { maxLength: 2000 }),
+      choice('priority', 'Priority', ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
+    ], values => ({ ...values, customerId: id }))]
+  }
   if (section === 'warranties' && can('tickets:create')) {
     return [post('ticket', 'Open service ticket', '/tickets', [
       input('faultCode', 'Fault code', 'text', { optional: true, maxLength: 80 }),
@@ -122,6 +142,17 @@ export function recordActions(section, row, capabilities) {
         patch('laborCharge', 'Set labour charge', url, [
           number('laborCharge', 'Labour charge (INR)', { min: 0, defaultValue: row.laborCharge }),
         ], values => values),
+        ...(row.asset && !row.ticketPartsByTicket.some(part => part.replacementAssetId) ? [
+          post('replacement', 'Replace serialized equipment', url + '/replace', [
+            input('serialNumber', 'Replacement serial'), number('chargePerUnit', 'Customer charge (INR)', { min: 0, defaultValue: 0 }),
+          ]),
+        ] : []),
+        ...(can('inventory:read') ? [post('addPart', 'Record repair part', url + '/parts', [
+          { ...choice('productId', 'Repair part', []), source: '/inventory?limit=100',
+            filter: item => !item.serialized && item.available > 0 },
+          number('quantity', 'Quantity', { min: 1, step: 1 }),
+          number('chargePerUnit', 'Customer charge per unit (INR)', { min: 0, defaultValue: 0 }),
+        ], values => ({ ...values, quantity: Number(values.quantity) }))] : []),
         post('resolve', 'Resolve ticket', url + '/resolve', [
           input('resolutionNotes', 'Repair details', 'textarea', { maxLength: 2000 }),
         ], values => ({ ...values, coverageDecision: row.coverageDecision === 'COVERED' ? 'COVERED' : 'NOT_COVERED' })),
@@ -159,6 +190,31 @@ export function recordActions(section, row, capabilities) {
   return []
 }
 
+
+export function collectionActions(section, capabilities) {
+  const can = capability => capabilities.includes(capability)
+  const post = (key, label, path, fields, convert = values => values) => [{ key, label, path, fields, convert, method: 'POST' }]
+  if (section === 'suppliers' && can('inventory:write')) return post('supplier', 'Add supplier', '/suppliers', [
+    input('code', 'Supplier code'), input('name', 'Supplier name'),
+    input('email', 'Email', 'email', { optional: true }), input('phone', 'Phone', 'tel', { optional: true }),
+    input('address', 'Address', 'textarea', { optional: true }),
+  ])
+  if (section === 'purchases' && can('inventory:write')) return post('purchase', 'Draft purchase order', '/purchases', [
+    { ...choice('supplierId', 'Supplier', []), source: '/suppliers?limit=100', filter: supplier => supplier.isActive },
+    { ...choice('productId', 'Product', []), source: '/inventory?limit=100' },
+    number('quantity', 'Quantity', { min: 1, max: 10000, step: 1 }),
+    number('unitCost', 'Agreed unit cost (INR)', { min: 0 }),
+    input('expectedAt', 'Expected delivery', 'datetime-local', { optional: true }),
+  ], ({ supplierId, productId, quantity, unitCost, expectedAt }) => ({
+    supplierId, expectedAt: toDate(expectedAt), lines: [{ productId, quantity: Number(quantity), unitCost }],
+  }))
+  if (section === 'users' && can('users:manage')) return post('user', 'Add staff account', '/users', [
+    input('name', 'Name'), input('email', 'Work email', 'email'), input('password', 'Temporary password', 'password', { minLength: 12 }),
+    choice('role', 'Role', ['ADMIN', 'DIRECTOR', 'SALES', 'SURVEYOR', 'WAREHOUSE', 'TECHNICIAN', 'SUPPORT', 'FINANCE']),
+  ])
+  return []
+}
+
 function Field({ field, options }) {
   const { name, type, label, attributes = {}, multiple } = field
   const { optional, ...props } = attributes
@@ -183,7 +239,10 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
     const controller = new AbortController()
     const fields = action.fields.filter(field => field.source)
     if (fields.length) {
-      Promise.all(fields.map(async field => [field.name, (await api(field.source, { token, signal: controller.signal })).data]))
+      Promise.all(fields.map(async field => {
+        const { data } = await api(field.source, { token, signal: controller.signal })
+        return [field.name, field.filter ? data.filter(field.filter) : data]
+      }))
         .then(entries => { setChoices(Object.fromEntries(entries)); setLoading(false) })
         .catch(failure => { if (!controller.signal.aborted) { setError(failure.message); setLoading(false) } })
     }
