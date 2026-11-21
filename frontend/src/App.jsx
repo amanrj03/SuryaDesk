@@ -3,9 +3,10 @@ import { Link, Navigate, NavLink, Route, Routes, useNavigate } from 'react-route
 import {
   ArrowLeftStartOnRectangleIcon, BoltIcon, ClipboardDocumentCheckIcon,
   CubeIcon, DocumentTextIcon, InboxStackIcon, ShoppingBagIcon, CreditCardIcon,
-  TruckIcon, ShieldCheckIcon, Squares2X2Icon,
+  TruckIcon, ShieldCheckIcon, Squares2X2Icon, ChartBarSquareIcon, WrenchScrewdriverIcon,
 } from '@heroicons/react/24/outline'
 import { api } from './api.js'
+import Dashboard from './Dashboard.jsx'
 
 const date = value => value ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeZone: 'Asia/Kolkata' }).format(new Date(value)) : '—'
 const currency = value => value == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(value))
@@ -27,6 +28,10 @@ const sections = [
     columns: [['Reference', row => row.dispatchNumber], ['Customer', row => row.order.customer.name], ['Status', row => <Status value={row.status} />], ['Delivered', row => date(row.deliveredAt)]] },
   { path: 'warranties', title: 'Warranties', capability: 'warranties:read', icon: ShieldCheckIcon, search: true,
     columns: [['Serial', row => row.asset.serialNumber], ['Product', row => row.asset.product.name], ['Customer', row => row.customer.name], ['Status', row => <Status value={row.status} />], ['Expires', row => date(row.endAt)]] },
+  { path: 'installations', title: 'Installations', capability: 'installations:read', icon: WrenchScrewdriverIcon,
+    columns: [['Customer', row => row.order.customer.name], ['Capacity', row => row.capacityKw + ' kW'], ['Scheduled', row => date(row.scheduledAt)], ['Status', row => <Status value={row.status} />]] },
+  { path: 'tickets', title: 'Service tickets', capability: 'tickets:read', icon: ClipboardDocumentCheckIcon, search: true,
+    columns: [['Reference', row => row.ticketNumber], ['Customer', row => row.customer.name], ['Fault', row => row.faultCode || '?'], ['Priority', row => words(row.priority)], ['Status', row => <Status value={row.status} />]] },
   { path: 'payments', title: 'Payments', capability: 'payments:read', icon: CreditCardIcon,
     columns: [['Reference', row => row.reference || '—'], ['Amount', row => currency(row.amount)], ['Method', row => words(row.method)], ['Received', row => date(row.receivedAt)]] },
 ]
@@ -235,6 +240,7 @@ function Records({ section, token, capabilities }) {
 
 function Workspace({ session, onLogout }) {
   const allowed = sections.filter(section => session.user.capabilities.includes(section.capability))
+  const hasReports = session.user.capabilities.includes('reports:view')
   const [error, setError] = useState('')
   async function logout() {
     try {
@@ -246,7 +252,7 @@ function Workspace({ session, onLogout }) {
   }
   return <div className="workspace">
     <aside className="sidebar"><Brand />
-      <nav aria-label="Workspace">{allowed.map(({ path, title, icon: Icon }) =>
+      <nav aria-label="Workspace">{hasReports && <NavLink to="/overview"><ChartBarSquareIcon />Overview</NavLink>}{allowed.map(({ path, title, icon: Icon }) =>
         <NavLink key={path} to={'/' + path}><Icon />{title}</NavLink>)}</nav>
       <div className="account"><div><strong>{session.user.name}</strong><span>{words(session.user.role)}</span></div>
         <button aria-label="Sign out" title="Sign out" onClick={logout}><ArrowLeftStartOnRectangleIcon /></button>
@@ -255,9 +261,10 @@ function Workspace({ session, onLogout }) {
     <main className="workspace-body">
       <Notice>{error}</Notice>
       <Routes>
+        {hasReports && <Route path="overview" element={<Dashboard session={session} />} />}
         {allowed.map(section => <Route key={section.path} path={section.path}
           element={<Records key={section.path} section={section} token={session.accessToken} capabilities={session.user.capabilities} />} />)}
-        <Route path="*" element={allowed.length ? <Navigate to={'/' + allowed[0].path} replace /> : <header className="page-header"><h1>Workspace</h1><p>No pages are assigned to your role yet.</p></header>} />
+        <Route path="*" element={hasReports ? <Navigate to="/overview" replace /> : allowed.length ? <Navigate to={'/' + allowed[0].path} replace /> : <header className="page-header"><h1>Workspace</h1><p>No pages are assigned to your role yet.</p></header>} />
       </Routes>
     </main>
   </div>

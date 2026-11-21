@@ -71,3 +71,10 @@ tbody tr { @apply hover:bg-sky-50/55; }
 .status { @apply inline-flex whitespace-nowrap rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-900; }
 .pager { @apply flex flex-wrap items-center justify-between gap-2 p-4 text-sm; }
 .lead-editor { @apply border-b border-slate-200 bg-blue-50/35; }
+.dashboard-metrics { @apply m-4 grid grid-cols-2 gap-3 sm:m-7 xl:grid-cols-4; }
+.dashboard-metrics article { @apply grid gap-2 rounded-2xl border border-white bg-white p-4 shadow-sm; }
+.dashboard-metrics h2 { @apply text-sm font-semibold text-slate-600; }
+.dashboard-metrics p { @apply text-xl font-bold tracking-tight sm:text-2xl; }
+.cash-chart { @apply mt-4 flex h-36 items-end gap-1 border-b border-slate-200 sm:gap-2; }
+.cash-chart > div { @apply flex h-full min-w-0 flex-1 items-end; }
+.cash-bar { @apply w-full rounded-t-md bg-gradient-to-t from-blue-700 to-sky-400; }
