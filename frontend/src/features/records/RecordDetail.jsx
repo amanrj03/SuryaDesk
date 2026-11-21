@@ -207,10 +207,10 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
 
   const data = state.data
   const ticketActions = state.ticket ? recordActions('tickets', state.ticket, capabilities, { detail: true }) : []
+  const repairRecords = ticketActions.filter(action => ['laborCharge', 'replacement', 'addPart'].includes(action.key))
+  const reassignTicket = ticketActions.find(action => action.key === 'ticketReassignment')
   const detailActions = state.quote ? recordActions('quotes', state.quote, capabilities)
-    : ticketActions.filter(action => ['startTicket', 'reportRepair', 'resolve'].includes(action.key))
-  const repairRecords = state.ticket?.repairReportedAt
-    ? ticketActions.filter(action => ['laborCharge', 'replacement', 'addPart'].includes(action.key)) : []
+    : ticketActions.filter(action => ['ticketAssignment', 'startTicket', 'reportRepair', 'resolve', 'closeTicket'].includes(action.key))
   const surveyActions = state.survey
     ? recordActions('surveys', state.survey, capabilities, { detail: true })
       .filter(action => ['approve', 'rejectSurvey', 'quote'].includes(action.key))
@@ -251,6 +251,8 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
         <div key={label} className="min-w-0"><dt className="text-sm font-semibold text-slate-600">{label}</dt><dd className="break-words">{value}</dd></div>)}</dl>
       {section === 'customers' && capabilities.includes('users:manage') &&
         <CustomerPortalAccess key={id} id={id} email={data.customerEmail} token={token} />}
+      {reassignTicket && <button type="button" className="secondary justify-self-start"
+        onClick={() => setDetailAction(reassignTicket)}>{reassignTicket.label}</button>}
       {repairRecords.length > 0 && <details className="rounded-xl border border-gray-200 p-3">
         <summary className="cursor-pointer text-sm font-semibold">Record repair parts or charges</summary>
         <div className="mt-3 flex flex-wrap gap-2">

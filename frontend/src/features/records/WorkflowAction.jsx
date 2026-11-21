@@ -194,48 +194,53 @@ function baseRecordActions(section, row, capabilities, detail) {
         input('customerConfirmationName', 'Customer confirmation name', 'text', { defaultValue: row.customer.name }),
       ])]
     }
-    const start = row.status === 'ASSIGNED' && can('tickets:manage')
-      ? [patch('startTicket', 'Mark in progress', url, [], () => ({ status: 'IN_PROGRESS' }))]
-      : []
-    const report = row.status === 'IN_PROGRESS' && row.canReportRepair && !row.repairReportedAt
-      ? [post('reportRepair', 'Report work done', url + '/report-repair', [
+    const actions = []
+    const canResolve = can('tickets:resolve')
+    if (canResolve && (
+      ['OPEN', 'TRIAGED'].includes(row.status)
+      || (detail && ['ASSIGNED', 'IN_PROGRESS'].includes(row.status) && !row.repairReportedAt)
+    )) {
+      const assigning = ['OPEN', 'TRIAGED'].includes(row.status)
+      actions.push(patch(assigning ? 'ticketAssignment' : 'ticketReassignment',
+        assigning ? 'Assign technician' : 'Reassign technician', url, [
+          { ...choice('assignedToId', 'Technician', []), source: '/users/options?kind=technician' },
+        ], values => values))
+    }
+    if (row.status === 'ASSIGNED' && can('tickets:manage')) {
+      actions.push(patch('startTicket', 'Mark in progress', url, [], () => ({ status: 'IN_PROGRESS' })))
+    }
+    if (row.status !== 'IN_PROGRESS') return actions
+    if (!row.repairReportedAt && row.canReportRepair) {
+      actions.push(post('reportRepair', 'Report work done', url + '/report-repair', [
         input('repairNotes', 'Work completed', 'textarea', { maxLength: 2000 }),
-      ])]
-      : []
-    if (!['RESOLVED_PENDING_CONFIRMATION', 'CLOSED'].includes(row.status) && can('tickets:resolve')) {
-      const resolve = post('resolve', 'Resolve ticket', url + '/resolve', [
+      ]))
+    }
+    if (row.repairReportedAt && canResolve) {
+      actions.push(post('resolve', 'Resolve ticket', url + '/resolve', [
         input('resolutionNotes', 'Repair details', 'textarea', { maxLength: 2000, defaultValue: row.repairNotes ?? '' }),
-      ], values => ({ ...values, coverageDecision: row.coverageDecision === 'COVERED' ? 'COVERED' : 'NOT_COVERED' }))
-      if (row.repairReportedAt && !detail) return [resolve]
-      const repairRecords = [
-        patch('laborCharge', 'Set labour charge', url, [
+      ], values => ({ ...values, coverageDecision: row.coverageDecision === 'COVERED' ? 'COVERED' : 'NOT_COVERED' })))
+    }
+    if (detail && canResolve) {
+      if (row.coverageDecision !== 'COVERED') {
+        actions.push(patch('laborCharge', 'Set labour charge', url, [
           number('laborCharge', 'Labour charge (INR)', { min: 0, defaultValue: row.laborCharge }),
-        ], values => values),
-        ...(row.asset && !row.ticketPartsByTicket.some(part => part.replacementAssetId) ? [
-          post('replacement', 'Replace serialized equipment', url + '/replace', [
-            input('serialNumber', 'Replacement serial'), number('chargePerUnit', 'Customer charge (INR)', { min: 0, defaultValue: 0 }),
-          ]),
-        ] : []),
-        ...(can('inventory:read') ? [post('addPart', 'Record repair part', url + '/parts', [
+        ], values => values))
+      }
+      if (row.asset && !row.ticketPartsByTicket.some(part => part.replacementAssetId)) {
+        actions.push(post('replacement', 'Replace serialized equipment', url + '/replace', [
+          input('serialNumber', 'Replacement serial'), number('chargePerUnit', 'Customer charge (INR)', { min: 0, defaultValue: 0 }),
+        ]))
+      }
+      if (can('inventory:read')) {
+        actions.push(post('addPart', 'Record repair part', url + '/parts', [
           { ...choice('productId', 'Repair part', []), source: '/inventory?limit=100',
             filter: item => !item.serialized && item.available > 0 },
           number('quantity', 'Quantity', { min: 1, step: 1 }),
           number('chargePerUnit', 'Customer charge per unit (INR)', { min: 0, defaultValue: 0 }),
-        ], values => ({ ...values, quantity: Number(values.quantity) }))] : []),
-      ]
-      if (row.repairReportedAt) return [resolve, ...repairRecords.filter(action =>
-        action.key !== 'laborCharge' || row.coverageDecision !== 'COVERED')]
-      return [
-        ...start,
-        ...report,
-        patch('ticketAssignment', 'Assign technician', url, [
-          { ...choice('assignedToId', 'Technician', []), source: '/users/options?kind=technician' },
-        ], values => values),
-        ...repairRecords,
-        resolve,
-      ]
+        ], values => ({ ...values, quantity: Number(values.quantity) })))
+      }
     }
-    return [...start, ...report]
+    return actions
   }
   if (section === 'subsidies' && row.status !== 'PAID' && can('subsidies:manage')) {
     const statuses = {
