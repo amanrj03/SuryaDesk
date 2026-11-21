@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client'
+import { adminOverview } from './admin-overview.js'
 
 const day = 86400_000
 const india = 330 * 60_000
@@ -76,6 +77,7 @@ async function operational(tx, window) {
 
 export function reportsService(db) {
   return {
+    adminOverview: query => db.$transaction(tx => adminOverview(tx, range(query)), { isolationLevel: 'RepeatableRead' }),
     async overview(query) {
       const window = range(query)
       return db.$transaction(async tx => {

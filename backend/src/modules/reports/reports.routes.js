@@ -10,6 +10,8 @@ export function reportsRoutes(db, auth) {
   const controller = reportsController(reportsService(db))
   const view = authorize('reports:view')
   router.use('/reports', authenticate(auth))
+  router.get('/reports/admin-overview', authorize('reports:admin_overview'),
+    validate({ query: schema.period }), controller.adminOverview)
   router.get('/reports/overview', view, validate({ query: schema.period }), controller.overview)
   router.get('/reports/operations', view, validate({ query: schema.period }), controller.operations)
   router.get('/reports/profitability', authorize('reports:financial'),

@@ -19,7 +19,7 @@ const staffGrants = Object.fromEntries(Object.entries(grants).map(([role, spec])
 const capabilities = [...new Set([...Object.values(staffGrants).flat(), ...operations, 'users:manage'])]
 export const roleCapabilities = Object.freeze({
   ...staffGrants,
-  ADMIN: capabilities,
+  ADMIN: [...capabilities, 'reports:admin_overview'],
   DIRECTOR: capabilities.filter(capability => capability.endsWith(':read') || capability.startsWith('reports:') ||
     ['surveys:approve', 'quotes:accept'].includes(capability)),
 })

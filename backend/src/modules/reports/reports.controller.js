@@ -13,6 +13,9 @@ function toCsv(rows) {
 
 export function reportsController(reports) {
   return {
+    async adminOverview(request, response) {
+      response.json({ success: true, data: await reports.adminOverview(request.validated.query) })
+    },
     async overview(request, response) {
       response.json({ success: true, data: await reports.overview(request.validated.query) })
     },

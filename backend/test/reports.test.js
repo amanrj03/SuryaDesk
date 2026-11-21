@@ -35,3 +35,41 @@ test('report counts and cash reconcile to PostgreSQL without counting payments a
     await db.$disconnect()
   }
 })
+
+test('admin overview reconciles period counts, expenses, and live balances', {
+  skip: !process.env.DATABASE_URL,
+}, async () => {
+  const db = createDatabase(process.env.DATABASE_URL)
+  try {
+    const reports = reportsService(db)
+    for (const period of ['today', 'week', 'month']) {
+      const summary = await reports.adminOverview({ period })
+      const dates = { gte: summary.from, lt: summary.to }
+      assert.equal(summary.customers, await db.customer.count({ where: { createdAt: dates } }))
+      assert.equal(summary.enquiries, await db.lead.count({ where: { createdAt: dates } }))
+      assert.equal(summary.acceptedQuotations, await db.quotation.count({ where: { acceptedAt: dates } }))
+      assert.equal(summary.orders, summary.projectStatuses.reduce((count, row) => count + row._count._all, 0))
+      assert.equal(summary.inventory.products, await db.product.count({ where: { isActive: true } }))
+    }
+    const summary = await reports.adminOverview({ period: 'custom', from: new Date('2026-04-01T00:00:00Z'), to: new Date('2026-10-01T00:00:00Z') })
+    const orders = await db.order.findMany({
+      where: { status: { not: 'CANCELLED' } },
+      select: { total: true, subtotal: true, confirmedAt: true, paymentsByOrder: { where: { voidedAt: null }, select: { amount: true } } },
+    })
+    const zero = summary.outstanding.mul(0)
+    const due = orders.reduce((sum, order) => {
+      const paid = order.paymentsByOrder.reduce((paid, payment) => paid.plus(payment.amount), zero)
+      const remaining = order.total.minus(paid)
+      return remaining.gt(0) ? sum.plus(remaining) : sum
+    }, zero)
+    assert.ok(summary.outstanding.equals(due))
+    const revenue = orders.filter(order => order.confirmedAt >= summary.from && order.confirmedAt < summary.to)
+      .reduce((sum, order) => sum.plus(order.subtotal), zero)
+    assert.ok(summary.revenue.equals(revenue))
+    assert.ok(summary.series.reduce((sum, day) => sum.plus(day.revenue), zero).equals(revenue))
+    assert.ok(summary.series.reduce((sum, day) => sum.plus(day.expenses), zero).minus(summary.expenses).abs().lte('0.01'))
+    assert.ok(summary.activity.length <= 12)
+  } finally {
+    await db.$disconnect()
+  }
+})

@@ -45,6 +45,8 @@ test('staff authentication and revocation against PostgreSQL', {
   const headers = { Authorization: 'Bearer ' + data.accessToken }
   assert.equal((await fetch(base + '/api/v1/auth/me', { headers })).status, 200)
   assert.equal((await fetch(base + '/api/v1/users', { headers })).status, 403)
+  assert.equal((await fetch(base + '/api/v1/users', { method: 'POST', headers })).status, 403)
+  assert.equal((await fetch(base + '/api/v1/reports/admin-overview', { headers })).status, 403)
   assert.equal((await fetch(base + '/api/v1/users/options?kind=surveyor', { headers })).status, 200)
   assert.equal((await fetch(base + '/api/v1/users/options?kind=technician', { headers })).status, 403)
   assert.equal((await fetch(base + '/api/v1/auth/logout', { method: 'POST', headers })).status, 200)
