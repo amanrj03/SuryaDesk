@@ -116,7 +116,7 @@ test('public enquiry survives refresh and can be qualified and scheduled from th
   }
 })
 
-test('accepting a quote opens its order and a partial payment updates the balance', async ({ page }) => {
+test('accepting a quote opens its order and the payment action follows the balance', async ({ page }) => {
   const db = createDatabase(process.env.DATABASE_URL)
   const reference = 'E2E-' + randomUUID()
   let fixture
@@ -171,6 +171,7 @@ test('accepting a quote opens its order and a partial payment updates the balanc
     await search.press('Enter')
     const row = page.getByRole('row').filter({ hasText: order.orderNumber })
     await expect(row).toContainText('Quote ' + reference)
+    await expect(row.getByRole('button')).toHaveText(['Record payment'])
     const cells = row.getByRole('cell')
     await expect(cells.nth(4)).toHaveText('₹77,000.00')
     await row.getByRole('button', { name: 'Record payment' }).click()
@@ -188,14 +189,51 @@ test('accepting a quote opens its order and a partial payment updates the balanc
     await row.getByRole('link', { name: 'View', exact: true }).click()
     const remaining = page.getByText('Remaining', { exact: true }).locator('..')
     await expect(remaining).toContainText('₹27,000.00')
+    const extras = page.getByText('Job costs and subsidy', { exact: true })
+    await extras.click()
+    await page.getByRole('button', { name: 'Record job cost', exact: true }).click()
+    const cost = page.getByRole('dialog', { name: 'Record job cost' })
+    await cost.getByLabel('Cost category').selectOption('TRANSPORT')
+    await cost.getByLabel('Cost description').fill('Site transport')
+    await cost.getByLabel('Amount (INR)').fill('1200')
+    await cost.getByRole('button', { name: 'Record job cost' }).click()
+    await expect(cost).toHaveCount(0)
+    expect(await db.jobCost.count({ where: { orderId: order.id } })).toBe(1)
+
+    await extras.click()
+    await page.getByRole('button', { name: 'Start subsidy application', exact: true }).click()
+    const subsidyDialog = page.getByRole('dialog', { name: 'Start subsidy application' })
+    await subsidyDialog.getByRole('button', { name: 'Start subsidy application' }).click()
+    await expect(subsidyDialog).toHaveCount(0)
+    await extras.click()
+    const subsidy = await db.subsidyApplication.findUniqueOrThrow({ where: { orderId: order.id } })
+    await expect(page.getByRole('link', { name: /^View subsidy application/ })).toHaveAttribute('href', '/subsidies/' + subsidy.id)
+    await expect(page.getByRole('button', { name: 'Start subsidy application', exact: true })).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Record payment', exact: true }).click()
+    await expect(dialog.getByLabel('Amount (INR)')).toHaveAttribute('max', '27000')
+    await dialog.getByLabel('Amount (INR)').fill('27000')
+    await dialog.getByLabel('Payment method').selectOption('UPI')
+    await dialog.getByRole('button', { name: 'Record payment' }).click()
+    await expect(remaining).toContainText('₹0.00')
+    await expect(page.getByRole('button', { name: 'Record payment', exact: true })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Back to Orders' }).click()
+    await expect(row.getByRole('link', { name: 'View', exact: true })).toBeVisible()
+    await expect(row.getByRole('button')).toHaveCount(0)
   } finally {
     try {
       if (fixture) {
         const { quote, survey, lead } = fixture
         const order = await db.order.findUnique({ where: { quotationId: quote.id } })
+        const subsidy = order && await db.subsidyApplication.findUnique({ where: { orderId: order.id } })
         await db.$transaction([
           ...(order ? [
             db.auditLog.deleteMany({ where: { entityType: 'Order', entityId: order.id } }),
+            ...(subsidy ? [
+              db.auditLog.deleteMany({ where: { entityType: 'SubsidyApplication', entityId: subsidy.id } }),
+              db.subsidyApplication.delete({ where: { id: subsidy.id } }),
+            ] : []),
+            db.jobCost.deleteMany({ where: { orderId: order.id } }),
             db.payment.deleteMany({ where: { orderId: order.id } }),
             db.dispatch.deleteMany({ where: { orderId: order.id } }),
             db.installation.deleteMany({ where: { orderId: order.id } }),

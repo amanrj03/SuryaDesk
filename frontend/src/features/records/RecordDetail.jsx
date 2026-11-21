@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api.js'
 import { ErrorState } from '../../components/ui/States.jsx'
-import { displayContactEmail, displayPackageDescription, displayReference } from '../../lib/format.js'
+import { displayContactEmail, displayPackageDescription, displayReference, words } from '../../lib/format.js'
 import { Link } from 'react-router-dom'
 import WorkflowAction, { quotationAfterApproval, recordActions } from './WorkflowAction.jsx'
 import { TrackingLink } from './TrackingLink.jsx'
@@ -206,11 +206,18 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
   }
 
   const data = state.data
+  const order = section === 'orders' ? data?.invoiceOrder : undefined
+  const orderActions = order ? recordActions('orders', order, capabilities, { detail: true }) : []
+  const orderAdminActions = orderActions.filter(action => action.key !== 'payment')
+  const subsidy = capabilities.includes('subsidies:read') ? order?.subsidyApplicationByOrder : undefined
   const ticketActions = state.ticket ? recordActions('tickets', state.ticket, capabilities, { detail: true }) : []
   const repairRecords = ticketActions.filter(action => ['laborCharge', 'replacement', 'addPart'].includes(action.key))
   const reassignTicket = ticketActions.find(action => action.key === 'ticketReassignment')
   const detailActions = state.quote ? recordActions('quotes', state.quote, capabilities)
-    : ticketActions.filter(action => ['ticketAssignment', 'startTicket', 'reportRepair', 'resolve', 'closeTicket'].includes(action.key))
+    : [
+      ...orderActions.filter(action => action.key === 'payment'),
+      ...ticketActions.filter(action => ['ticketAssignment', 'startTicket', 'reportRepair', 'resolve', 'closeTicket'].includes(action.key)),
+    ]
   const surveyActions = state.survey
     ? recordActions('surveys', state.survey, capabilities, { detail: true })
       .filter(action => ['approve', 'rejectSurvey', 'quote'].includes(action.key))
@@ -227,7 +234,7 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
       {detailActions.length > 0 && <div className="flex flex-wrap gap-2">
         {detailActions.map(action => (
           <button key={action.key} type="button"
-            className={['accept', 'order'].includes(action.key) ? 'primary' : 'secondary'}
+            className={['accept', 'order', 'payment'].includes(action.key) ? 'primary' : 'secondary'}
             onClick={() => setDetailAction(action)}>
             {action.label}
           </button>
@@ -251,6 +258,16 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
         <div key={label} className="min-w-0"><dt className="text-sm font-semibold text-slate-600">{label}</dt><dd className="break-words">{value}</dd></div>)}</dl>
       {section === 'customers' && capabilities.includes('users:manage') &&
         <CustomerPortalAccess key={id} id={id} email={data.customerEmail} token={token} />}
+      {(orderAdminActions.length > 0 || subsidy) && <details className="rounded-xl border border-gray-200 p-3">
+        <summary className="cursor-pointer text-sm font-semibold">Job costs and subsidy</summary>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {orderAdminActions.map(action => <button key={action.key} type="button" className="secondary"
+            onClick={() => setDetailAction(action)}>{action.label}</button>)}
+          {subsidy && <Link className="secondary" to={'/subsidies/' + encodeURIComponent(subsidy.id)}>
+            View subsidy application ({words(subsidy.status)})
+          </Link>}
+        </div>
+      </details>}
       {reassignTicket && <button type="button" className="secondary justify-self-start"
         onClick={() => setDetailAction(reassignTicket)}>{reassignTicket.label}</button>}
       {repairRecords.length > 0 && <details className="rounded-xl border border-gray-200 p-3">

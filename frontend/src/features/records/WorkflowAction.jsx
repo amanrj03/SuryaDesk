@@ -107,17 +107,20 @@ function baseRecordActions(section, row, capabilities, detail) {
   }
   if (section === 'orders' && row.status !== 'CANCELLED') {
     const actions = []
-    if (can('payments:record')) actions.push(post('payment', 'Record payment', '/orders/' + id + '/payments', [
-      number('amount', 'Amount (INR)', { min: '.01' }),
+    if (Number(row.balance) > 0 && can('payments:record')) actions.push(post('payment', 'Record payment', '/orders/' + id + '/payments', [
+      number('amount', 'Amount (INR)', { min: '.01', max: row.balance }),
       choice('method', 'Payment method', ['CASH', 'BANK_TRANSFER', 'UPI', 'CARD', 'OTHER']),
     ]))
+    if (!detail) return actions
     if (can('reports:financial')) actions.push(post('jobCost', 'Record job cost', '/orders/' + id + '/costs', [
       choice('category', 'Cost category', ['TRANSPORT', 'LABOR', 'MATERIAL', 'OTHER']),
       input('description', 'Cost description', 'textarea', { maxLength: 500 }),
       number('amount', 'Amount (INR)', { min: '.01' }),
       input('incurredAt', 'Incurred at', 'datetime-local', { optional: true }),
     ], ({ incurredAt, ...values }) => ({ ...values, incurredAt: toDate(incurredAt) })))
-    if (can('subsidies:manage')) actions.push(post('subsidy', 'Start subsidy application', '/subsidies', [], () => ({ orderId: id })))
+    if (!row.subsidyApplicationByOrder && can('subsidies:manage')) {
+      actions.push(post('subsidy', 'Start subsidy application', '/subsidies', [], () => ({ orderId: id })))
+    }
     return actions
   }
   if (section === 'purchases' && can('inventory:write')) {

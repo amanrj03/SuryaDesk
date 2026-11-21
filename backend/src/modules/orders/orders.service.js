@@ -11,7 +11,11 @@ const related = {
   dispatchesByOrder: true,
   installationByOrder: true,
 }
-const detail = { ...related, orderLinesByOrder: { orderBy: { id: 'asc' } } }
+const detail = {
+  ...related,
+  orderLinesByOrder: { orderBy: { id: 'asc' } },
+  subsidyApplicationByOrder: { select: { id: true, status: true } },
+}
 const notFound = () => new ApiError(404, 'NOT_FOUND', 'Order not found.')
 
 function snapshot({ productId, descriptionSnapshot, quantity, unitPriceSnapshot, unitCostSnapshot, lineTotal, lineKind, taxRateSnapshot, taxAmount }) {
