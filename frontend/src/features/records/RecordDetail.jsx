@@ -142,6 +142,7 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
   const [retry, setRetry] = useState(0)
   const [mediaError, setMediaError] = useState('')
   const [creatingOrder, setCreatingOrder] = useState(false)
+  const [surveyAction, setSurveyAction] = useState(null)
   const backButton = useRef(null)
 
   useEffect(() => {
@@ -155,7 +156,11 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
     api(path, { token, signal: controller.signal })
       .then(({ data }) => {
         if (!controller.signal.aborted) {
-          setState({ data: definition[section](data), quote: section === 'quotes' ? data : undefined })
+          setState({
+            data: definition[section](data),
+            quote: section === 'quotes' ? data : undefined,
+            survey: section === 'surveys' ? data : undefined,
+          })
         }
       })
       .catch(error => { if (!controller.signal.aborted) setState({ error: error.message }) })
@@ -186,6 +191,10 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
   const order = state.quote?.orderByQuotation
   const createOrder = state.quote && recordActions('quotes', state.quote, capabilities)
     .find(action => action.key === 'order')
+  const surveyActions = state.survey
+    ? recordActions('surveys', state.survey, capabilities, { detail: true })
+      .filter(action => ['approve', 'rejectSurvey', 'quote'].includes(action.key))
+    : []
   return <section aria-labelledby="record-detail-heading" className="min-w-0 rounded-2xl border border-gray-100 bg-white shadow-2xs">
     <header className="grid gap-3 border-b border-gray-100 p-4 sm:p-5">
       <button type="button" ref={backButton} className="secondary justify-self-start" onClick={onBack}>
@@ -235,7 +244,19 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
       {data.attachments?.length > 0 && <div><h2 className="mb-2 font-semibold">Evidence</h2>
         {data.attachments.map(item => <button className="secondary mb-1 mr-1" key={item.id} onClick={() => download(item)}>{evidenceName(item)}</button>)}</div>}
       {mediaError && <p className="notice" role="alert">{mediaError}</p>}
+      {surveyActions.length > 0 && <div className="flex flex-wrap gap-2 border-t border-gray-200 pt-4">
+        {surveyActions.map(action => (
+          <button key={action.key} type="button" className={action.key === 'rejectSurvey' ? 'secondary' : 'primary'}
+            onClick={() => setSurveyAction(action)}>
+            {action.label}
+          </button>
+        ))}
+      </div>}
     </div>}
+    {surveyAction && (
+      <WorkflowAction action={surveyAction} token={token} onClose={() => setSurveyAction(null)}
+        onSaved={() => { setSurveyAction(null); retryDetails() }} />
+    )}
     {createOrder && creatingOrder && (
       <WorkflowAction action={createOrder} token={token} onClose={() => setCreatingOrder(false)} />
     )}

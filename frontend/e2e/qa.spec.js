@@ -97,6 +97,9 @@ test('all administrator modules load live records and open actions in modal dial
       await expect(page.locator('.records dialog')).toHaveCount(0)
       await expect(panel.getByRole('status').filter({ hasText: /Loading|Checking/ })).toHaveCount(0)
       await expect(panel.getByRole('alert')).toHaveCount(0)
+      if (action === 'Submit for review') {
+        await expect(panel.getByRole('button', { name: 'Submit and approve', exact: true })).toBeVisible()
+      }
       await panel.getByRole('button', { name: 'Close', exact: true }).click()
       await expect(panel).toHaveCount(0)
       opened++
@@ -104,6 +107,17 @@ test('all administrator modules load live records and open actions in modal dial
   }
   expect(viewed).toBe(12)
   expect(opened + viewed).toBeGreaterThan(25)
+  await nav.getByRole('link', { name: 'Surveys', exact: true }).click()
+  await page.getByLabel('Filter by status').selectOption('SUBMITTED')
+  const submitted = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Submitted', exact: true }) }).first()
+  await expect(submitted.getByRole('button', { name: 'Approve survey', exact: true })).toHaveCount(0)
+  await submitted.getByRole('link', { name: 'View', exact: true }).click()
+  await expect(page.getByText('Findings', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Approve survey', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Reject survey', exact: true }).click()
+  const reject = page.getByRole('dialog', { name: 'Reject survey' })
+  await expect(reject.getByLabel('Reason')).toHaveAttribute('required', '')
+  await reject.getByRole('button', { name: 'Close', exact: true }).click()
   console.log('Verified action dialogs:', opened, 'and detail pages:', viewed)
   await nav.getByRole('link', { name: 'Customers', exact: true }).click()
   const customerSearch = page.getByRole('textbox', { name: 'Search customers' })

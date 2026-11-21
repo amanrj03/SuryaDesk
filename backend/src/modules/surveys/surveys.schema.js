@@ -22,7 +22,9 @@ export const record = z.strictObject({
   gridSuitable: z.boolean(),
   findings: notes,
   status: z.enum(['IN_PROGRESS', 'SUBMITTED']),
+  approveOnSubmit: z.boolean(),
 }).partial().refine(value => Object.keys(value).length > 0)
+  .refine(value => !value.approveOnSubmit || value.status === 'SUBMITTED', 'Submit the survey to approve it.')
 export const approval = z.discriminatedUnion('approved', [
   z.strictObject({ approved: z.literal(true) }),
   z.strictObject({ approved: z.literal(false), rejectionReason: notes }),

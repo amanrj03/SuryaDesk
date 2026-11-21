@@ -27,6 +27,12 @@ async function updateSurvey(tx, survey, data) {
   return tx.siteSurvey.findUnique({ where: { id: survey.id }, include })
 }
 
+function auditReview(tx, survey, actorId, action, from = survey.status) {
+  return tx.auditLog.create({ data: {
+    actorId, entityType: 'SiteSurvey', entityId: survey.id, action, summary: { from },
+  } })
+}
+
 export function surveysService(db) {
   return {
     async schedule(leadId, data, user) {
@@ -76,7 +82,10 @@ export function surveysService(db) {
       })
       return { ...survey, attachments }
     },
-    async record(id, data, user) {
+    async record(id, { approveOnSubmit, ...data }, user) {
+      if (approveOnSubmit && !user.capabilities.includes('surveys:approve')) {
+        throw new ApiError(403, 'FORBIDDEN', 'You do not have permission to approve surveys.')
+      }
       return db.$transaction(async tx => {
         const survey = await tx.siteSurvey.findFirst({ where: { id, ...scope(user) }, include })
         if (!survey) throw missing('Survey')
@@ -86,6 +95,12 @@ export function surveysService(db) {
         if (data.status === 'SUBMITTED') {
           if (!complete({ ...survey, ...data })) throw transition('Complete the survey measurements and findings before submitting.')
           await updateLead(tx, survey.leadId, 'SURVEY_SCHEDULED', 'SURVEY_PENDING_APPROVAL', user.id)
+          if (approveOnSubmit) {
+            await updateLead(tx, survey.leadId, 'SURVEY_PENDING_APPROVAL', 'SURVEY_APPROVED', user.id)
+            const result = await updateSurvey(tx, survey, { ...data, status: 'APPROVED', approvedById: user.id, approvedAt: new Date() })
+            await auditReview(tx, survey, user.id, 'APPROVED', 'SUBMITTED')
+            return result
+          }
         }
         return updateSurvey(tx, survey, data)
       })
@@ -100,9 +115,7 @@ export function surveysService(db) {
         const result = await updateSurvey(tx, survey, {
           status, approvedById: approved ? user.id : null, approvedAt: approved ? new Date() : null, rejectionReason,
         })
-        await tx.auditLog.create({ data: {
-          actorId: user.id, entityType: 'SiteSurvey', entityId: id, action: status, summary: { from: survey.status },
-        } })
+        await auditReview(tx, survey, user.id, status)
         return result
       })
     },

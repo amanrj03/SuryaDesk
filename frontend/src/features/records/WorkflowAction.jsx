@@ -32,7 +32,7 @@ function productData({ warrantyMonths, reorderLevel, taxRate, ...values }) {
   return { ...values, taxRate: taxRate ?? null, warrantyMonths: Number(warrantyMonths), reorderLevel: Number(reorderLevel) }
 }
 
-function baseRecordActions(section, row, capabilities) {
+function baseRecordActions(section, row, capabilities, detail) {
   const can = capability => capabilities.includes(capability)
   const id = row.id
   const post = (key, label, path, fields = [], convert = values => values) => ({ key, label, path, method: 'POST', fields, convert })
@@ -45,7 +45,7 @@ function baseRecordActions(section, row, capabilities) {
   if (section === 'surveys') {
     const url = '/surveys/' + id
     if (['SCHEDULED', 'IN_PROGRESS'].includes(row.status) && can('surveys:record')) {
-      return [patch('record', 'Submit survey', url, [
+      return [{ ...patch('record', 'Submit for review', url, [
         time('visitedAt', 'Visit time'), choice('roofDirection', 'Roof direction', ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']),
         number('tiltDegrees', 'Roof tilt (degrees)', { min: 0, max: 90 }),
         number('cableDistanceMeters', 'Cable distance (m)', { min: 0 }),
@@ -56,9 +56,9 @@ function baseRecordActions(section, row, capabilities) {
         ...values, visitedAt: toDate(values.visitedAt), tiltDegrees: Number(values.tiltDegrees),
         cableDistanceMeters: Number(values.cableDistanceMeters), shadowFreeArea: Number(values.shadowFreeArea),
         gridSuitable: values.gridSuitable === 'yes', status: 'SUBMITTED',
-      }))]
+      })), approveOnSubmit: can('surveys:approve') }]
     }
-    if (row.status === 'SUBMITTED' && can('surveys:approve')) {
+    if (detail && row.status === 'SUBMITTED' && can('surveys:approve')) {
       return [post('approve', 'Approve survey', url + '/approve', [], () => ({ approved: true })),
         post('rejectSurvey', 'Reject survey', url + '/approve', [input('rejectionReason', 'Reason', 'textarea')], values => ({ ...values, approved: false }))]
     }
@@ -235,8 +235,8 @@ function baseRecordActions(section, row, capabilities) {
 
 
 
-export function recordActions(section, row, capabilities) {
-  const actions = baseRecordActions(section, row, capabilities)
+export function recordActions(section, row, capabilities, { detail = false } = {}) {
+  const actions = baseRecordActions(section, row, capabilities, detail)
   if (!capabilities.includes('attachments:upload')) return actions
   const can = capability => capabilities.includes(capability)
   const configurations = {
@@ -343,6 +343,7 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
     try {
       const body = action.convert(values)
       if (paymentRequestId) body.requestId = paymentRequestId
+      if (action.approveOnSubmit && event.nativeEvent.submitter?.value === 'approve') body.approveOnSubmit = true
       const result = await api(action.path, { token, method: action.method, body })
       if (action.successPath) navigate(action.successPath(result.data))
       else onSaved()
@@ -360,7 +361,14 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
         {action.fields.map(field => <Field key={field.name} field={field} options={choices[field.name] ?? field.options ?? []} />)}
       </div>}
       {error && <p className="notice" role="alert">{error}</p>}
-      <button className="primary w-fit" disabled={busy || loading}>{busy ? 'Saving…' : action.label}</button>
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" className={action.approveOnSubmit ? 'secondary' : 'primary'} disabled={busy || loading}>
+          {busy ? 'Saving…' : action.label}
+        </button>
+        {action.approveOnSubmit && (
+          <button type="submit" value="approve" className="primary" disabled={busy || loading}>Submit and approve</button>
+        )}
+      </div>
     </form>
   </RecordDialog>
 }
