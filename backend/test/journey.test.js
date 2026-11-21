@@ -171,6 +171,18 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.equal(deliveredRecords.orders[0].balance, '112.5')
         assert.deepEqual(deliveredRecords.invoices, [])
         assert.equal(await tx.invoice.count({ where: { orderId: order.id } }), 0)
+        const legacyInvoice = await tx.invoice.create({ data: {
+          invoiceNumber: 'LEGACY-' + key, orderId: order.id, customerId: order.customerId,
+          subtotal: order.subtotal, total: order.total, tax: order.tax,
+          status: 'PARTIALLY_PAID', issuedAt: new Date(),
+        } })
+        assert.deepEqual((await portalData('/records')).invoices, [])
+        assert.equal((await portal('/invoices/' + legacyInvoice.id + '/pdf')).status, 404)
+        await tx.invoice.update({ where: { id: legacyInvoice.id }, data: { status: 'PAID' } })
+        assert.deepEqual((await portalData('/records')).invoices, [])
+        assert.equal((await portal('/invoices/' + legacyInvoice.id + '/pdf')).status, 404)
+        await portalPdf('/payments/' + payment.payment.id + '/receipt')
+        await tx.invoice.delete({ where: { id: legacyInvoice.id } })
         const final = await post('/orders/' + order.id + '/payments', { amount: '112.50', method: 'BANK_TRANSFER' })
         assert.equal(final.balance, '0')
         const paidRecords = await portalData('/records')

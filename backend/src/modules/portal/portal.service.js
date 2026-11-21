@@ -27,6 +27,7 @@ const ticket = {
   id: true, ticketNumber: true, status: true, description: true, createdAt: true, updatedAt: true, resolvedAt: true,
   confirmedAt: true, coverageDecision: true, asset: { select: { serialNumber: true, product: { select: { name: true } } } },
 }
+const issuedStatuses = ['ISSUED', 'PARTIALLY_PAID', 'PAID']
 
 function customerQuote({ quotationLinesByQuotation, ...quote }) {
   return { ...quote, pricing: pricingBreakdown(quotationLinesByQuotation) }
@@ -38,9 +39,12 @@ function ownership(account) {
     : { portalAccountId: account.id }
   const order = { quotation: { lead } }
   const service = { OR: [{ order }, ...(account.historicalAccess ? [{ customerId: account.customerId, orderId: null }] : [])] }
-  const issued = { status: { in: ['ISSUED', 'PARTIALLY_PAID', 'PAID'] },
-    OR: [{ order }, { ticket: service }, ...(account.historicalAccess ? [{ customerId: account.customerId, orderId: null, ticketId: null }] : [])],
-  }
+  const issued = { OR: [
+    { order, status: 'PAID' },
+    { orderId: null, status: { in: issuedStatuses }, OR: [
+      { ticket: service }, ...(account.historicalAccess ? [{ customerId: account.customerId, ticketId: null }] : []),
+    ] },
+  ] }
   return { lead, order, service, issued }
 }
 
@@ -61,7 +65,7 @@ export function portalService(db) {
           dispatchesByOrder: { where: { dispatchedAt: { not: null } }, select: { dispatchedAt: true, deliveredAt: true }, orderBy: { dispatchedAt: 'desc' }, take: 1 },
           paymentsByOrder: { where: { voidedAt: null }, select: payment, orderBy: { receivedAt: 'desc' } },
         } }),
-        db.invoice.findMany({ where: scope.issued, select: invoice, orderBy: { issuedAt: 'desc' } }),
+        db.invoice.findMany({ where: scope.issued, select: { ...invoice, orderId: true }, orderBy: { issuedAt: 'desc' } }),
         db.serializedAsset.findMany({ where: { order: { ...scope.order, installationByOrder: { status: 'COMPLETED', signedAt: { not: null } } },
           status: { in: ['INSTALLED', 'REPLACED'] } }, select: equipment, orderBy: { serialNumber: 'asc' } }),
         db.serviceTicket.findMany({ where: scope.service, select: ticket, orderBy: { updatedAt: 'desc' } }),
@@ -70,12 +74,15 @@ export function portalService(db) {
         where: { ownerType: 'TICKET', ownerId: { in: tickets.map(row => row.id) }, uploadedById: null },
         select: { id: true, originalName: true, ownerId: true },
       })
+      const orderBalances = orders.map(row => ({
+        ...row, ...paymentTotals(row.total, row.paymentsByOrder.reduce((sum, item) => sum.plus(item.amount), row.total.minus(row.total))),
+      }))
+      const settled = new Set(orderBalances.filter(row => row.balance.isZero()).map(row => row.id))
       return {
         requests: requests.map(row => ({ ...row, quotationsByLead: row.quotationsByLead.map(customerQuote) })),
-        orders: orders.map(row => ({
-          ...row, ...paymentTotals(row.total, row.paymentsByOrder.reduce((sum, item) => sum.plus(item.amount), row.total.minus(row.total))),
-        })),
-        invoices, assets, tickets: tickets.map(row => ({ ...row, photos: photos.filter(photo => photo.ownerId === row.id) })),
+        orders: orderBalances,
+        invoices: invoices.filter(row => !row.orderId || settled.has(row.orderId)),
+        assets, tickets: tickets.map(row => ({ ...row, photos: photos.filter(photo => photo.ownerId === row.id) })),
       }
     },
     async quote(account, id) {
@@ -94,10 +101,20 @@ export function portalService(db) {
       return { id, status }
     },
     async invoice(account, id) {
-      if (!await db.invoice.findFirst({ where: { id, ...ownership(account).issued }, select: { id: true } })) throw missing()
-      const row = await invoiceService(db).detail(id)
-      if (!['ISSUED', 'PARTIALLY_PAID', 'PAID'].includes(row.status)) throw missing()
-      return account.historicalAccess ? row : { ...row, customer: { name: account.name, address: account.address } }
+      return db.$transaction(async tx => {
+        const visible = await tx.invoice.findFirst({
+          where: { id, ...ownership(account).issued }, select: { orderId: true, order: { select: { total: true } } },
+        })
+        if (!visible) throw missing()
+        if (visible.orderId) {
+          const { _sum } = await tx.payment.aggregate({
+            where: { orderId: visible.orderId, voidedAt: null }, _sum: { amount: true },
+          })
+          if (!paymentTotals(visible.order.total, _sum.amount ?? undefined).balance.isZero()) throw missing()
+        }
+        const row = await invoiceService(tx).detail(id)
+        return account.historicalAccess ? row : { ...row, customer: { name: account.name, address: account.address } }
+      }, { isolationLevel: 'RepeatableRead' })
     },
     async payment(account, id) {
       const row = await db.payment.findFirst({
