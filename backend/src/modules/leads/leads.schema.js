@@ -9,7 +9,8 @@ const customer = z.strictObject({
   phone: z.string().trim().regex(/^\+?[\d ()-]{7,19}$/).refine(value => value.replace(/\D/g, '').length >= 7),
   address: z.string().trim().min(1).max(500),
   email: z.string().trim().toLowerCase().pipe(z.email()).optional(),
-  desiredKw: z.number().min(1).max(5).optional(),
+  desiredKw: z.union([z.number(), z.string().trim().regex(/^\d+(?:\.\d{1,2})?$/).transform(Number)])
+    .pipe(z.number().min(1).max(5)).optional(),
   systemType: z.enum(SystemType).optional(),
   subsidyInterest: z.boolean().default(false),
   monthlyBill: amount.optional(),

@@ -48,7 +48,7 @@ test('Express connects public intake to paid delivery, signed completion, and co
       const post = (path, body = {}) => request('POST', path, body)
       const patch = (path, body) => request('PATCH', path, body)
       try {
-        const enquiry = await post('/public/enquiries', { name: key, phone: '+910000000000', address: 'Test residence' })
+        const enquiry = await post('/public/enquiries', { name: key, phone: '+910000000000', address: 'Test residence', desiredKw: '2.00' })
         token = (await post('/auth/login', { email, password })).accessToken
         const [lead] = await request('GET', '/leads?q=' + enquiry.leadNumber)
         await patch('/leads/' + lead.id, { status: 'CONTACTED' })
@@ -62,7 +62,7 @@ test('Express connects public intake to paid delivery, signed completion, and co
           cost: '120.00', salePrice: '200.00', serialized: true, warrantyMonths: 240, reorderLevel: 1 })
         const pack = await post('/packages', { code: key, name: 'Journey package', type: 'PANEL_SET',
           basePrice: '250.00', components: [{ productId: product.id, quantity: 1 }] })
-        const quote = await post('/quotes', { leadId: lead.id, surveyId: survey.id, packageId: pack.id })
+        const quote = await post('/quotes', { leadId: lead.id, surveyId: survey.id, packageId: pack.id, taxRate: '0.00' })
         await post('/quotes/' + quote.id + '/send')
         await post('/quotes/' + quote.id + '/accept')
         const order = await post('/quotes/' + quote.id + '/convert-to-order')
