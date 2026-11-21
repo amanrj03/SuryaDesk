@@ -43,6 +43,8 @@ model User {
   auditLogsByActor                    AuditLog[]               @relation("AuditLog_actor")
   jobCostsByRecordedBy                JobCost[]                @relation("JobCost_recordedBy")
 
+  staffSessions StaffSession[]
+
   @@index([role, isActive])
 }
 
@@ -838,4 +840,14 @@ model JobCost {
 
   @@index([orderId, incurredAt])
   @@index([recordedById])
+}
+
+model StaffSession {
+  id        String   @id @default(uuid())
+  userId    String
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([expiresAt])
 }

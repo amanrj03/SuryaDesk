@@ -1,9 +1,11 @@
 import express from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
+import { authRoutes } from './modules/auth/auth.routes.js'
+import { authService } from './modules/auth/auth.service.js'
 import { errorHandler } from './middleware/errorHandler.js'
 
-export function createApp({ CORS_ORIGIN }) {
+export function createApp({ CORS_ORIGIN, JWT_SECRET }, database) {
   const app = express()
   app.disable('x-powered-by')
   app.use(helmet())
@@ -18,6 +20,8 @@ export function createApp({ CORS_ORIGIN }) {
   app.get('/api/v1/health', (_request, response) => {
     response.json({ success: true, data: { status: 'ok' } })
   })
+  if (database) app.use('/api/v1/auth', authRoutes(authService(database, JWT_SECRET)))
+
   app.use((_request, response) => {
     response.status(404).json({
       success: false,
