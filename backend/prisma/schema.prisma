@@ -28,5 +28,814 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  leadsByAssignedTo                   Lead[]                   @relation("Lead_assignedTo")
+  leadActivitiesByActor               LeadActivity[]           @relation("LeadActivity_actor")
+  siteSurveysBySurveyor               SiteSurvey[]             @relation("SiteSurvey_surveyor")
+  siteSurveysByApprovedBy             SiteSurvey[]             @relation("SiteSurvey_approvedBy")
+  quotationsByCreatedBy               Quotation[]              @relation("Quotation_createdBy")
+  paymentsByRecordedBy                Payment[]                @relation("Payment_recordedBy")
+  stockMovementsByActor               StockMovement[]          @relation("StockMovement_actor")
+  dispatchesByPreparedBy              Dispatch[]               @relation("Dispatch_preparedBy")
+  installationAssignmentsByTechnician InstallationAssignment[] @relation("InstallationAssignment_technician")
+  workLogsByTechnician                WorkLog[]                @relation("WorkLog_technician")
+  attachmentsByUploadedBy             Attachment[]             @relation("Attachment_uploadedBy")
+  serviceTicketsByAssignedTo          ServiceTicket[]          @relation("ServiceTicket_assignedTo")
+  auditLogsByActor                    AuditLog[]               @relation("AuditLog_actor")
+  jobCostsByRecordedBy                JobCost[]                @relation("JobCost_recordedBy")
+
   @@index([role, isActive])
+}
+
+enum LeadSource {
+  WEB
+  PHONE
+  WHATSAPP
+  OTHER
+}
+
+enum SystemType {
+  ON_GRID
+  OFF_GRID
+  PANEL_SET
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  SURVEY_SCHEDULED
+  SURVEY_PENDING_APPROVAL
+  SURVEY_APPROVED
+  QUOTED
+  WON
+  LOST
+}
+
+enum ActivityType {
+  CALL
+  NOTE
+  STATUS_CHANGE
+  FOLLOW_UP
+}
+
+enum SurveyStatus {
+  SCHEDULED
+  IN_PROGRESS
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum ProductCategory {
+  PANEL
+  INVERTER
+  BATTERY
+  CONTROLLER
+  STAND
+  WIRING
+  SWITCH
+  SAFETY
+  OTHER
+}
+
+enum PackageType {
+  PANEL_SET
+  ON_GRID
+  OFF_GRID
+  INSTALLATION
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum LineKind {
+  MATERIAL
+  SERVICE
+}
+
+enum OrderStatus {
+  CONFIRMED
+  AWAITING_STOCK
+  READY_TO_DISPATCH
+  DISPATCHED
+  DELIVERED
+  INSTALLATION_IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  UPI
+  CARD
+  OTHER
+}
+
+enum StockMovementType {
+  RECEIPT
+  RESERVE
+  RELEASE
+  DISPATCH
+  RETURN
+  ADJUSTMENT
+}
+
+enum AssetStatus {
+  IN_STOCK
+  RESERVED
+  DISPATCHED
+  DELIVERED
+  INSTALLED
+  UNDER_REPAIR
+  REPLACED
+}
+
+enum DispatchStatus {
+  DRAFT
+  ALLOCATED
+  DISPATCHED
+  DELIVERED
+  CANCELLED
+}
+
+enum DispatchItemStatus {
+  ALLOCATED
+  DISPATCHED
+  DELIVERED
+  RETURNED
+}
+
+enum WarrantyStatus {
+  ACTIVE
+  EXPIRED
+  VOID
+  REPLACED
+}
+
+enum InstallationStatus {
+  UNSCHEDULED
+  SCHEDULED
+  IN_PROGRESS
+  PENDING_SIGNOFF
+  COMPLETED
+}
+
+enum AttachmentOwnerType {
+  SURVEY
+  INSTALLATION
+  TICKET
+  SUBSIDY
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketStatus {
+  OPEN
+  TRIAGED
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED_PENDING_CONFIRMATION
+  CLOSED
+}
+
+enum CoverageDecision {
+  PENDING
+  COVERED
+  NOT_COVERED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+enum SubsidyStatus {
+  NOT_STARTED
+  DOCUMENTS_PENDING
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum JobCostCategory {
+  TRANSPORT
+  LABOR
+  MATERIAL
+  OTHER
+}
+
+model Customer {
+  id                         String            @id @default(cuid())
+  name                       String
+  phone                      String
+  email                      String?
+  address                    String
+  notes                      String?
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
+  leadsByCustomer            Lead[]            @relation("Lead_customer")
+  ordersByCustomer           Order[]           @relation("Order_customer")
+  serializedAssetsByCustomer SerializedAsset[] @relation("SerializedAsset_customer")
+  warrantiesByCustomer       Warranty[]        @relation("Warranty_customer")
+  serviceTicketsByCustomer   ServiceTicket[]   @relation("ServiceTicket_customer")
+  invoicesByCustomer         Invoice[]         @relation("Invoice_customer")
+
+  @@index([phone])
+}
+
+model Lead {
+  id                   String         @id @default(cuid())
+  leadNumber           String         @unique
+  customerId           String
+  source               LeadSource
+  desiredKw            Decimal?       @db.Decimal(10, 2)
+  systemType           SystemType?
+  subsidyInterest      Boolean
+  roofArea             Decimal?       @db.Decimal(10, 2)
+  monthlyBill          Decimal?       @db.Decimal(12, 2)
+  gridSuitable         Boolean?
+  status               LeadStatus
+  assignedToId         String?
+  notes                String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  customer             Customer       @relation("Lead_customer", fields: [customerId], references: [id], onDelete: Restrict)
+  assignedTo           User?          @relation("Lead_assignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  leadActivitiesByLead LeadActivity[] @relation("LeadActivity_lead")
+  siteSurveysByLead    SiteSurvey[]   @relation("SiteSurvey_lead")
+  quotationsByLead     Quotation[]    @relation("Quotation_lead")
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([customerId])
+  @@index([assignedToId])
+}
+
+model LeadActivity {
+  id        String       @id @default(cuid())
+  leadId    String
+  actorId   String?
+  type      ActivityType
+  notes     String
+  createdAt DateTime     @default(now())
+  lead      Lead         @relation("LeadActivity_lead", fields: [leadId], references: [id], onDelete: Restrict)
+  actor     User?        @relation("LeadActivity_actor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([leadId, createdAt])
+  @@index([actorId])
+}
+
+model SiteSurvey {
+  id                  String       @id @default(cuid())
+  leadId              String
+  surveyorId          String?
+  scheduledAt         DateTime
+  visitedAt           DateTime?
+  roofDirection       String?
+  tiltDegrees         Decimal?     @db.Decimal(10, 2)
+  cableDistanceMeters Decimal?     @db.Decimal(10, 2)
+  shadowFreeArea      Decimal?     @db.Decimal(10, 2)
+  gridSuitable        Boolean?
+  findings            String?
+  status              SurveyStatus
+  approvedById        String?
+  approvedAt          DateTime?
+  rejectionReason     String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  lead                Lead         @relation("SiteSurvey_lead", fields: [leadId], references: [id], onDelete: Restrict)
+  surveyor            User?        @relation("SiteSurvey_surveyor", fields: [surveyorId], references: [id], onDelete: SetNull)
+  approvedBy          User?        @relation("SiteSurvey_approvedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  quotationsBySurvey  Quotation[]  @relation("Quotation_survey")
+
+  @@index([leadId, status])
+  @@index([surveyorId, scheduledAt])
+  @@index([approvedById])
+}
+
+model Product {
+  id                         String             @id @default(cuid())
+  sku                        String             @unique
+  name                       String
+  category                   ProductCategory
+  unit                       String
+  cost                       Decimal            @db.Decimal(12, 2)
+  salePrice                  Decimal            @db.Decimal(12, 2)
+  serialized                 Boolean
+  warrantyMonths             Int
+  reorderLevel               Int
+  isActive                   Boolean            @default(true)
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+  packageComponentsByProduct PackageComponent[] @relation("PackageComponent_product")
+  quotationLinesByProduct    QuotationLine[]    @relation("QuotationLine_product")
+  orderLinesByProduct        OrderLine[]        @relation("OrderLine_product")
+  stockBalanceByProduct      StockBalance?      @relation("StockBalance_product")
+  stockMovementsByProduct    StockMovement[]    @relation("StockMovement_product")
+  serializedAssetsByProduct  SerializedAsset[]  @relation("SerializedAsset_product")
+  dispatchItemsByProduct     DispatchItem[]     @relation("DispatchItem_product")
+  ticketPartsByProduct       TicketPart[]       @relation("TicketPart_product")
+
+  @@index([category, isActive])
+}
+
+model SolarPackage {
+  id                         String             @id @default(cuid())
+  code                       String             @unique
+  name                       String
+  type                       PackageType
+  capacityKw                 Decimal?           @db.Decimal(10, 2)
+  basePrice                  Decimal            @db.Decimal(12, 2)
+  isActive                   Boolean            @default(true)
+  description                String?
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+  packageComponentsByPackage PackageComponent[] @relation("PackageComponent_package")
+  quotationsByPackage        Quotation[]        @relation("Quotation_package")
+
+  @@unique([type, capacityKw])
+  @@index([isActive])
+}
+
+model PackageComponent {
+  id        String       @id @default(cuid())
+  packageId String
+  productId String
+  quantity  Int
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  package   SolarPackage @relation("PackageComponent_package", fields: [packageId], references: [id], onDelete: Restrict)
+  product   Product      @relation("PackageComponent_product", fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([packageId, productId])
+  @@index([productId])
+}
+
+model Quotation {
+  id                        String          @id @default(cuid())
+  quoteNumber               String          @unique
+  leadId                    String
+  surveyId                  String
+  packageId                 String
+  status                    QuoteStatus
+  currency                  String          @default("INR")
+  subtotal                  Decimal         @db.Decimal(12, 2)
+  tax                       Decimal         @db.Decimal(12, 2)
+  total                     Decimal         @db.Decimal(12, 2)
+  validUntil                DateTime?
+  sentAt                    DateTime?
+  acceptedAt                DateTime?
+  notes                     String?
+  createdById               String
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+  lead                      Lead            @relation("Quotation_lead", fields: [leadId], references: [id], onDelete: Restrict)
+  survey                    SiteSurvey      @relation("Quotation_survey", fields: [surveyId], references: [id], onDelete: Restrict)
+  package                   SolarPackage    @relation("Quotation_package", fields: [packageId], references: [id], onDelete: Restrict)
+  createdBy                 User            @relation("Quotation_createdBy", fields: [createdById], references: [id], onDelete: Restrict)
+  quotationLinesByQuotation QuotationLine[] @relation("QuotationLine_quotation")
+  orderByQuotation          Order?          @relation("Order_quotation")
+
+  @@index([leadId, status])
+  @@index([surveyId])
+  @@index([packageId])
+  @@index([createdById])
+}
+
+model QuotationLine {
+  id                  String    @id @default(cuid())
+  quotationId         String
+  productId           String?
+  descriptionSnapshot String
+  quantity            Int
+  unitPriceSnapshot   Decimal   @db.Decimal(12, 2)
+  unitCostSnapshot    Decimal   @db.Decimal(12, 2)
+  lineTotal           Decimal   @db.Decimal(12, 2)
+  lineKind            LineKind
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  quotation           Quotation @relation("QuotationLine_quotation", fields: [quotationId], references: [id], onDelete: Restrict)
+  product             Product?  @relation("QuotationLine_product", fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([quotationId])
+  @@index([productId])
+}
+
+model Order {
+  id                        String              @id @default(cuid())
+  orderNumber               String              @unique
+  quotationId               String              @unique
+  customerId                String
+  status                    OrderStatus
+  confirmedAt               DateTime
+  scheduledAt               DateTime?
+  subtotal                  Decimal             @db.Decimal(12, 2)
+  tax                       Decimal             @db.Decimal(12, 2)
+  total                     Decimal             @db.Decimal(12, 2)
+  notes                     String?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  quotation                 Quotation           @relation("Order_quotation", fields: [quotationId], references: [id], onDelete: Restrict)
+  customer                  Customer            @relation("Order_customer", fields: [customerId], references: [id], onDelete: Restrict)
+  orderLinesByOrder         OrderLine[]         @relation("OrderLine_order")
+  paymentsByOrder           Payment[]           @relation("Payment_order")
+  stockMovementsByOrder     StockMovement[]     @relation("StockMovement_order")
+  serializedAssetsByOrder   SerializedAsset[]   @relation("SerializedAsset_order")
+  dispatchesByOrder         Dispatch[]          @relation("Dispatch_order")
+  warrantiesByOrder         Warranty[]          @relation("Warranty_order")
+  installationByOrder       Installation?       @relation("Installation_order")
+  serviceTicketsByOrder     ServiceTicket[]     @relation("ServiceTicket_order")
+  invoiceByOrder            Invoice?            @relation("Invoice_order")
+  subsidyApplicationByOrder SubsidyApplication? @relation("SubsidyApplication_order")
+  jobCostsByOrder           JobCost[]           @relation("JobCost_order")
+
+  @@index([customerId, status, confirmedAt])
+}
+
+model OrderLine {
+  id                  String   @id @default(cuid())
+  orderId             String
+  productId           String?
+  descriptionSnapshot String
+  quantity            Int
+  unitPriceSnapshot   Decimal  @db.Decimal(12, 2)
+  unitCostSnapshot    Decimal  @db.Decimal(12, 2)
+  lineTotal           Decimal  @db.Decimal(12, 2)
+  lineKind            LineKind
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  order               Order    @relation("OrderLine_order", fields: [orderId], references: [id], onDelete: Restrict)
+  product             Product? @relation("OrderLine_product", fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  orderId      String
+  amount       Decimal       @db.Decimal(12, 2)
+  method       PaymentMethod
+  reference    String?
+  receivedAt   DateTime
+  recordedById String
+  voidedAt     DateTime?
+  voidReason   String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  order        Order         @relation("Payment_order", fields: [orderId], references: [id], onDelete: Restrict)
+  recordedBy   User          @relation("Payment_recordedBy", fields: [recordedById], references: [id], onDelete: Restrict)
+
+  @@index([orderId, receivedAt])
+  @@index([recordedById])
+}
+
+model StockBalance {
+  id        String   @id @default(cuid())
+  productId String   @unique
+  onHand    Int
+  reserved  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  product   Product  @relation("StockBalance_product", fields: [productId], references: [id], onDelete: Restrict)
+}
+
+model StockMovement {
+  id          String            @id @default(cuid())
+  productId   String
+  orderId     String?
+  type        StockMovementType
+  quantity    Int
+  unitCost    Decimal?          @db.Decimal(12, 2)
+  actorId     String?
+  reason      String?
+  referenceId String?
+  createdAt   DateTime          @default(now())
+  product     Product           @relation("StockMovement_product", fields: [productId], references: [id], onDelete: Restrict)
+  order       Order?            @relation("StockMovement_order", fields: [orderId], references: [id], onDelete: Restrict)
+  actor       User?             @relation("StockMovement_actor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([productId, createdAt])
+  @@index([orderId])
+  @@index([actorId])
+}
+
+model SerializedAsset {
+  id                              String            @id @default(cuid())
+  productId                       String
+  serialNumber                    String            @unique
+  status                          AssetStatus
+  orderId                         String?
+  customerId                      String?
+  receivedAt                      DateTime
+  dispatchedAt                    DateTime?
+  deliveredAt                     DateTime?
+  replacedAssetId                 String?
+  createdAt                       DateTime          @default(now())
+  updatedAt                       DateTime          @updatedAt
+  product                         Product           @relation("SerializedAsset_product", fields: [productId], references: [id], onDelete: Restrict)
+  order                           Order?            @relation("SerializedAsset_order", fields: [orderId], references: [id], onDelete: Restrict)
+  customer                        Customer?         @relation("SerializedAsset_customer", fields: [customerId], references: [id], onDelete: Restrict)
+  replacedAsset                   SerializedAsset?  @relation("SerializedAsset_replacedAsset", fields: [replacedAssetId], references: [id], onDelete: Restrict)
+  serializedAssetsByReplacedAsset SerializedAsset[] @relation("SerializedAsset_replacedAsset")
+  dispatchItemByAsset             DispatchItem?     @relation("DispatchItem_asset")
+  warrantyByAsset                 Warranty?         @relation("Warranty_asset")
+  serviceTicketsByAsset           ServiceTicket[]   @relation("ServiceTicket_asset")
+  ticketPartsByReplacementAsset   TicketPart[]      @relation("TicketPart_replacementAsset")
+
+  @@index([productId, status])
+  @@index([orderId])
+  @@index([customerId])
+  @@index([replacedAssetId])
+}
+
+model Dispatch {
+  id                      String         @id @default(cuid())
+  dispatchNumber          String         @unique
+  orderId                 String
+  status                  DispatchStatus
+  preparedById            String?
+  dispatchedAt            DateTime?
+  deliveredAt             DateTime?
+  recipientName           String?
+  notes                   String?
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+  order                   Order          @relation("Dispatch_order", fields: [orderId], references: [id], onDelete: Restrict)
+  preparedBy              User?          @relation("Dispatch_preparedBy", fields: [preparedById], references: [id], onDelete: SetNull)
+  dispatchItemsByDispatch DispatchItem[] @relation("DispatchItem_dispatch")
+
+  @@index([orderId, status])
+  @@index([preparedById])
+}
+
+model DispatchItem {
+  id         String             @id @default(cuid())
+  dispatchId String
+  productId  String
+  assetId    String?            @unique
+  quantity   Int
+  status     DispatchItemStatus
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  dispatch   Dispatch           @relation("DispatchItem_dispatch", fields: [dispatchId], references: [id], onDelete: Restrict)
+  product    Product            @relation("DispatchItem_product", fields: [productId], references: [id], onDelete: Restrict)
+  asset      SerializedAsset?   @relation("DispatchItem_asset", fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@index([dispatchId, productId])
+  @@index([productId])
+}
+
+model Warranty {
+  id                           String          @id @default(cuid())
+  assetId                      String          @unique
+  orderId                      String
+  customerId                   String
+  startAt                      DateTime
+  endAt                        DateTime
+  months                       Int
+  status                       WarrantyStatus
+  originalWarrantyId           String?
+  createdAt                    DateTime        @default(now())
+  updatedAt                    DateTime        @updatedAt
+  asset                        SerializedAsset @relation("Warranty_asset", fields: [assetId], references: [id], onDelete: Restrict)
+  order                        Order           @relation("Warranty_order", fields: [orderId], references: [id], onDelete: Restrict)
+  customer                     Customer        @relation("Warranty_customer", fields: [customerId], references: [id], onDelete: Restrict)
+  originalWarranty             Warranty?       @relation("Warranty_originalWarranty", fields: [originalWarrantyId], references: [id], onDelete: Restrict)
+  warrantiesByOriginalWarranty Warranty[]      @relation("Warranty_originalWarranty")
+
+  @@index([customerId, endAt])
+  @@index([orderId])
+  @@index([originalWarrantyId])
+}
+
+model Installation {
+  id                                    String                   @id @default(cuid())
+  orderId                               String                   @unique
+  scheduledAt                           DateTime?
+  startedAt                             DateTime?
+  finishedAt                            DateTime?
+  capacityKw                            Decimal                  @db.Decimal(10, 2)
+  status                                InstallationStatus
+  checklist                             Json
+  generationTestPassed                  Boolean?
+  generationReading                     Decimal?                 @db.Decimal(10, 2)
+  customerSignerName                    String?
+  signatureAttachmentId                 String?                  @unique
+  signedAt                              DateTime?
+  notes                                 String?
+  createdAt                             DateTime                 @default(now())
+  updatedAt                             DateTime                 @updatedAt
+  order                                 Order                    @relation("Installation_order", fields: [orderId], references: [id], onDelete: Restrict)
+  signatureAttachment                   Attachment?              @relation("Installation_signatureAttachment", fields: [signatureAttachmentId], references: [id], onDelete: Restrict)
+  installationAssignmentsByInstallation InstallationAssignment[] @relation("InstallationAssignment_installation")
+  workLogsByInstallation                WorkLog[]                @relation("WorkLog_installation")
+
+  @@index([status, scheduledAt])
+}
+
+model InstallationAssignment {
+  id             String       @id @default(cuid())
+  installationId String
+  technicianId   String
+  assignedAt     DateTime
+  assignmentRole String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  installation   Installation @relation("InstallationAssignment_installation", fields: [installationId], references: [id], onDelete: Restrict)
+  technician     User         @relation("InstallationAssignment_technician", fields: [technicianId], references: [id], onDelete: Restrict)
+
+  @@unique([installationId, technicianId])
+  @@index([technicianId, assignedAt])
+}
+
+model WorkLog {
+  id                 String         @id @default(cuid())
+  installationId     String?
+  ticketId           String?
+  technicianId       String
+  startAt            DateTime
+  endAt              DateTime
+  hourlyCostSnapshot Decimal        @db.Decimal(12, 2)
+  notes              String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  installation       Installation?  @relation("WorkLog_installation", fields: [installationId], references: [id], onDelete: Restrict)
+  ticket             ServiceTicket? @relation("WorkLog_ticket", fields: [ticketId], references: [id], onDelete: Restrict)
+  technician         User           @relation("WorkLog_technician", fields: [technicianId], references: [id], onDelete: Restrict)
+
+  @@index([technicianId, startAt])
+  @@index([installationId])
+  @@index([ticketId])
+}
+
+model Attachment {
+  id                                String              @id @default(cuid())
+  ownerType                         AttachmentOwnerType
+  ownerId                           String
+  originalName                      String
+  storageKey                        String              @unique
+  mimeType                          String
+  sizeBytes                         Int
+  uploadedById                      String?
+  createdAt                         DateTime            @default(now())
+  installationBySignatureAttachment Installation?       @relation("Installation_signatureAttachment")
+  uploadedBy                        User?               @relation("Attachment_uploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([ownerType, ownerId])
+  @@index([uploadedById])
+}
+
+model ServiceTicket {
+  id                       String           @id @default(cuid())
+  ticketNumber             String           @unique
+  customerId               String
+  assetId                  String?
+  orderId                  String?
+  assignedToId             String?
+  faultCode                String?
+  description              String
+  priority                 TicketPriority
+  status                   TicketStatus
+  coverageDecision         CoverageDecision
+  coverageReason           String?
+  incidentAt               DateTime
+  resolvedAt               DateTime?
+  confirmedAt              DateTime?
+  customerConfirmationName String?
+  laborCharge              Decimal          @db.Decimal(12, 2)
+  notes                    String?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  workLogsByTicket         WorkLog[]        @relation("WorkLog_ticket")
+  customer                 Customer         @relation("ServiceTicket_customer", fields: [customerId], references: [id], onDelete: Restrict)
+  asset                    SerializedAsset? @relation("ServiceTicket_asset", fields: [assetId], references: [id], onDelete: Restrict)
+  order                    Order?           @relation("ServiceTicket_order", fields: [orderId], references: [id], onDelete: Restrict)
+  assignedTo               User?            @relation("ServiceTicket_assignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  ticketPartsByTicket      TicketPart[]     @relation("TicketPart_ticket")
+  invoiceByTicket          Invoice?         @relation("Invoice_ticket")
+
+  @@index([status, priority])
+  @@index([customerId])
+  @@index([assetId])
+  @@index([orderId])
+  @@index([assignedToId])
+}
+
+model TicketPart {
+  id                 String           @id @default(cuid())
+  ticketId           String
+  productId          String
+  quantity           Int
+  costSnapshot       Decimal          @db.Decimal(12, 2)
+  chargeSnapshot     Decimal          @db.Decimal(12, 2)
+  replacementAssetId String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  ticket             ServiceTicket    @relation("TicketPart_ticket", fields: [ticketId], references: [id], onDelete: Restrict)
+  product            Product          @relation("TicketPart_product", fields: [productId], references: [id], onDelete: Restrict)
+  replacementAsset   SerializedAsset? @relation("TicketPart_replacementAsset", fields: [replacementAssetId], references: [id], onDelete: Restrict)
+
+  @@index([ticketId])
+  @@index([productId])
+  @@index([replacementAssetId])
+}
+
+model Invoice {
+  id                    String         @id @default(cuid())
+  invoiceNumber         String         @unique
+  orderId               String?        @unique
+  ticketId              String?        @unique
+  customerId            String
+  subtotal              Decimal        @db.Decimal(12, 2)
+  tax                   Decimal        @db.Decimal(12, 2)
+  total                 Decimal        @db.Decimal(12, 2)
+  status                InvoiceStatus
+  issuedAt              DateTime
+  dueAt                 DateTime?
+  paidAt                DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  order                 Order?         @relation("Invoice_order", fields: [orderId], references: [id], onDelete: Restrict)
+  ticket                ServiceTicket? @relation("Invoice_ticket", fields: [ticketId], references: [id], onDelete: Restrict)
+  customer              Customer       @relation("Invoice_customer", fields: [customerId], references: [id], onDelete: Restrict)
+  invoiceLinesByInvoice InvoiceLine[]  @relation("InvoiceLine_invoice")
+
+  @@index([customerId, status])
+}
+
+model InvoiceLine {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(12, 2)
+  lineTotal   Decimal  @db.Decimal(12, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  invoice     Invoice  @relation("InvoiceLine_invoice", fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId])
+}
+
+model SubsidyApplication {
+  id                String        @id @default(cuid())
+  orderId           String        @unique
+  status            SubsidyStatus
+  reference         String?
+  submittedAt       DateTime?
+  decisionAt        DateTime?
+  notes             String?
+  documentChecklist Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  order             Order         @relation("SubsidyApplication_order", fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  entityType String
+  entityId   String
+  action     String
+  summary    Json
+  createdAt  DateTime @default(now())
+  actor      User?    @relation("AuditLog_actor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model JobCost {
+  id           String          @id @default(cuid())
+  orderId      String
+  category     JobCostCategory
+  description  String
+  amount       Decimal         @db.Decimal(12, 2)
+  recordedById String
+  incurredAt   DateTime
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  order        Order           @relation("JobCost_order", fields: [orderId], references: [id], onDelete: Restrict)
+  recordedBy   User            @relation("JobCost_recordedBy", fields: [recordedById], references: [id], onDelete: Restrict)
+
+  @@index([orderId, incurredAt])
+  @@index([recordedById])
 }
