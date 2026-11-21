@@ -42,9 +42,18 @@ async function audit(tx, id, action, actorId, summary = {}) {
 
 export function installationsService(db, clock = () => new Date()) {
   return {
-    async list({ page, limit, status, technicianId }, user) {
+    async list({ page, limit, q, status, technicianId }, user) {
+      const search = { contains: q, mode: 'insensitive' }
+      const where = {
+        status,
+        AND: [scope(user), ...(technicianId ? [assigned(technicianId)] : [])],
+        ...(q && { OR: [
+          { order: { orderNumber: search } },
+          { order: { customer: { name: search } } },
+          { order: { customer: { phone: search } } },
+        ] }),
+      }
       return db.$transaction(async tx => {
-        const where = { status, AND: [scope(user), ...(technicianId ? [assigned(technicianId)] : [])] }
         const data = await tx.installation.findMany({
           where, include, skip: (page - 1) * limit, take: limit,
           orderBy: [{ scheduledAt: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],

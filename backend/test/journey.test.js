@@ -190,6 +190,11 @@ test('Express connects public intake to paid delivery, signed completion, and co
         const installationId = order.installationByOrder.id
         const installation = '/installations/' + installationId
         await patch(installation, { technicianIds: [admin.id], scheduledAt: new Date().toISOString() })
+        for (const value of [order.orderNumber.toLowerCase(), key.toLowerCase()]) {
+          const results = await request('GET', '/installations?status=SCHEDULED&q=' + encodeURIComponent(value))
+          assert.deepEqual(results.map(row => row.id), [installationId])
+        }
+        assert.deepEqual(await request('GET', '/installations?status=COMPLETED&q=' + order.orderNumber), [])
         const started = await patch(installation, { startedAt: new Date().toISOString(), generationReading: 1.8 })
         const installing = await post('/public/tracking', { token: tracking.token })
         assert.deepEqual(installing.timeline.slice(-2), [

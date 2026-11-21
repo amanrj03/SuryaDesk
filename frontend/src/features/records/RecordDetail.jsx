@@ -117,7 +117,7 @@ const definition = {
   }),
   installations: row => ({
     title: 'Installation for ' + row.order.customer.name,
-    fields: [['Status', state(row.status)], ['Scheduled', localDate(row.scheduledAt)], ['Started', localDate(row.startedAt)],
+    fields: [['Order ID', displayReference(row.order.orderNumber)], ['Status', state(row.status)], ['Scheduled', localDate(row.scheduledAt)], ['Started', localDate(row.startedAt)],
       ['Site address', row.order.quotation?.lead.siteAddress ?? row.order.customer.address],
       ['Finished', localDate(row.finishedAt)], ['Signed by', row.customerSignerName], ['Signed at', localDate(row.signedAt)]],
     groups: [['Crew', ['Technician', 'Assigned'], assignment(row.installationAssignmentsByInstallation)]], attachments: row.attachments,

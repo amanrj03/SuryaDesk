@@ -9,6 +9,7 @@ export const params = z.object({ id })
 export const query = z.object({
   page: z.coerce.number().int().min(1).max(100000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
+  q: z.string().trim().max(120).optional(),
   status: z.enum(InstallationStatus).optional(), technicianId: id.optional(),
 })
 export const update = z.strictObject({

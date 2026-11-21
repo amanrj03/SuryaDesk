@@ -279,7 +279,12 @@ test('assigned technician completes a delivered job with a photo and drawn signa
     await expect(page.getByText('Warranty details will appear after installation is completed and signed off.')).toBeVisible()
     await login(page, 'technician')
     await page.getByRole('link', { name: 'Installations' }).click()
+    const search = page.getByRole('textbox', { name: 'Search installations' })
+    await search.fill(fixture.order.orderNumber.toLowerCase())
+    await search.press('Enter')
     const row = page.getByRole('row').filter({ hasText: name })
+    await expect(row.getByRole('cell', { name: fixture.order.orderNumber, exact: true })).toBeVisible()
+    await expect(page.getByRole('row')).toHaveCount(2)
     await row.getByRole('button', { name: 'Sign off' }).click()
     const local = date => {
       const timestamp = new Date(date)

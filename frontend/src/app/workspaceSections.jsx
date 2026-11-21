@@ -183,7 +183,10 @@ export const sections = [
     title: 'Installations',
     capability: 'installations:read',
     icon: WrenchScrewdriverIcon,
+    search: true,
+    searchPlaceholder: 'Search by order ID, customer, or phone',
     columns: [
+      ['Order ID', (row) => displayReference(row.order.orderNumber)],
       ['Customer', (row) => row.order.customer.name],
       ['Capacity', (row) => row.capacityKw + ' kW'],
       ['Scheduled', (row) => date(row.scheduledAt)],
