@@ -3,8 +3,8 @@ const grants = {
   SURVEYOR: 'surveys:read/record attachments:upload leads:read',
   WAREHOUSE: 'inventory:read/write catalog:read orders:read dispatch:prepare/allocate/complete/deliver warranties:read',
   TECHNICIAN: 'installations:read/complete_assigned attachments:upload tickets:read/manage warranties:read',
-  SUPPORT: 'tickets:create/read/manage/resolve/confirm warranties:read orders:read inventory:read',
-  FINANCE: 'orders:read payments:read/record invoices:read/manage subsidies:read/manage reports:view/financial/export',
+  SUPPORT: 'attachments:upload tickets:create/read/manage/resolve/confirm warranties:read orders:read inventory:read',
+  FINANCE: 'attachments:upload orders:read payments:read/record invoices:read/manage subsidies:read/manage reports:view/financial/export',
 }
 
 function expand(specification) {

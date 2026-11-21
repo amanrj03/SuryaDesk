@@ -57,6 +57,16 @@ test('Express connects public intake to paid delivery, signed completion, and co
         await patch('/surveys/' + survey.id, { status: 'SUBMITTED', visitedAt: new Date().toISOString(),
           roofDirection: 'S', tiltDegrees: 12, cableDistanceMeters: 15, shadowFreeArea: 40,
           gridSuitable: true, findings: 'Clear roof and cable route.' })
+
+        const surveyPhoto = new FormData()
+        surveyPhoto.set('ownerType', 'SURVEY')
+        surveyPhoto.set('ownerId', survey.id)
+        surveyPhoto.set('file', new Blob([
+          Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Yv1cAAAAASUVORK5CYII=', 'base64'),
+        ], { type: 'image/png' }), 'survey-photo.png')
+        const surveyEvidence = await post('/attachments', surveyPhoto)
+        const surveyDetail = await request('GET', '/surveys/' + survey.id)
+        assert.equal(surveyDetail.attachments[0].id, surveyEvidence.id)
         await post('/surveys/' + survey.id + '/approve', { approved: true })
         const product = await post('/products', { sku: key, name: 'Demo panel', category: 'PANEL', unit: 'unit',
           cost: '120.00', salePrice: '200.00', serialized: true, warrantyMonths: 240, reorderLevel: 1 })

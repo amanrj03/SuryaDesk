@@ -11,6 +11,7 @@ export function subsidiesRoutes(db, auth) {
   const manage = authorize('subsidies:manage')
   router.use('/subsidies', authenticate(auth))
   router.get('/subsidies', authorize('subsidies:read'), validate({ query: schema.query }), controller.list)
+  router.get('/subsidies/:id', authorize('subsidies:read'), validate({ params: schema.params }), controller.detail)
   router.post('/subsidies', manage, validate({ body: schema.create }), controller.create)
   router.patch('/subsidies/:id', manage, validate({ params: schema.params, body: schema.update }), controller.update)
   return router

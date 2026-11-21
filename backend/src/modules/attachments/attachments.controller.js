@@ -9,6 +9,7 @@ export function attachmentsController(attachments) {
     async download(request, response, next) {
       const file = await attachments.open(request.validated.params.id, request.user)
       response.type(file.mimeType).set('Cache-Control', 'private, no-store')
+      if (file.mimeType === 'application/pdf') response.set('Content-Disposition', 'attachment')
       response.sendFile(file.path, error => {
         if (error) next(error.status === 404 ? new ApiError(404, 'NOT_FOUND', 'Attachment file not found.') : error)
       })

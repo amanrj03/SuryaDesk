@@ -7,6 +7,9 @@ export function subsidiesController(subsidies) {
     async list(request, response) {
       response.json({ success: true, ...await subsidies.list(request.validated.query) })
     },
+    async detail(request, response) {
+      response.json({ success: true, data: await subsidies.detail(request.validated.params.id) })
+    },
     async update(request, response) {
       const data = await subsidies.update(request.validated.params.id, request.validated.body, request.user)
       response.json({ success: true, data })

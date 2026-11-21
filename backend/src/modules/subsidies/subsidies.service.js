@@ -39,6 +39,15 @@ export function subsidiesService(db) {
         return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } }
       }, { isolationLevel: 'RepeatableRead' })
     },
+    async detail(id) {
+      const row = await db.subsidyApplication.findUnique({ where: { id }, include })
+      if (!row) throw new ApiError(404, 'NOT_FOUND', 'Subsidy application not found.')
+      const attachments = await db.attachment.findMany({
+        where: { ownerType: 'SUBSIDY', ownerId: id },
+        select: { id: true, originalName: true, mimeType: true, sizeBytes: true },
+      })
+      return { ...row, attachments }
+    },
     async update(id, { status, documentChecklist, ...fields }, user) {
       return db.$transaction(async tx => {
         const row = await tx.subsidyApplication.findUnique({ where: { id } })

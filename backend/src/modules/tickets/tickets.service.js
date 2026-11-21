@@ -83,7 +83,11 @@ export function ticketsService(db) {
         where: { entityId: id, entityType: 'ServiceTicket' }, orderBy: { createdAt: 'asc' },
         select: { action: true, createdAt: true, summary: true },
       })
-      return { ...ticket, timeline }
+      const attachments = await db.attachment.findMany({
+        where: { ownerType: 'TICKET', ownerId: id },
+        select: { id: true, originalName: true, mimeType: true, sizeBytes: true },
+      })
+      return { ...ticket, timeline, attachments }
     },
     async update(id, data, user) {
       return db.$transaction(async tx => {

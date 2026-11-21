@@ -6,8 +6,8 @@ import { ApiError } from '../../utils/ApiError.js'
 const preview = { id: true, ownerType: true, ownerId: true, originalName: true, mimeType: true, sizeBytes: true, createdAt: true }
 const notFound = () => new ApiError(404, 'NOT_FOUND', 'Attachment not found.')
 const pngHeader = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
-const extensions = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }
-const permittedSuffix = /\.(png|jpe?g|webp)$/i
+const extensions = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'application/pdf': 'pdf' }
+const permittedSuffix = /\.(png|jpe?g|webp|pdf)$/i
 
 function imageType(buffer) {
   if (buffer.length < 12) return null
@@ -31,15 +31,43 @@ async function allow(db, ownerId, user, write) {
   if (write && job.status === 'COMPLETED') throw new ApiError(409, 'INVALID_TRANSITION', 'Signed installation evidence is closed.')
 }
 
+
+async function allowRelated(db, ownerType, ownerId, user, write) {
+  const can = capability => user.capabilities.includes(capability)
+  let row, allowed, closed
+  if (ownerType === 'SURVEY') {
+    row = await db.siteSurvey.findUnique({ where: { id: ownerId } })
+    const assigned = can('surveys:record') && row?.surveyorId === user.id
+    allowed = can('surveys:approve') || assigned || (!write && can('surveys:read') && !can('surveys:record'))
+    closed = ['APPROVED', 'REJECTED'].includes(row?.status)
+  } else if (ownerType === 'TICKET') {
+    row = await db.serviceTicket.findUnique({ where: { id: ownerId } })
+    const assigned = can('tickets:manage') && row?.assignedToId === user.id
+    allowed = can('tickets:resolve') || assigned || (!write && can('tickets:read') && !can('installations:complete_assigned'))
+    closed = row?.status === 'CLOSED'
+  } else if (ownerType === 'SUBSIDY') {
+    row = await db.subsidyApplication.findUnique({ where: { id: ownerId } })
+    allowed = can(write ? 'subsidies:manage' : 'subsidies:read')
+  }
+  if (!row) throw notFound()
+  if (!allowed) throw new ApiError(403, 'FORBIDDEN', 'You do not have access to this evidence.')
+  if (write && closed) throw new ApiError(409, 'INVALID_TRANSITION', 'This evidence record is closed.')
+}
+
+function authorizeOwner(db, ownerType, ownerId, user, write) {
+  return ownerType === 'INSTALLATION' ? allow(db, ownerId, user, write) : allowRelated(db, ownerType, ownerId, user, write)
+}
+
 export function attachmentsService(db, uploadDirectory = process.env.UPLOAD_DIR ?? 'uploads') {
   return {
     async upload(owner, file, user) {
-      await allow(db, owner.ownerId, user, true)
-      const mimeType = file && imageType(file.buffer)
+      await authorizeOwner(db, owner.ownerType, owner.ownerId, user, true)
+      const pdf = owner.ownerType === 'SUBSIDY' && file?.buffer.toString('ascii', 0, 5) === '%PDF-'
+      const mimeType = pdf ? 'application/pdf' : file && imageType(file.buffer)
       const suffix = file?.originalname.match(permittedSuffix)?.[0].toLowerCase().slice(1)
       const expected = extensions[mimeType]
       if (!mimeType || mimeType !== file.mimetype || (suffix !== expected && !(mimeType === 'image/jpeg' && suffix === 'jpeg'))) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Upload a PNG, JPEG, or WebP image with a matching extension.')
+        throw new ApiError(400, 'VALIDATION_ERROR', 'Upload a matching PNG, JPEG, or WebP image. Subsidy documents can also be PDFs.')
       }
       const storageKey = randomUUID()
       const root = resolve(uploadDirectory)
@@ -58,8 +86,8 @@ export function attachmentsService(db, uploadDirectory = process.env.UPLOAD_DIR 
     },
     async open(id, user) {
       const row = await db.attachment.findUnique({ where: { id } })
-      if (!row || row.ownerType !== 'INSTALLATION' || !/^[a-f0-9-]{36}$/.test(row.storageKey)) throw notFound()
-      await allow(db, row.ownerId, user, false)
+      if (!row || !/^[a-f0-9-]{36}$/.test(row.storageKey)) throw notFound()
+      await authorizeOwner(db, row.ownerType, row.ownerId, user, false)
       return { path: resolve(uploadDirectory, row.storageKey), mimeType: row.mimeType }
     },
   }

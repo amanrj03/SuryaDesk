@@ -28,7 +28,7 @@ function productData({ warrantyMonths, reorderLevel, ...values }) {
   return { ...values, warrantyMonths: Number(warrantyMonths), reorderLevel: Number(reorderLevel) }
 }
 
-export function recordActions(section, row, capabilities) {
+function baseRecordActions(section, row, capabilities) {
   const can = capability => capabilities.includes(capability)
   const id = row.id
   const post = (key, label, path, fields = [], convert = values => values) => ({ key, label, path, method: 'POST', fields, convert })
@@ -228,6 +228,31 @@ export function recordActions(section, row, capabilities) {
   return []
 }
 
+
+
+export function recordActions(section, row, capabilities) {
+  const actions = baseRecordActions(section, row, capabilities)
+  if (!capabilities.includes('attachments:upload')) return actions
+  const can = capability => capabilities.includes(capability)
+  const configurations = {
+    surveys: { type: 'SURVEY', allowed: (can('surveys:record') || can('surveys:approve')) && !['APPROVED', 'REJECTED'].includes(row.status) },
+    tickets: { type: 'TICKET', allowed: can('tickets:manage') && row.status !== 'CLOSED' },
+    subsidies: { type: 'SUBSIDY', allowed: can('subsidies:manage') },
+  }
+  const scope = configurations[section]
+  if (!scope?.allowed) return actions
+  return [...actions, {
+    key: 'attach', label: 'Upload evidence', method: 'POST', path: '/attachments',
+    fields: [input('file', 'Evidence file', 'file', { accept: scope.type === 'SUBSIDY' ? '.pdf,.png,.jpg,.jpeg,.webp' : '.png,.jpg,.jpeg,.webp' })],
+    convert({ file }) {
+      const body = new FormData()
+      body.set('ownerType', scope.type)
+      body.set('ownerId', row.id)
+      body.set('file', file)
+      return body
+    },
+  }]
+}
 
 export function collectionActions(section, capabilities) {
   const can = capability => capabilities.includes(capability)

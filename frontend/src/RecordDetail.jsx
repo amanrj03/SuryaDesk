@@ -35,7 +35,7 @@ const definition = {
     title: 'Survey for ' + row.lead.customer.name,
     fields: [['Status', state(row.status)], ['Appointment', localDate(row.scheduledAt)], ['Visited', localDate(row.visitedAt)],
       ['Roof direction', row.roofDirection], ['Tilt (degrees)', row.tiltDegrees], ['Cable run (m)', row.cableDistanceMeters],
-      ['Shadow-free area (m²)', row.shadowFreeArea], ['Findings', row.findings], ['Review note', row.rejectionReason]],
+      ['Shadow-free area (m²)', row.shadowFreeArea], ['Findings', row.findings], ['Review note', row.rejectionReason]], attachments: row.attachments,
   }),
   packages: row => ({
     title: row.name, fields: [['Code', row.code], ['Capacity', row.capacityKw && row.capacityKw + ' kW'],
@@ -80,7 +80,13 @@ const definition = {
       ['Description', row.description], ['Labour charge', money(row.laborCharge)], ['Invoice', row.invoiceByTicket?.invoiceNumber],
       ['Confirmation', row.customerConfirmationName]],
     groups: [['Parts', ['Product', 'Quantity', 'Unit charge'], row.ticketPartsByTicket.map(part => [part.product.name, part.quantity, money(part.chargeSnapshot)])],
-      ['History', ['At', 'Action'], activity(row.timeline)]],
+      ['History', ['At', 'Action'], activity(row.timeline)]], attachments: row.attachments,
+  }),
+  subsidies: row => ({
+    title: 'Subsidy for ' + row.order.customer.name,
+    fields: [['Order', row.order.orderNumber], ['Reference', row.reference], ['Status', state(row.status)],
+      ['Submitted', localDate(row.submittedAt)], ['Decision', localDate(row.decisionAt)], ['Notes', row.notes]],
+    attachments: row.attachments,
   }),
   invoices: row => ({
     title: 'Invoice for ' + row.customer.name,
