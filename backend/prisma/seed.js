@@ -1,5 +1,6 @@
 ﻿import { randomBytes } from 'node:crypto'
 import bcrypt from 'bcrypt'
+import { seedSales } from './seed-sales.js'
 import { createDatabase } from '../src/lib/prisma.js'
 
 const roles = [
@@ -94,6 +95,8 @@ if (process.env.NODE_ENV === 'production' || !databaseUrl ||
 const db = createDatabase(databaseUrl)
 try {
   await seed(db)
+  await seedSales(db)
+  console.log('Demo sales pipeline seeded.')
 } finally {
   await db.$disconnect()
 }
