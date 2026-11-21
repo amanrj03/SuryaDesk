@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from 'react'
-import { Link, Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
+import { Link, Navigate, NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeftStartOnRectangleIcon, BoltIcon, ClipboardDocumentCheckIcon,
   CubeIcon, DocumentTextIcon, InboxStackIcon, ShoppingBagIcon, CreditCardIcon,
@@ -9,6 +9,7 @@ import { api } from './api.js'
 import Dashboard from './Dashboard.jsx'
 import InstallationSignoff from './InstallationSignoff.jsx'
 import RecordDetail, { hasDetail } from './RecordDetail.jsx'
+import PackageEditor from './PackageEditor.jsx'
 import WorkflowAction, { collectionActions, recordActions } from './WorkflowAction.jsx'
 
 const date = value => value ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeZone: 'Asia/Kolkata' }).format(new Date(value)) : '—'
@@ -211,6 +212,8 @@ function Records({ section, token, capabilities }) {
   const canSign = section.path === 'installations' && capabilities.includes('installations:complete_assigned')
   const [action, setAction] = useState(null)
   const [detail, setDetail] = useState(null)
+  const [packageEdit, setPackageEdit] = useState(null)
+  const managePackages = section.path === 'packages' && capabilities.includes('catalog:manage')
   const hasActions = hasDetail(section.path) || canEditLead || canSign || state.result?.data.some(row => recordActions(section.path, row, capabilities).length)
   const Editor = canEditLead ? LeadEditor : InstallationSignoff
   useEffect(() => {
@@ -227,6 +230,7 @@ function Records({ section, token, capabilities }) {
     setSelected(null)
     setAction(null)
     setDetail(null)
+    setPackageEdit(null)
     setState({ busy: true })
     setRetry(value => value + 1)
   }
@@ -241,6 +245,10 @@ function Records({ section, token, capabilities }) {
       {state.result && <p>{state.result.meta.total} {state.result.meta.total === 1 ? 'record' : 'records'}</p>}
     </header>
     <div className="records">
+      {managePackages && <div className="toolbar"><button className="primary"
+        onClick={() => { setDetail(null); setPackageEdit({}) }}>Add package</button></div>}
+      {packageEdit && <PackageEditor key={packageEdit.id ?? 'new'} id={packageEdit.id} token={token}
+        onSaved={refresh} onClose={() => setPackageEdit(null)} />}
       {collectionActions(section.path, capabilities).map(candidate => <div className="toolbar" key={candidate.key}>
         <button className="primary" onClick={() => { setDetail(null); setSelected(null); setAction(candidate) }}>{candidate.label}</button>
       </div>)}
@@ -265,8 +273,9 @@ function Records({ section, token, capabilities }) {
         ? <p className="feedback">No {section.title.toLowerCase()} found.</p>
         : <><div className="overflow-x-auto"><table><thead><tr>{section.columns.map(([label]) => <th key={label}>{label}</th>)}{hasActions && <th scope="col">Action</th>}</tr></thead>
           <tbody>{state.result.data.map(row => <tr key={row.id}>{section.columns.map(([label, value]) => <td key={label}>{value(row)}</td>)}{hasActions && <td>{hasDetail(section.path) && <button className="secondary mb-1 mr-1" onClick={() => {
-            setAction(null); setSelected(null); setDetail(section.path === 'assets' ? row.serialNumber : row.id)
-          }}>View</button>}{(canEditLead || (canSign && row.status !== 'COMPLETED' && ['DELIVERED', 'INSTALLATION_IN_PROGRESS'].includes(row.order.status) && row.installationAssignmentsByInstallation.length > 0)) &&
+            setPackageEdit(null); setAction(null); setSelected(null); setDetail(section.path === 'assets' ? row.serialNumber : row.id)
+          }}>View</button>}{managePackages && <button className="secondary mr-1"
+            onClick={() => { setDetail(null); setPackageEdit({ id: row.id }) }}>Edit package</button>}{(canEditLead || (canSign && row.status !== 'COMPLETED' && ['DELIVERED', 'INSTALLATION_IN_PROGRESS'].includes(row.order.status) && row.installationAssignmentsByInstallation.length > 0)) &&
             <button className="secondary mb-1" onClick={() => { setDetail(null); setAction(null); setSelected(row) }}>{canEditLead ? 'Edit' : 'Sign off'}</button>}
             {recordActions(section.path, row, capabilities).map(candidate => <button className="secondary mb-1 ml-1" key={candidate.key}
               onClick={() => { setSelected(null); setAction(candidate) }}>{candidate.label}</button>)}</td>}</tr>)}</tbody>
@@ -277,6 +286,20 @@ function Records({ section, token, capabilities }) {
         </div></>)}
     </div>
   </>
+}
+
+
+const workspaceAliases = [
+  ['catalog/products', 'products'], ['catalog/packages', 'packages'], ['dispatch', 'dispatches'],
+  ['support/tickets', 'tickets'], ['finance/invoices', 'invoices'], ['finance/payments', 'payments'],
+  ['finance/subsidies', 'subsidies'], ['admin/users', 'users'],
+]
+
+function DetailPage({ section, token }) {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  return <div className="records"><RecordDetail id={id} section={section.path} token={token}
+    onClose={() => navigate('/' + section.path)} /></div>
 }
 
 function Workspace({ session, onLogout }) {
@@ -303,6 +326,13 @@ function Workspace({ session, onLogout }) {
       <Notice>{error}</Notice>
       <Routes>
         {hasReports && <Route path="overview" element={<Dashboard session={session} />} />}
+        {hasReports && ['dashboard', 'reports/operations', 'reports/profitability'].map(path =>
+          <Route key={path} path={path} element={<Navigate to="/overview" replace />} />)}
+        {workspaceAliases.filter(([, path]) => allowed.some(section => section.path === path)).map(([alias, path]) =>
+          <Route key={alias} path={alias} element={<Navigate to={'/' + path} replace />} />)}
+        {allowed.filter(section => hasDetail(section.path)).map(section =>
+          <Route key={section.path + '/:id'} path={section.path + '/:id'}
+            element={<DetailPage section={section} token={session.accessToken} />} />)}
         {allowed.map(section => <Route key={section.path} path={section.path}
           element={<Records key={section.path} section={section} token={session.accessToken} capabilities={session.user.capabilities} />} />)}
         <Route path="*" element={hasReports ? <Navigate to="/overview" replace /> : allowed.length ? <Navigate to={'/' + allowed[0].path} replace /> : <header className="page-header"><h1>Workspace</h1><p>No pages are assigned to your role yet.</p></header>} />
@@ -315,6 +345,7 @@ export default function App() {
   const [session, setSession] = useState(null)
   return <Routes>
     <Route path="/enquiry" element={<Enquiry />} />
+    <Route path="/request-quote" element={<Navigate to="/enquiry" replace />} />
     <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login onLogin={setSession} />} />
     <Route path="*" element={session ? <Workspace session={session} onLogout={() => setSession(null)} /> : <Navigate to="/login" replace />} />
   </Routes>

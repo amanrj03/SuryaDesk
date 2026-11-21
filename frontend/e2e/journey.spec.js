@@ -176,3 +176,40 @@ test('assigned technician completes a delivered job with a photo and drawn signa
     await database.$disconnect()
   }
 })
+
+test('catalog administrator can maintain a package bill of materials', async ({ page }) => {
+  const code = 'E2E-' + randomUUID().toUpperCase()
+  const database = createDatabase(process.env.DATABASE_URL)
+  try {
+    await login(page, 'admin')
+    await page.getByRole('link', { name: 'Packages', exact: true }).click()
+    await page.getByRole('button', { name: 'Add package', exact: true }).click()
+    await page.getByLabel('Package code').fill(code)
+    await page.getByLabel('Package name').fill('Browser BOM fixture')
+    await page.getByRole('combobox', { name: 'Type', exact: true }).selectOption('PANEL_SET')
+    await page.getByLabel('Package price (INR)').fill('2500')
+    await page.getByRole('button', { name: 'Add component' }).click()
+    await page.getByRole('combobox', { name: 'Component 1' }).selectOption({ index: 1 })
+    await page.getByLabel('Quantity').fill('2')
+    await page.getByRole('button', { name: 'Save package' }).click()
+    await page.getByRole('textbox', { name: 'Search packages' }).fill(code)
+    await page.getByRole('button', { name: 'Search', exact: true }).click()
+    const row = page.getByRole('row').filter({ hasText: code })
+    await expect(row).toContainText('Browser BOM fixture')
+    await row.getByRole('button', { name: 'Edit package' }).click()
+    await page.getByLabel('Quantity').fill('3')
+    await page.getByRole('button', { name: 'Save package' }).click()
+    await expect(page.getByRole('heading', { name: 'Edit package' })).toHaveCount(0)
+    const saved = await database.solarPackage.findUniqueOrThrow({
+      where: { code }, include: { packageComponentsByPackage: true },
+    })
+    expect(saved.packageComponentsByPackage[0].quantity).toBe(3)
+  } finally {
+    const saved = await database.solarPackage.findUnique({ where: { code } })
+    if (saved) await database.$transaction([
+      database.packageComponent.deleteMany({ where: { packageId: saved.id } }),
+      database.solarPackage.delete({ where: { id: saved.id } }),
+    ])
+    await database.$disconnect()
+  }
+})
