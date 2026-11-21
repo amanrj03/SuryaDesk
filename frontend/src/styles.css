@@ -78,3 +78,4 @@ tbody tr { @apply hover:bg-sky-50/55; }
 .cash-chart { @apply mt-4 flex h-36 items-end gap-1 border-b border-slate-200 sm:gap-2; }
 .cash-chart > div { @apply flex h-full min-w-0 flex-1 items-end; }
 .cash-bar { @apply w-full rounded-t-md bg-gradient-to-t from-blue-700 to-sky-400; }
+.signature { @apply w-full max-w-lg touch-none rounded-xl border border-slate-300 bg-white; }

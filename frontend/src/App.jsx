@@ -7,6 +7,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { api } from './api.js'
 import Dashboard from './Dashboard.jsx'
+import InstallationSignoff from './InstallationSignoff.jsx'
 
 const date = value => value ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeZone: 'Asia/Kolkata' }).format(new Date(value)) : '—'
 const currency = value => value == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(value))
@@ -185,7 +186,10 @@ function Records({ section, token, capabilities }) {
   const [retry, setRetry] = useState(0)
   const [state, setState] = useState({ busy: true })
   const [selected, setSelected] = useState(null)
-  const canEdit = section.path === 'leads' && capabilities.includes('leads:write')
+  const canEditLead = section.path === 'leads' && capabilities.includes('leads:write')
+  const canSign = section.path === 'installations' && capabilities.includes('installations:complete_assigned')
+  const hasActions = canEditLead || canSign
+  const Editor = canEditLead ? LeadEditor : InstallationSignoff
   useEffect(() => {
     const controller = new AbortController()
     const params = new URLSearchParams({ page: String(page), limit: '20' })
@@ -206,7 +210,7 @@ function Records({ section, token, capabilities }) {
       {state.result && <p>{state.result.meta.total} {state.result.meta.total === 1 ? 'record' : 'records'}</p>}
     </header>
     <div className="records">
-      {selected && <LeadEditor key={selected.id} lead={selected} token={token} onClose={() => setSelected(null)} onSaved={() => {
+      {selected && <Editor key={selected.id} lead={selected} job={selected} token={token} onClose={() => setSelected(null)} onSaved={() => {
         setSelected(null)
         setState({ busy: true })
         setRetry(value => value + 1)
@@ -227,8 +231,9 @@ function Records({ section, token, capabilities }) {
       }}>Try again</button></div>}
       {state.result && (!state.result.data.length
         ? <p className="feedback">No {section.title.toLowerCase()} found.</p>
-        : <><div className="overflow-x-auto"><table><thead><tr>{section.columns.map(([label]) => <th key={label}>{label}</th>)}{canEdit && <th scope="col">Action</th>}</tr></thead>
-          <tbody>{state.result.data.map(row => <tr key={row.id}>{section.columns.map(([label, value]) => <td key={label}>{value(row)}</td>)}{canEdit && <td><button className="secondary" onClick={() => setSelected(row)}>Edit</button></td>}</tr>)}</tbody>
+        : <><div className="overflow-x-auto"><table><thead><tr>{section.columns.map(([label]) => <th key={label}>{label}</th>)}{hasActions && <th scope="col">Action</th>}</tr></thead>
+          <tbody>{state.result.data.map(row => <tr key={row.id}>{section.columns.map(([label, value]) => <td key={label}>{value(row)}</td>)}{hasActions && <td>{(canEditLead || (row.status !== 'COMPLETED' && ['DELIVERED', 'INSTALLATION_IN_PROGRESS'].includes(row.order.status) && row.installationAssignmentsByInstallation.length > 0)) &&
+            <button className="secondary" onClick={() => setSelected(row)}>{canEditLead ? 'Edit' : 'Sign off'}</button>}</td>}</tr>)}</tbody>
         </table></div>
         <div className="pager"><button className="secondary" disabled={page <= 1} onClick={() => go(page - 1)}>Previous</button>
           <span>Page {page} of {state.result.meta.totalPages}</span>
