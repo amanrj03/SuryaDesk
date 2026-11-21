@@ -75,6 +75,13 @@ test('director can switch periods and see seeded profitability', async ({ page }
   await expect(page.getByRole('heading', { name: 'Daily cash collections' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Recent job profitability' })).toBeVisible()
   await expect(page.getByRole('table').getByRole('row').nth(1)).toBeVisible()
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download CSV' }).click()
+  expect((await download).suggestedFilename()).toBe('profitability.csv')
+  await page.getByRole('link', { name: 'Packages' }).click()
+  const packageRow = page.getByRole('row').filter({ hasText: 'DEMO-ON-GRID-3' })
+  await packageRow.getByRole('button', { name: 'View' }).click()
+  await expect(page.getByRole('heading', { name: 'Bill of materials' })).toBeVisible()
 })
 
 test('assigned technician completes a delivered job with a photo and drawn signature', async ({ page }) => {

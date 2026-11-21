@@ -58,7 +58,7 @@ export default function Dashboard({ session }) {
   }
 
   return <>
-    <header className="page-header"><div><h1>Operations overview</h1><p>SunPower Solutions</p></div>
+    <header className="page-header"><h1>Operations overview</h1>
       <label className="grid gap-1 text-sm font-semibold">Reporting period
         <select value={period} onChange={event => { setState({ loading: true }); setPeriod(event.target.value) }}>
           <option value="today">Today</option><option value="week">This week</option>

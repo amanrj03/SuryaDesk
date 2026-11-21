@@ -10,6 +10,13 @@ const activity = items => (items ?? []).map(item => [localDate(item.createdAt), 
 const lines = rows => rows?.map(row => [row.descriptionSnapshot ?? row.description, row.quantity, money(row.lineTotal)])
 const assignment = rows => rows.map(row => [row.technician.name, localDate(row.assignedAt)])
 const definition = {
+  assets: row => ({
+    title: row.asset.serialNumber, fields: [
+      ['Product', row.asset.product.name], ['Status', state(row.asset.status)], ['Customer', row.asset.customer?.name],
+      ['Order', row.asset.order?.orderNumber], ['Warranty active', row.coveredAsOf ? 'Yes' : 'No'],
+      ['Warranty starts', localDate(row.warranty?.startAt)], ['Warranty ends', localDate(row.warranty?.endAt)],
+    ],
+  }),
   leads: row => ({
     title: row.customer.name,
     fields: [['Reference', row.leadNumber], ['Status', state(row.status)], ['Phone', row.customer.phone],
@@ -90,7 +97,8 @@ export default function RecordDetail({ section, id, token, onClose }) {
   const [mediaError, setMediaError] = useState('')
   useEffect(() => {
     const controller = new AbortController()
-    api('/' + section + '/' + id, { token, signal: controller.signal })
+    const path = section === 'assets' ? '/assets/' + encodeURIComponent(id) + '/warranty' : '/' + section + '/' + id
+    api(path, { token, signal: controller.signal })
       .then(({ data }) => setState({ data: definition[section](data) }))
       .catch(error => { if (!controller.signal.aborted) setState({ error: error.message }) })
     return () => controller.abort()

@@ -24,12 +24,18 @@ const sections = [
     columns: [['Customer', row => row.lead.customer.name], ['Scheduled', row => date(row.scheduledAt)], ['Status', row => <Status value={row.status} />]] },
   { path: 'packages', title: 'Packages', capability: 'catalog:read', icon: CubeIcon, search: true,
     columns: [['Code', row => row.code], ['Package', row => row.name], ['System', row => words(row.type)], ['Capacity', row => row.capacityKw ? row.capacityKw + ' kW' : '—'], ['Price', row => currency(row.basePrice)]] },
+  { path: 'products', title: 'Products', capability: 'catalog:read', icon: CubeIcon, search: true,
+    columns: [['SKU', row => row.sku], ['Product', row => row.name], ['Category', row => words(row.category)],
+      ['Sale price', row => currency(row.salePrice)], ['Status', row => row.isActive ? 'Active' : 'Inactive']] },
   { path: 'quotes', title: 'Quotations', capability: 'quotes:read', icon: DocumentTextIcon, search: true,
     columns: [['Reference', row => row.quoteNumber], ['Customer', row => row.lead.customer.name], ['Total', row => currency(row.total)], ['Status', row => <Status value={row.status} />], ['Created', row => date(row.createdAt)]] },
   { path: 'orders', title: 'Orders', capability: 'orders:read', icon: ShoppingBagIcon, search: true,
     columns: [['Reference', row => row.orderNumber], ['Customer', row => row.customer.name], ['Total', row => currency(row.total)], ['Status', row => <Status value={row.status} />], ['Confirmed', row => date(row.confirmedAt)]] },
   { path: 'inventory', title: 'Inventory', capability: 'inventory:read', icon: Squares2X2Icon, search: true,
     columns: [['SKU', row => row.sku], ['Product', row => row.name], ['In stock', row => row.onHand], ['Reserved', row => row.reserved], ['Available', row => row.available], ['Reorder', row => row.lowStock ? 'Required' : '—']] },
+  { path: 'assets', title: 'Equipment serials', capability: 'inventory:read', icon: CubeIcon, search: true,
+    columns: [['Serial', row => row.serialNumber], ['Product', row => row.product.name], ['Status', row => <Status value={row.status} />],
+      ['Order', row => row.order?.orderNumber], ['Customer', row => row.customer?.name]] },
   { path: 'dispatches', title: 'Dispatch', capability: 'dispatch:prepare', icon: TruckIcon,
     columns: [['Reference', row => row.dispatchNumber], ['Customer', row => row.order.customer.name], ['Status', row => <Status value={row.status} />], ['Delivered', row => date(row.deliveredAt)]] },
   { path: 'warranties', title: 'Warranties', capability: 'warranties:read', icon: ShieldCheckIcon, search: true,
@@ -259,7 +265,7 @@ function Records({ section, token, capabilities }) {
         ? <p className="feedback">No {section.title.toLowerCase()} found.</p>
         : <><div className="overflow-x-auto"><table><thead><tr>{section.columns.map(([label]) => <th key={label}>{label}</th>)}{hasActions && <th scope="col">Action</th>}</tr></thead>
           <tbody>{state.result.data.map(row => <tr key={row.id}>{section.columns.map(([label, value]) => <td key={label}>{value(row)}</td>)}{hasActions && <td>{hasDetail(section.path) && <button className="secondary mb-1 mr-1" onClick={() => {
-            setAction(null); setSelected(null); setDetail(row.id)
+            setAction(null); setSelected(null); setDetail(section.path === 'assets' ? row.serialNumber : row.id)
           }}>View</button>}{(canEditLead || (canSign && row.status !== 'COMPLETED' && ['DELIVERED', 'INSTALLATION_IN_PROGRESS'].includes(row.order.status) && row.installationAssignmentsByInstallation.length > 0)) &&
             <button className="secondary mb-1" onClick={() => { setDetail(null); setAction(null); setSelected(row) }}>{canEditLead ? 'Edit' : 'Sign off'}</button>}
             {recordActions(section.path, row, capabilities).map(candidate => <button className="secondary mb-1 ml-1" key={candidate.key}

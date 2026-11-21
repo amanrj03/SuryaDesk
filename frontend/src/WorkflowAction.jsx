@@ -7,6 +7,27 @@ const time = (name, label) => input(name, label, 'datetime-local')
 const number = (name, label, attributes = {}) => input(name, label, 'number', { step: '.01', ...attributes })
 const toDate = text => text && new Date(text).toISOString()
 
+
+function productFields(product = {}) {
+  return [
+    input('sku', 'SKU', 'text', { defaultValue: product.sku }),
+    input('name', 'Product name', 'text', { defaultValue: product.name }),
+    { ...choice('category', 'Category', ['PANEL', 'INVERTER', 'BATTERY', 'CONTROLLER', 'STAND', 'WIRING', 'SWITCH', 'SAFETY', 'OTHER']),
+      attributes: { defaultValue: product.category } },
+    input('unit', 'Unit of measure', 'text', { defaultValue: product.unit ?? 'unit' }),
+    number('cost', 'Unit cost (INR)', { min: 0, defaultValue: product.cost }),
+    number('salePrice', 'Sale price (INR)', { min: 0, defaultValue: product.salePrice }),
+    number('warrantyMonths', 'Warranty (months)', { min: 0, max: 600, step: 1, defaultValue: product.warrantyMonths ?? 0 }),
+    number('reorderLevel', 'Reorder threshold', { min: 0, max: 1000000, step: 1, defaultValue: product.reorderLevel ?? 0 }),
+    input('serialized', 'Track individual serials', 'checkbox', { defaultChecked: product.serialized, disabled: Boolean(product.id) }),
+    input('isActive', 'Active product', 'checkbox', { defaultChecked: product.isActive ?? true }),
+  ]
+}
+
+function productData({ warrantyMonths, reorderLevel, ...values }) {
+  return { ...values, warrantyMonths: Number(warrantyMonths), reorderLevel: Number(reorderLevel) }
+}
+
 export function recordActions(section, row, capabilities) {
   const can = capability => capabilities.includes(capability)
   const id = row.id
@@ -63,6 +84,12 @@ export function recordActions(section, row, capabilities) {
       choice('method', 'Payment method', ['CASH', 'BANK_TRANSFER', 'UPI', 'CARD', 'OTHER']),
       input('reference', 'Payment reference', 'text', { optional: true, maxLength: 120 }),
     ]))
+    if (can('reports:financial')) actions.push(post('jobCost', 'Record job cost', '/orders/' + id + '/costs', [
+      choice('category', 'Cost category', ['TRANSPORT', 'LABOR', 'MATERIAL', 'OTHER']),
+      input('description', 'Cost description', 'textarea', { maxLength: 500 }),
+      number('amount', 'Amount (INR)', { min: '.01' }),
+      input('incurredAt', 'Incurred at', 'datetime-local', { optional: true }),
+    ], ({ incurredAt, ...values }) => ({ ...values, incurredAt: toDate(incurredAt) })))
     if (can('invoices:manage')) actions.push(post('invoice', 'Draft invoice', '/invoices', [], () => ({ orderId: id, customerId: row.customerId })))
     if (can('subsidies:manage')) actions.push(post('subsidy', 'Start subsidy application', '/subsidies', [], () => ({ orderId: id })))
     return actions
@@ -81,8 +108,14 @@ export function recordActions(section, row, capabilities) {
       })
     }
   }
+  if (section === 'products' && can('catalog:manage')) {
+    return [patch('editProduct', 'Edit product', '/products/' + id, productFields(row), values => {
+      const { serialized, ...data } = productData(values)
+      return data
+    })]
+  }
   if (section === 'inventory' && can('inventory:write')) {
-    return [post('receipt', 'Receive stock', '/inventory/receipts', [
+    const actions = [post('receipt', 'Receive stock', '/inventory/receipts', [
       number('quantity', 'Quantity received', { min: 1, max: 10000, step: 1 }),
       number('unitCost', 'Unit cost (INR)', { min: 0, defaultValue: row.cost }),
       input('reference', 'Purchase reference', 'text', { optional: true }),
@@ -91,6 +124,11 @@ export function recordActions(section, row, capabilities) {
       ...values, productId: id, quantity: Number(values.quantity),
       serialNumbers: values.serialNumbers?.split(/\r?\n/).map(value => value.trim()).filter(Boolean) ?? [],
     }))]
+    if (!row.serialized) actions.push(post('adjust', 'Adjust stock', '/inventory/adjustments', [
+      number('delta', 'Stock change (negative to subtract)', { min: -10000, max: 10000, step: 1 }),
+      input('reason', 'Reason', 'textarea', { maxLength: 500 }),
+    ], values => ({ productId: id, delta: Number(values.delta), reason: values.reason })))
+    return actions
   }
   if (section === 'dispatches') {
     const url = '/dispatches/' + id
@@ -194,6 +232,16 @@ export function recordActions(section, row, capabilities) {
 export function collectionActions(section, capabilities) {
   const can = capability => capabilities.includes(capability)
   const post = (key, label, path, fields, convert = values => values) => [{ key, label, path, fields, convert, method: 'POST' }]
+  if (section === 'leads' && can('leads:write')) return post('manualLead', 'Add enquiry', '/leads', [
+    input('name', 'Customer name'), input('phone', 'Phone', 'tel'), input('address', 'Installation address', 'textarea'),
+    choice('source', 'Enquiry source', ['PHONE', 'WHATSAPP', 'WEB', 'OTHER']),
+    input('email', 'Email', 'email', { optional: true }),
+    number('desiredKw', 'Desired system capacity (kW)', { min: 1, max: 5, optional: true }),
+    number('monthlyBill', 'Monthly bill (INR)', { min: 0, optional: true }),
+    input('subsidyInterest', 'Interested in subsidies', 'checkbox'),
+    input('notes', 'Notes', 'textarea', { optional: true }),
+  ], ({ desiredKw, ...values }) => ({ ...values, ...(desiredKw && { desiredKw: Number(desiredKw) }) }))
+  if (section === 'products' && can('catalog:manage')) return post('newProduct', 'Add product', '/products', productFields(), productData)
   if (section === 'suppliers' && can('inventory:write')) return post('supplier', 'Add supplier', '/suppliers', [
     input('code', 'Supplier code'), input('name', 'Supplier name'),
     input('email', 'Email', 'email', { optional: true }), input('phone', 'Phone', 'tel', { optional: true }),
@@ -221,7 +269,7 @@ function Field({ field, options }) {
   const common = { name, required: !optional && (!['validUntil', 'dueAt', 'submittedAt', 'decisionAt'].includes(name)), ...props }
   if (type === 'checkbox') return <label className="check"><input type="checkbox" name={name} {...props} />{label}</label>
   if (type === 'textarea') return <label>{label}<textarea {...common} /></label>
-  if (type === 'select') return <label>{label}<select {...common} multiple={multiple} defaultValue={multiple ? [] : ''}>
+  if (type === 'select') return <label>{label}<select {...common} multiple={multiple} defaultValue={multiple ? [] : attributes.defaultValue ?? ''}>
     {!multiple && <option value="">Choose {label.toLowerCase()}</option>}
     {options.map(option => typeof option === 'string'
       ? <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>
