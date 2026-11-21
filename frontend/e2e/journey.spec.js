@@ -494,6 +494,7 @@ test('customer service request reaches the assigned technician and closes after 
     await support.getByLabel('Filter by status').selectOption('IN_PROGRESS')
     const active = supportRow
     await expect(active).toContainText('Repair reported')
+    await expect(active.getByRole('button')).toHaveText(['Resolve ticket'])
     await active.getByRole('button', { name: 'Resolve ticket' }).click()
     const resolveTicket = support.getByRole('dialog', { name: 'Resolve ticket' })
     await expect(resolveTicket.getByLabel('Repair details')).toHaveValue(repairNotes)

@@ -203,12 +203,11 @@ function baseRecordActions(section, row, capabilities, detail) {
       ])]
       : []
     if (!['RESOLVED_PENDING_CONFIRMATION', 'CLOSED'].includes(row.status) && can('tickets:resolve')) {
-      return [
-        ...start,
-        ...report,
-        patch('ticketAssignment', 'Assign technician', url, [
-          { ...choice('assignedToId', 'Technician', []), source: '/users/options?kind=technician' },
-        ], values => values),
+      const resolve = post('resolve', 'Resolve ticket', url + '/resolve', [
+        input('resolutionNotes', 'Repair details', 'textarea', { maxLength: 2000, defaultValue: row.repairNotes ?? '' }),
+      ], values => ({ ...values, coverageDecision: row.coverageDecision === 'COVERED' ? 'COVERED' : 'NOT_COVERED' }))
+      if (row.repairReportedAt && !detail) return [resolve]
+      const repairRecords = [
         patch('laborCharge', 'Set labour charge', url, [
           number('laborCharge', 'Labour charge (INR)', { min: 0, defaultValue: row.laborCharge }),
         ], values => values),
@@ -223,9 +222,17 @@ function baseRecordActions(section, row, capabilities, detail) {
           number('quantity', 'Quantity', { min: 1, step: 1 }),
           number('chargePerUnit', 'Customer charge per unit (INR)', { min: 0, defaultValue: 0 }),
         ], values => ({ ...values, quantity: Number(values.quantity) }))] : []),
-        post('resolve', 'Resolve ticket', url + '/resolve', [
-          input('resolutionNotes', 'Repair details', 'textarea', { maxLength: 2000, defaultValue: row.repairNotes ?? '' }),
-        ], values => ({ ...values, coverageDecision: row.coverageDecision === 'COVERED' ? 'COVERED' : 'NOT_COVERED' })),
+      ]
+      if (row.repairReportedAt) return [resolve, ...repairRecords.filter(action =>
+        action.key !== 'laborCharge' || row.coverageDecision !== 'COVERED')]
+      return [
+        ...start,
+        ...report,
+        patch('ticketAssignment', 'Assign technician', url, [
+          { ...choice('assignedToId', 'Technician', []), source: '/users/options?kind=technician' },
+        ], values => values),
+        ...repairRecords,
+        resolve,
       ]
     }
     return [...start, ...report]
