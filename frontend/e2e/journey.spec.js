@@ -482,8 +482,13 @@ test('customer service request reaches the assigned technician and closes after 
     const report = field.getByRole('dialog', { name: 'Report work done' })
     const repairNotes = 'Re-seated the string connector and verified stable generation.'
     await report.getByLabel('Work completed').fill(repairNotes)
+    await report.getByLabel('Evidence photo (optional)').setInputFiles({
+      name: 'completed-repair.png', mimeType: 'image/png',
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Yv1cAAAAASUVORK5CYII=', 'base64'),
+    })
     await report.getByRole('button', { name: 'Report work done' }).click()
     await expect(field.getByText(repairNotes, { exact: true })).toBeVisible()
+    await expect(field.getByRole('button', { name: 'completed-repair.png' })).toBeVisible()
     await expect(field.getByRole('button', { name: 'Report work done' })).toHaveCount(0)
 
     await support.getByLabel('Filter by status').selectOption('IN_PROGRESS')
@@ -496,6 +501,11 @@ test('customer service request reaches the assigned technician and closes after 
     await expect(resolveTicket).toHaveCount(0)
     await support.getByLabel('Filter by status').selectOption('RESOLVED_PENDING_CONFIRMATION')
     await expect(active).toContainText('Resolved pending confirmation')
+    await expect(active.getByRole('button', { name: 'Upload evidence' })).toHaveCount(0)
+    await active.getByRole('button', { name: 'Confirm repair' }).click()
+    const confirm = support.getByRole('dialog', { name: 'Confirm repair' })
+    await expect(confirm.getByLabel('Evidence photo (optional)')).toBeVisible()
+    await confirm.getByRole('button', { name: 'Close', exact: true }).click()
 
     await page.reload()
     await card.getByRole('button', { name: 'Confirm resolution' }).click()
@@ -522,4 +532,14 @@ test('customer service request reaches the assigned technician and closes after 
       await Promise.all([support.close(), field.close(), db.$disconnect()])
     }
   }
+})
+
+test('survey submission has the evidence field in the review form', async ({ page }) => {
+  await login(page, 'admin')
+  await page.getByRole('link', { name: 'Surveys', exact: true }).click()
+  await page.getByLabel('Filter by status').selectOption('SCHEDULED')
+  const row = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'Submit for review' }) }).first()
+  await expect(row.getByRole('button', { name: 'Upload evidence' })).toHaveCount(0)
+  await row.getByRole('button', { name: 'Submit for review' }).click()
+  await expect(page.getByRole('dialog', { name: 'Submit for review' }).getByLabel('Evidence photo (optional)')).toBeVisible()
 })

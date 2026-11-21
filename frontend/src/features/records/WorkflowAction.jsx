@@ -264,25 +264,27 @@ function baseRecordActions(section, row, capabilities, detail) {
 export function recordActions(section, row, capabilities, { detail = false } = {}) {
   const actions = baseRecordActions(section, row, capabilities, detail)
   if (!capabilities.includes('attachments:upload')) return actions
-  const can = capability => capabilities.includes(capability)
-  const configurations = {
-    surveys: { type: 'SURVEY', allowed: (can('surveys:record') || can('surveys:approve')) && !['APPROVED', 'REJECTED'].includes(row.status) },
-    tickets: { type: 'TICKET', allowed: can('tickets:manage') && row.status !== 'CLOSED' },
-    subsidies: { type: 'SUBSIDY', allowed: can('subsidies:manage') },
+  const evidenceActions = {
+    surveys: { type: 'SURVEY', keys: ['record'] },
+    tickets: { type: 'TICKET', keys: ['reportRepair', 'closeTicket'] },
   }
-  const scope = configurations[section]
-  if (!scope?.allowed) return actions
+  const evidence = evidenceActions[section]
+  if (evidence) return actions.map(action => evidence.keys.includes(action.key)
+    ? { ...action, evidence: { ownerType: evidence.type, ownerId: row.id } } : action)
+  if (section !== 'subsidies' || !capabilities.includes('subsidies:manage')) return actions
   return [...actions, {
     key: 'attach', label: 'Upload evidence', method: 'POST', path: '/attachments',
-    fields: [input('file', 'Evidence file', 'file', { accept: scope.type === 'SUBSIDY' ? '.pdf,.png,.jpg,.jpeg,.webp' : '.png,.jpg,.jpeg,.webp' })],
-    convert({ file }) {
-      const body = new FormData()
-      body.set('ownerType', scope.type)
-      body.set('ownerId', row.id)
-      body.set('file', file)
-      return body
-    },
+    fields: [input('file', 'Evidence file', 'file', { accept: '.pdf,.png,.jpg,.jpeg,.webp' })],
+    convert: ({ file }) => evidenceBody({ ownerType: 'SUBSIDY', ownerId: row.id }, file),
   }]
+}
+
+function evidenceBody({ ownerType, ownerId }, file) {
+  const body = new FormData()
+  body.set('ownerType', ownerType)
+  body.set('ownerId', ownerId)
+  body.set('file', file)
+  return body
 }
 
 export function collectionActions(section, capabilities) {
@@ -346,6 +348,7 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
   const [loading, setLoading] = useState(action.fields.some(field => field.source))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [uploaded, setUploaded] = useState('')
   useEffect(() => {
     const controller = new AbortController()
     const fields = action.fields.filter(field => field.source)
@@ -362,6 +365,9 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
 
   async function submit(event) {
     event.preventDefault()
+    const fileInput = event.currentTarget.elements.namedItem('evidenceFile')
+    const evidenceFile = fileInput?.files?.[0]
+    const approve = event.nativeEvent.submitter?.value === 'approve'
     const form = new FormData(event.currentTarget)
     const values = Object.fromEntries(action.fields.flatMap(field => {
       if (field.type === 'checkbox') return [[field.name, form.has(field.name)]]
@@ -374,7 +380,12 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
     try {
       const body = action.convert(values)
       if (paymentRequestId) body.requestId = paymentRequestId
-      if (action.approveOnSubmit && event.nativeEvent.submitter?.value === 'approve') body.approveOnSubmit = true
+      if (action.approveOnSubmit && approve) body.approveOnSubmit = true
+      if (action.evidence && evidenceFile) {
+        await api('/attachments', { token, method: 'POST', body: evidenceBody(action.evidence, evidenceFile) })
+        setUploaded(evidenceFile.name)
+        fileInput.value = ''
+      }
       const result = await api(action.path, { token, method: action.method, body })
       if (action.successPath) navigate(action.successPath(result.data))
       else onSaved(result.data)
@@ -391,6 +402,10 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
       {!loading && !!action.fields.length && <div className="form-grid">
         {action.fields.map(field => <Field key={field.name} field={field} options={choices[field.name] ?? field.options ?? []} />)}
       </div>}
+      {action.evidence && <label>Evidence photo (optional)
+        <input name="evidenceFile" type="file" accept=".png,.jpg,.jpeg,.webp" disabled={busy} />
+      </label>}
+      {uploaded && <p role="status" className="text-sm text-gray-600">Evidence uploaded: {uploaded}</p>}
       {error && <p className="notice" role="alert">{error}</p>}
       <div className="flex flex-wrap gap-2">
         <button type="submit" className={action.approveOnSubmit ? 'secondary' : 'primary'} disabled={busy || loading}>
