@@ -53,6 +53,9 @@ test('public enquiry reaches the sales queue and requires qualification evidence
   token = (await request('/auth/login', 'POST', { email, password })).body.data.accessToken
   const list = await request('/leads?q=' + fixture.name)
   assert.equal(list.body.meta.total, 1)
+  const customers = await request('/customers?q=' + fixture.name)
+  assert.equal(customers.status, 200)
+  assert.equal(customers.body.data[0].id, list.body.data[0].customerId)
   const { id } = list.body.data[0]
   assert.equal((await request('/leads/' + id, 'PATCH', { status: 'CONTACTED' })).status, 200)
   assert.equal((await request('/leads/' + id, 'PATCH', { status: 'QUALIFIED' })).status, 409)
