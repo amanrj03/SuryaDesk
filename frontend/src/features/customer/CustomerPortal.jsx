@@ -2,6 +2,7 @@
 import { Link, NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { ChartBarIcon, ClipboardDocumentListIcon, DocumentTextIcon, ShieldCheckIcon, ShoppingBagIcon, UserCircleIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline'
 import { Brand } from '../../components/ui/Brand.jsx'
+import { BackToHome } from '../../components/ui/BackToHome.jsx'
 import { Notice } from '../../components/ui/Notice.jsx'
 import { displayReference, formatCurrency, formatDateTime, words } from '../../lib/format.js'
 import Enquiry from '../enquiries/EnquiryPage.jsx'
@@ -179,7 +180,10 @@ export default function CustomerPortal() {
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-8">
           <Link to="/" aria-label="SuryaDesk home"><Brand /></Link>
-          {profile && <button type="button" className="secondary shrink-0" disabled={busy} onClick={logout}>Sign out</button>}
+          <div className="flex flex-wrap justify-end gap-2">
+            <BackToHome />
+            {profile && <button type="button" className="secondary shrink-0" disabled={busy} onClick={logout}>Sign out</button>}
+          </div>
         </div>
       </header>
       <div className="mx-auto grid max-w-7xl gap-5 px-4 py-5 sm:px-8 lg:grid-cols-[13rem_minmax(0,1fr)]">

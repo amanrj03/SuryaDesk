@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Brand } from '../../components/ui/Brand.jsx'
+import { BackToHome } from '../../components/ui/BackToHome.jsx'
 import { Notice } from '../../components/ui/Notice.jsx'
 import { customerApi } from '../customer/customerApi.js'
 import { CodeField, CodeNotice, NewPasswordFields } from '../customer/CustomerAuthFields.jsx'
@@ -61,7 +62,10 @@ export default function Enquiry({ profile, onSubmitted }) {
       ? 'flex items-center justify-center text-gray-900'
       : 'public-screen flex min-h-screen items-center justify-center bg-[#FAF9F6] p-3 text-[#2D2D2E] antialiased sm:p-6'}>
       <div className="w-full max-w-2xl rounded-[22px] border border-gray-200/80 bg-white p-6 shadow-xl sm:p-8">
-        {!profile && <Brand />}
+        {!profile && <header className="flex flex-wrap items-center justify-between gap-2">
+          <Link to="/" aria-label="SuryaDesk home"><Brand /></Link>
+          <BackToHome />
+        </header>}
         <h1 className="mt-6 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
           Request a solar quote
         </h1>

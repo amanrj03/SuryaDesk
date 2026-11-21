@@ -2,6 +2,7 @@ import { useState } from 'react'
 import DemoAccounts from './DemoAccounts.jsx'
 import { Link, useNavigate } from 'react-router-dom'
 import { Brand } from '../../components/ui/Brand.jsx'
+import { BackToHome } from '../../components/ui/BackToHome.jsx'
 import { Notice } from '../../components/ui/Notice.jsx'
 import { api } from '../../lib/api.js'
 import { BoltIcon, EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
@@ -70,14 +71,9 @@ export default function Login({ onLogin }) {
         aria-labelledby="login-title"
       >
         <div className="login-content w-full max-w-sm sm:max-w-md my-auto">
-          <div className="mb-5 flex items-center justify-between">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
             <Brand />
-            <Link
-              to="/enquiry"
-              className="text-xs font-semibold text-[#E62E6B] transition hover:underline"
-            >
-              Public quote →
-            </Link>
+            <BackToHome />
           </div>
 
           <h1 id="login-title" className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">

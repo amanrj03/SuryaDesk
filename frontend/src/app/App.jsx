@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Login from '../features/auth/LoginPage.jsx'
 import Enquiry from '../features/enquiries/EnquiryPage.jsx'
 import Workspace from './Workspace.jsx'
@@ -11,6 +11,11 @@ import CustomerPortal from '../features/customer/CustomerPortal.jsx'
 
 export default function App() {
   const [session, setSession] = useState(null)
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    if (pathname !== '/' || !window.location.hash) window.scrollTo(0, 0)
+  }, [pathname])
 
   useEffect(() => {
     const expired = () => setSession(null)

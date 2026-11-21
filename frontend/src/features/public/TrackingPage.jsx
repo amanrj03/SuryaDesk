@@ -2,14 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { CheckIcon } from '@heroicons/react/24/outline'
 import { Brand } from '../../components/ui/Brand.jsx'
+import { BackToHome } from '../../components/ui/BackToHome.jsx'
 import { StatusBadge } from '../../components/ui/Badge.jsx'
 import { ErrorState } from '../../components/ui/States.jsx'
 import { api } from '../../lib/api.js'
 import { displayReference, formatDate, formatDateTime, words } from '../../lib/format.js'
-
-function tokenFromHash(hash) {
-  return new URLSearchParams(hash.slice(1)).get('token')
-}
+import { tokenFromHash, trackingToken } from './trackingLocation.js'
 
 function OrderTimeline({ timeline, cancelled }) {
   const latest = timeline.findLastIndex(event => event.at)
@@ -66,9 +64,7 @@ export default function TrackingPage() {
   function submit(event) {
     event.preventDefault()
     const value = new FormData(event.currentTarget).get('tracking').trim()
-    const nextToken = /^LEAD-/i.test(value)
-      ? value.toUpperCase()
-      : tokenFromHash(value.includes('#') ? value.slice(value.indexOf('#')) : '')
+    const nextToken = trackingToken(value)
     if (!nextToken) {
       setInputError('Enter your tracking ID or paste the full tracking link.')
       return
@@ -82,8 +78,9 @@ export default function TrackingPage() {
   const order = current.data
   return (
     <main className="min-h-screen bg-[#FAF9F6] px-4 py-6 text-gray-900 sm:px-8">
-      <header className="mx-auto max-w-3xl">
+      <header className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2">
         <Link to="/" aria-label="SuryaDesk home"><Brand /></Link>
+        <BackToHome />
       </header>
       <div className="mx-auto my-8 grid max-w-3xl gap-5">
         <h1 className="text-3xl font-bold tracking-tight">Track your order</h1>

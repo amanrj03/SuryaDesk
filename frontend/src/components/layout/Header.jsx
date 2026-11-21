@@ -7,6 +7,7 @@ import {
   ArrowRightStartOnRectangleIcon,
 } from '@heroicons/react/24/outline'
 import { Avatar } from '../ui/Avatar.jsx'
+import { BackToHome } from '../ui/BackToHome.jsx'
 import { Badge } from '../ui/Badge.jsx'
 import { words } from '../../lib/format.js'
 
@@ -53,7 +54,7 @@ export function Header({ user, navigationOpen, onToggleNavigation, onLogout }) {
           <Bars3Icon className="size-5" />
         </button>
 
-        <Link to="/workspace" className="flex items-center gap-1.5" aria-label="SuryaDesk Home">
+        <Link to="/workspace" className="flex items-center gap-1.5" aria-label="Back to staff dashboard" title="Back to staff dashboard">
           <img
             src="/logo.png"
             alt="SuryaDesk"
@@ -115,6 +116,7 @@ export function Header({ user, navigationOpen, onToggleNavigation, onLogout }) {
                   <Badge tone="accent">{words(user?.role)}</Badge>
                 </div>
               </div>
+              <BackToHome className="mx-3 my-1" />
               <button
                 type="button"
                 onClick={() => {

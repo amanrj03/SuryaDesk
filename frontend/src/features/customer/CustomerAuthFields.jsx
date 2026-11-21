@@ -1,11 +1,15 @@
 import { Link } from 'react-router-dom'
 import { Brand } from '../../components/ui/Brand.jsx'
+import { BackToHome } from '../../components/ui/BackToHome.jsx'
 
 export function CustomerFrame({ title, children }) {
   return (
     <main className="min-h-screen bg-[#FAF9F6] px-4 py-8 text-gray-900 sm:px-8 flex items-center justify-center">
       <div className="w-full max-w-md">
-        <Link to="/" aria-label="SuryaDesk home" className="inline-block mb-6"><Brand /></Link>
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-2">
+          <Link to="/" aria-label="SuryaDesk home"><Brand /></Link>
+          <BackToHome />
+        </header>
         <section className="rounded-3xl border border-gray-200/80 bg-white p-6 shadow-xl sm:p-8">
           <h1 className="mb-6 text-2xl font-bold tracking-tight text-gray-900">{title}</h1>
           {children}

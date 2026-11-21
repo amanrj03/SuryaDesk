@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Brand } from '../../components/ui/Brand.jsx'
+import { BackToHome } from '../../components/ui/BackToHome.jsx'
 import { StatusBadge } from '../../components/ui/Badge.jsx'
 import { api } from '../../lib/api.js'
 import { displayReference, formatDateTime } from '../../lib/format.js'
@@ -45,7 +46,10 @@ export default function WarrantyStatusPage() {
   return (
     <main className="min-h-screen bg-[#FAF9F6] px-4 py-6 text-gray-900 sm:px-8">
       <div className="mx-auto grid max-w-3xl gap-5">
-        <header><Link to="/" aria-label="SuryaDesk home"><Brand /></Link></header>
+        <header className="flex flex-wrap items-center justify-between gap-2">
+          <Link to="/" aria-label="SuryaDesk home"><Brand /></Link>
+          <BackToHome />
+        </header>
         <h1 className="mt-3 text-3xl font-bold tracking-tight">Warranty status</h1>
         <form className="form rounded-2xl border border-gray-200 bg-white p-5" onSubmit={submit}>
           <p className="text-sm text-gray-600">Enter the order ID from your invoice or tracking page.</p>
