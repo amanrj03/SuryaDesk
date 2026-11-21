@@ -70,3 +70,4 @@ td:first-child { @apply max-w-56 truncate; }
 tbody tr { @apply hover:bg-sky-50/55; }
 .status { @apply inline-flex whitespace-nowrap rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-900; }
 .pager { @apply flex flex-wrap items-center justify-between gap-2 p-4 text-sm; }
+.lead-editor { @apply border-b border-slate-200 bg-blue-50/35; }

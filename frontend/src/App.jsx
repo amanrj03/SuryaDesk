@@ -3,6 +3,7 @@ import { Link, Navigate, NavLink, Route, Routes, useNavigate } from 'react-route
 import {
   ArrowLeftStartOnRectangleIcon, BoltIcon, ClipboardDocumentCheckIcon,
   CubeIcon, DocumentTextIcon, InboxStackIcon, ShoppingBagIcon, CreditCardIcon,
+  TruckIcon, ShieldCheckIcon, Squares2X2Icon,
 } from '@heroicons/react/24/outline'
 import { api } from './api.js'
 
@@ -20,6 +21,12 @@ const sections = [
     columns: [['Reference', row => row.quoteNumber], ['Customer', row => row.lead.customer.name], ['Total', row => currency(row.total)], ['Status', row => <Status value={row.status} />], ['Created', row => date(row.createdAt)]] },
   { path: 'orders', title: 'Orders', capability: 'orders:read', icon: ShoppingBagIcon, search: true,
     columns: [['Reference', row => row.orderNumber], ['Customer', row => row.customer.name], ['Total', row => currency(row.total)], ['Status', row => <Status value={row.status} />], ['Confirmed', row => date(row.confirmedAt)]] },
+  { path: 'inventory', title: 'Inventory', capability: 'inventory:read', icon: Squares2X2Icon, search: true,
+    columns: [['SKU', row => row.sku], ['Product', row => row.name], ['In stock', row => row.onHand], ['Reserved', row => row.reserved], ['Available', row => row.available], ['Reorder', row => row.lowStock ? 'Required' : '?']] },
+  { path: 'dispatches', title: 'Dispatch', capability: 'dispatch:prepare', icon: TruckIcon,
+    columns: [['Reference', row => row.dispatchNumber], ['Customer', row => row.order.customer.name], ['Status', row => <Status value={row.status} />], ['Delivered', row => date(row.deliveredAt)]] },
+  { path: 'warranties', title: 'Warranties', capability: 'warranties:read', icon: ShieldCheckIcon, search: true,
+    columns: [['Serial', row => row.asset.serialNumber], ['Product', row => row.asset.product.name], ['Customer', row => row.customer.name], ['Status', row => <Status value={row.status} />], ['Expires', row => date(row.endAt)]] },
   { path: 'payments', title: 'Payments', capability: 'payments:read', icon: CreditCardIcon,
     columns: [['Reference', row => row.reference || '—'], ['Amount', row => currency(row.amount)], ['Method', row => words(row.method)], ['Received', row => date(row.receivedAt)]] },
 ]
@@ -116,12 +123,64 @@ function Enquiry() {
   </main>
 }
 
-function Records({ section, token }) {
+function LeadEditor({ lead, token, onClose, onSaved }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const next = { NEW: ['CONTACTED', 'LOST'], CONTACTED: ['QUALIFIED', 'LOST'], QUALIFIED: ['LOST'] }
+  const allowed = next[lead.status] ?? []
+
+  async function save(event) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const body = {}
+    for (const field of ['status', 'monthlyBill', 'notes']) {
+      const value = form.get(field).trim()
+      if (value) body[field] = value
+    }
+    if (form.get('roofArea')) body.roofArea = Number(form.get('roofArea'))
+    if (form.get('gridSuitable')) body.gridSuitable = form.get('gridSuitable') === 'yes'
+    if (!Object.keys(body).length) {
+      setError('Enter an update before saving.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      await api('/leads/' + lead.id, { method: 'PATCH', token, body })
+      onSaved()
+    } catch (failure) {
+      setError(failure.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <section className="lead-editor" aria-labelledby="lead-editor-title">
+    <div className="toolbar"><h2 id="lead-editor-title">{lead.customer.name}</h2><button className="secondary ml-auto" disabled={busy} onClick={onClose}>Close</button></div>
+    <form className="form p-4" onSubmit={save}>
+      <div className="form-grid">
+        <label>Status<select name="status"><option value="">{words(lead.status)}</option>
+          {allowed.map(status => <option key={status} value={status}>{words(status)}</option>)}</select></label>
+        <label>Shadow-free roof area (m?)<input name="roofArea" type="number" min="0.01" step="0.01" defaultValue={lead.roofArea ?? ''} /></label>
+        <label>Monthly bill (INR)<input name="monthlyBill" type="number" min="0" step="0.01" defaultValue={lead.monthlyBill ?? ''} /></label>
+        <label>Grid suitable<select name="gridSuitable" defaultValue={lead.gridSuitable == null ? '' : lead.gridSuitable ? 'yes' : 'no'}>
+          <option value="">Unknown</option><option value="yes">Yes</option><option value="no">No</option></select></label>
+      </div>
+      <label>Notes<textarea name="notes" maxLength={2000} defaultValue={lead.notes ?? ''} /></label>
+      <Notice>{error}</Notice>
+      <button className="primary w-fit" disabled={busy}>{busy ? 'Saving?' : 'Save enquiry'}</button>
+    </form>
+  </section>
+}
+
+function Records({ section, token, capabilities }) {
   const [page, setPage] = useState(1)
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('')
   const [retry, setRetry] = useState(0)
   const [state, setState] = useState({ busy: true })
+  const [selected, setSelected] = useState(null)
+  const canEdit = section.path === 'leads' && capabilities.includes('leads:write')
   useEffect(() => {
     const controller = new AbortController()
     const params = new URLSearchParams({ page: String(page), limit: '20' })
@@ -142,6 +201,11 @@ function Records({ section, token }) {
       {state.result && <p>{state.result.meta.total} {state.result.meta.total === 1 ? 'record' : 'records'}</p>}
     </header>
     <div className="records">
+      {selected && <LeadEditor key={selected.id} lead={selected} token={token} onClose={() => setSelected(null)} onSaved={() => {
+        setSelected(null)
+        setState({ busy: true })
+        setRetry(value => value + 1)
+      }} />}
       {section.search && <form className="toolbar" onSubmit={event => {
         event.preventDefault()
         setState({ busy: true })
@@ -158,8 +222,8 @@ function Records({ section, token }) {
       }}>Try again</button></div>}
       {state.result && (!state.result.data.length
         ? <p className="feedback">No {section.title.toLowerCase()} found.</p>
-        : <><div className="overflow-x-auto"><table><thead><tr>{section.columns.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
-          <tbody>{state.result.data.map(row => <tr key={row.id}>{section.columns.map(([label, value]) => <td key={label}>{value(row)}</td>)}</tr>)}</tbody>
+        : <><div className="overflow-x-auto"><table><thead><tr>{section.columns.map(([label]) => <th key={label}>{label}</th>)}{canEdit && <th scope="col">Action</th>}</tr></thead>
+          <tbody>{state.result.data.map(row => <tr key={row.id}>{section.columns.map(([label, value]) => <td key={label}>{value(row)}</td>)}{canEdit && <td><button className="secondary" onClick={() => setSelected(row)}>Edit</button></td>}</tr>)}</tbody>
         </table></div>
         <div className="pager"><button className="secondary" disabled={page <= 1} onClick={() => go(page - 1)}>Previous</button>
           <span>Page {page} of {state.result.meta.totalPages}</span>
@@ -192,7 +256,7 @@ function Workspace({ session, onLogout }) {
       <Notice>{error}</Notice>
       <Routes>
         {allowed.map(section => <Route key={section.path} path={section.path}
-          element={<Records key={section.path} section={section} token={session.accessToken} />} />)}
+          element={<Records key={section.path} section={section} token={session.accessToken} capabilities={session.user.capabilities} />} />)}
         <Route path="*" element={allowed.length ? <Navigate to={'/' + allowed[0].path} replace /> : <header className="page-header"><h1>Workspace</h1><p>No pages are assigned to your role yet.</p></header>} />
       </Routes>
     </main>
