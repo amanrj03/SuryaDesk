@@ -172,6 +172,14 @@ export function ServiceRequests({ entries, assets, busy, run, save, create }) {
         <p className="mt-2 text-sm text-gray-600">Updated {formatDateTime(row.updatedAt)}</p>
         {row.resolvedAt && <p className="text-sm text-gray-600">Resolved {formatDateTime(row.resolvedAt)}</p>}
         {row.confirmedAt && <p className="text-sm text-gray-600">Confirmed {formatDateTime(row.confirmedAt)}</p>}
+        {row.invoice ? <section aria-label="Service charges" className="mt-3 rounded-xl border border-gray-200 p-3">
+          <h4 className="font-semibold">Service charges</h4>
+          <Prices lines={row.invoice.invoiceLinesByInvoice} />
+          {Number(row.invoice.tax) > 0 && <p className="text-sm">Tax {formatCurrency(row.invoice.tax)}</p>}
+          <p className="my-2 font-semibold">Total {formatCurrency(row.invoice.total)}</p>
+          {download(save, '/invoices/' + row.invoice.id + '/pdf', 'Download service invoice', row.invoice.invoiceNumber)}
+        </section> : row.status === 'CLOSED' && row.coverageDecision === 'COVERED' &&
+          <p className="mt-3 text-sm font-medium">Covered by warranty · {formatCurrency(0)}</p>}
         <div className="mt-3 flex flex-wrap gap-2">
           {row.photos.map(photo => <button key={photo.id} type="button" className="secondary" onClick={() => save('/photos/' + photo.id, photo.originalName, false)}>Download photo</button>)}
           {row.status === 'RESOLVED_PENDING_CONFIRMATION' && <button className="primary" disabled={busy} onClick={() =>

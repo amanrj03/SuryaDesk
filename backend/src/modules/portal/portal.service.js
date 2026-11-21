@@ -65,7 +65,7 @@ export function portalService(db) {
           paymentsByOrder: { where: { voidedAt: null }, select: payment, orderBy: { receivedAt: 'desc' } },
         } }),
         db.invoice.findMany({ where: { ...scope.invoices, status: { in: issuedInvoiceStatuses } },
-          select: { ...invoice, orderId: true }, orderBy: { issuedAt: 'desc' } }),
+          select: { ...invoice, orderId: true, ticketId: true }, orderBy: { issuedAt: 'desc' } }),
         db.serializedAsset.findMany({ where: { order: { ...scope.order, installationByOrder: { status: 'COMPLETED', signedAt: { not: null } } },
           status: { in: ['INSTALLED', 'REPLACED'] } }, select: equipment, orderBy: { serialNumber: 'asc' } }),
         db.serviceTicket.findMany({ where: scope.service, select: ticket, orderBy: { updatedAt: 'desc' } }),
@@ -78,14 +78,19 @@ export function portalService(db) {
         ...row, ...paymentTotals(row.total, row.paymentsByOrder.reduce((sum, item) => sum.plus(item.amount), row.total.minus(row.total))),
       }))
       const ordersById = new Map(orderBalances.map(row => [row.id, row]))
+      const visibleInvoices = invoices.filter(row => {
+        const order = ordersById.get(row.orderId)
+        return (!row.orderId || order) && canDownloadInvoice(row, order, order?.paidTotal)
+      })
+      const serviceInvoices = new Map(visibleInvoices.filter(row => row.ticketId).map(row => [row.ticketId, row]))
       return {
         requests: requests.map(row => ({ ...row, quotationsByLead: row.quotationsByLead.map(customerQuote) })),
         orders: orderBalances,
-        invoices: invoices.filter(row => {
-          const order = ordersById.get(row.orderId)
-          return (!row.orderId || order) && canDownloadInvoice(row, order, order?.paidTotal)
-        }),
-        assets, tickets: tickets.map(row => ({ ...row, photos: photos.filter(photo => photo.ownerId === row.id) })),
+        invoices: visibleInvoices,
+        assets, tickets: tickets.map(row => ({
+          ...row, invoice: serviceInvoices.get(row.id) ?? null,
+          photos: photos.filter(photo => photo.ownerId === row.id),
+        })),
       }
     },
     async quote(account, id) {

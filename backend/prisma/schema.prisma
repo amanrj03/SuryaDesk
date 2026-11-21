@@ -782,6 +782,7 @@ model ServiceTicket {
   confirmedAt              DateTime?
   customerConfirmationName String?
   laborCharge              Decimal          @db.Decimal(12, 2)
+  visitCharge              Decimal          @default(0) @db.Decimal(8, 2)
   notes                    String?
   createdAt                DateTime         @default(now())
   updatedAt                DateTime         @updatedAt
@@ -803,6 +804,7 @@ model ServiceTicket {
 model ServiceLabourRate {
   id         String   @id
   hourlyRate Decimal  @db.Decimal(8, 2)
+  visitCharge Decimal @default(0) @db.Decimal(8, 2)
   updatedAt  DateTime @updatedAt
 }
 

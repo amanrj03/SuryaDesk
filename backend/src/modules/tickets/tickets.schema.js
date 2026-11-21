@@ -25,7 +25,8 @@ export const part = z.strictObject({ productId: id, quantity: z.number().int().m
 export const repairReport = z.strictObject({
   repairNotes: text, customerSignerName: z.string().trim().min(1).max(120), signatureAttachmentId: id,
 })
-export const labourRate = z.strictObject({ hourlyRate: amount.refine(rate => Number(rate) <= 999999.99) })
+const servicePrice = amount.refine(rate => Number(rate) <= 999999.99)
+export const labourRate = z.strictObject({ hourlyRate: servicePrice, visitCharge: servicePrice.optional() })
 export const resolve = z.strictObject({
   resolutionNotes: text, coverageDecision: z.enum(['COVERED', 'NOT_COVERED']), coverageReason: text.optional(),
 })

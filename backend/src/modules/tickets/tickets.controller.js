@@ -8,7 +8,7 @@ export function ticketsController(tickets) {
       response.json({ success: true, data: await tickets.labourRate() })
     },
     async updateLabourRate(request, response) {
-      response.json({ success: true, data: await tickets.updateLabourRate(request.validated.body.hourlyRate, request.user) })
+      response.json({ success: true, data: await tickets.updateLabourRate(request.validated.body, request.user) })
     },
     async create(request, response) {
       response.status(201).json({ success: true, data: await tickets.create(request.validated.body, request.user) })

@@ -92,9 +92,10 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.ok(received.timeline[0].at)
         assert.ok(received.timeline.slice(1).every(event => event.at === null))
         token = (await post('/auth/login', { email, password })).accessToken
-        const rate = await patch('/service-labour-rate', { hourlyRate: '600.50' })
+        const rate = await patch('/service-labour-rate', { hourlyRate: '600.50', visitCharge: '350.00' })
         assert.equal(rate.hourlyRate, '600.5')
         assert.equal((await request('GET', '/service-labour-rate')).hourlyRate, '600.5')
+        assert.equal(rate.visitCharge, '350')
         const approval = '/customer-portal/staff/customers/' + legacyLead.customerId + '/access'
         assert.equal((await portal('/staff/customers/' + legacyLead.customerId + '/access', {
           method: 'PATCH', body: { email, approved: true },
@@ -209,7 +210,7 @@ test('Express connects public intake to paid delivery, signed completion, and co
         token = (await post('/auth/login', { email: salesEmail, password })).accessToken
         const deniedRate = await fetch(url + '/service-labour-rate', {
           method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ hourlyRate: '1.00' }),
+          body: JSON.stringify({ hourlyRate: '1.00', visitCharge: '1.00' }),
         })
         assert.equal(deniedRate.status, 403)
         assert.deepEqual((await related('orders', order.id)).map(link => link.section), ['leads', 'surveys', 'quotes'])
@@ -312,6 +313,18 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.equal(resolution.invoiceByTicket, null)
         const closed = await portalData('/tickets/' + ticket.id + '/confirm', { method: 'POST' })
         assert.equal(closed.status, 'CLOSED')
+        const billable = await post('/tickets', {
+          customerId: order.customerId, orderId: order.id, priority: 'MEDIUM', description: 'Uncovered service visit.',
+        })
+        await patch('/tickets/' + billable.id, { laborCharge: '250.00' })
+        const charged = await post('/tickets/' + billable.id + '/resolve', {
+          coverageDecision: 'NOT_COVERED', resolutionNotes: 'Completed the service visit.',
+        })
+        const serviceRecord = (await portalData('/records')).tickets.find(row => row.id === billable.id)
+        assert.equal(serviceRecord.invoice.total, '250')
+        assert.equal(serviceRecord.invoice.invoiceLinesByInvoice[0].lineTotal, '250')
+        await portalPdf('/invoices/' + charged.invoiceByTicket.id + '/pdf')
+        assert.equal((await portal('/invoices/' + charged.invoiceByTicket.id + '/pdf', { session: otherSession })).status, 404)
         await portalData('/enquiries', { method: 'POST', body: { address: 'Another site', notes: 'Second rooftop' } }, 201)
         assert.equal((await portalData('/records')).requests.length, 2)
         assert.equal(await tx.customer.count({ where: { email } }), 1)

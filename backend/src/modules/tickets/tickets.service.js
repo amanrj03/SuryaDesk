@@ -49,6 +49,9 @@ function billingLines(ticket) {
   if (ticket.laborCharge.greaterThan(0)) lines.push({
     description: 'Service labour', quantity: 1, unitPrice: ticket.laborCharge, lineTotal: ticket.laborCharge,
   })
+  if (ticket.visitCharge.greaterThan(0)) lines.push({
+    description: 'Service visit charge', quantity: 1, unitPrice: ticket.visitCharge, lineTotal: ticket.visitCharge,
+  })
   return lines
 }
 
@@ -73,14 +76,14 @@ export function ticketsService(db, clock = () => new Date()) {
     async labourRate() {
       return db.serviceLabourRate.findUnique({ where: { id: labourRateId } })
     },
-    async updateLabourRate(hourlyRate, user) {
+    async updateLabourRate({ hourlyRate, visitCharge }, user) {
       return db.$transaction(async tx => {
         const rate = await tx.serviceLabourRate.upsert({
-          where: { id: labourRateId }, create: { id: labourRateId, hourlyRate }, update: { hourlyRate },
+          where: { id: labourRateId }, create: { id: labourRateId, hourlyRate, visitCharge }, update: { hourlyRate, visitCharge },
         })
         await tx.auditLog.create({ data: {
           actorId: user.id, entityType: 'ServiceLabourRate', entityId: labourRateId, action: 'UPDATED',
-          summary: { hourlyRate: rate.hourlyRate.toFixed(2) },
+          summary: { hourlyRate: rate.hourlyRate.toFixed(2), visitCharge: rate.visitCharge.toFixed(2) },
         } })
         return rate
       })
@@ -289,11 +292,12 @@ export function ticketsService(db, clock = () => new Date()) {
         const laborCharge = covered ? new Prisma.Decimal(0)
           : rate.hourlyRate.mul(elapsed).div(3_600_000).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
         if (laborCharge.gte(10_000_000_000)) throw invalid('The calculated labour charge exceeds the supported amount.')
-        await settleRepairCharges(tx, { ...ticket, laborCharge }, covered, clock())
+        const visitCharge = covered ? new Prisma.Decimal(0) : rate.visitCharge
+        await settleRepairCharges(tx, { ...ticket, laborCharge, visitCharge }, covered, clock())
         const coverageDecision = covered ? 'COVERED' : 'NOT_COVERED'
         const updated = await tx.serviceTicket.update({ where: { id }, include, data: {
           repairNotes, repairReportedAt, repairSignerName: customerSignerName, repairSignatureId: proof.id,
-          laborRateSnapshot: rate?.hourlyRate, laborCharge, coverageDecision, notes: repairNotes,
+          laborRateSnapshot: rate?.hourlyRate, laborCharge, visitCharge, coverageDecision, notes: repairNotes,
           status: 'CLOSED', resolvedAt: repairReportedAt, confirmedAt: repairReportedAt,
           customerConfirmationName: customerSignerName,
         } })

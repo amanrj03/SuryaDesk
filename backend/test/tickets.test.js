@@ -26,7 +26,7 @@ test('a signed uncovered repair closes immediately and bills parts and labour on
       const ticket = await tickets.create({ customerId: customer.id, description: 'Loose connectors', priority: 'MEDIUM' }, support)
       await assert.rejects(tickets.confirm(ticket.id, { customerConfirmationName: 'Customer' }, support), { code: 'INVALID_TRANSITION' })
       await assert.rejects(tickets.part(ticket.id, { productId: part.id, quantity: 3, chargePerUnit: '75.25' }, support), { code: 'INSUFFICIENT_STOCK' })
-      await tickets.updateLabourRate('600.00', support)
+      await tickets.updateLabourRate({ hourlyRate: '600.00', visitCharge: '350.00' }, support)
       const worker = await tx.user.create({ data: {
         name: 'Technician fixture', email: 'tech-' + key + '@example.invalid', role: 'TECHNICIAN', passwordHash: 'fixture',
       } })
@@ -59,13 +59,20 @@ test('a signed uncovered repair closes immediately and bills parts and labour on
       assert.equal(reported.status, 'CLOSED')
       assert.equal(reported.customerConfirmationName, 'Customer')
       assert.deepEqual(reported.confirmedAt, now)
-      assert.equal(reported.invoiceByTicket.total.toFixed(2), '600.50')
+      assert.equal(reported.visitCharge.toFixed(2), '350.00')
+      assert.equal(reported.invoiceByTicket.total.toFixed(2), '950.50')
+      const visitLine = await tx.invoiceLine.findFirstOrThrow({
+        where: { invoiceId: reported.invoiceByTicket.id, description: 'Service visit charge' },
+      })
+      assert.equal(visitLine.lineTotal.toFixed(2), '350.00')
       assert.deepEqual(reported.repairReportedAt, now)
       assert.equal(reported.repairSignatureId, proof.id)
       assert.equal(reported.laborRateSnapshot.toFixed(2), '600.00')
       assert.equal(reported.laborCharge.toFixed(2), '450.00')
-      await tickets.updateLabourRate('800.00', support)
-      assert.deepEqual((await tickets.reportRepair(ticket.id, signedReport, technician)).repairReportedAt, reported.repairReportedAt)
+      await tickets.updateLabourRate({ hourlyRate: '800.00', visitCharge: '500.00' }, support)
+      const retried = await tickets.reportRepair(ticket.id, signedReport, technician)
+      assert.deepEqual(retried.repairReportedAt, reported.repairReportedAt)
+      assert.equal(retried.visitCharge.toFixed(2), '350.00')
       await assert.rejects(tickets.part(ticket.id, used, technician), { code: 'INVALID_TRANSITION' })
       await assert.rejects(tickets.resolve(ticket.id, { coverageDecision: 'COVERED', resolutionNotes: 'Repaired' }, support), { code: 'INVALID_TRANSITION' })
       assert.equal(await tx.invoice.count({ where: { ticketId: ticket.id } }), 1)

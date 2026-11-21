@@ -453,9 +453,10 @@ test('seeded customer can browse records and download an issued invoice on mobil
 test('administrator can open the global service labour rate settings', async ({ page }) => {
   await login(page, 'admin')
   await page.getByRole('link', { name: 'Service tickets', exact: true }).click()
-  await page.getByRole('button', { name: 'Service labour rate', exact: true }).click()
-  const settings = page.getByRole('dialog', { name: 'Save labour rate' })
+  await page.getByRole('button', { name: 'Service charges', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: 'Save service charges' })
   await expect(settings.getByLabel('Customer labour rate (INR per hour)')).toBeVisible()
+  await expect(settings.getByLabel('Visiting charge (INR per visit)')).toBeVisible()
 })
 
 test('customer service request closes when the assigned technician submits the signed repair', async ({ page, browser, baseURL }) => {
@@ -510,7 +511,7 @@ test('customer service request closes when the assigned technician submits the s
 
     await login(support, 'support')
     const supportRow = await findTicket(support, ticket.ticketNumber)
-    await expect(support.getByRole('button', { name: 'Service labour rate', exact: true })).toHaveCount(0)
+    await expect(support.getByRole('button', { name: 'Service charges', exact: true })).toHaveCount(0)
     await expect(supportRow).toContainText('Open')
     await expect(supportRow.getByRole('button')).toHaveText(['Assign technician'])
     await supportRow.getByRole('link', { name: 'View', exact: true }).click()
@@ -589,6 +590,7 @@ test('customer service request closes when the assigned technician submits the s
 
     await page.reload()
     await expect(card).toContainText('Closed')
+    await expect(card).toContainText('Covered by warranty · ₹0.00')
     await expect(card.getByRole('button', { name: 'Confirm resolution' })).toHaveCount(0)
     await support.getByLabel('Filter by status').selectOption('CLOSED')
     await expect(supportRow).toContainText('Closed')
