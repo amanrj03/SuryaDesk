@@ -146,8 +146,8 @@ test('serialized dispatch, warranty activation, and assigned installation sign-o
         repairNotes: 'Replaced faulty equipment.', customerSignerName: 'Customer', signatureAttachmentId: repairProof.id,
       }, technician)
       assert.ok(report.laborCharge.isZero())
-      const resolved = await tickets.resolve(ticket.id, { coverageDecision: 'COVERED', resolutionNotes: 'Replaced faulty equipment.' }, support)
-      assert.equal(resolved.invoiceByTicket, null)
+      assert.equal(report.status, 'CLOSED')
+      assert.equal(report.invoiceByTicket, null)
       throw new Error('Rollback dispatch fixture')
     }), { message: 'Rollback dispatch fixture' })
   } finally {

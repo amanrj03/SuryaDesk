@@ -4,7 +4,7 @@ import test from 'node:test'
 import { createDatabase } from '../src/lib/prisma.js'
 import { ticketsService } from '../src/modules/tickets/tickets.service.js'
 
-test('uncovered repair bills parts and labour and requires customer confirmation', {
+test('a signed uncovered repair closes immediately and bills parts and labour once', {
   skip: !process.env.DATABASE_URL,
 }, async () => {
   const db = createDatabase(process.env.DATABASE_URL)
@@ -56,7 +56,10 @@ test('uncovered repair bills parts and labour and requires customer confirmation
       const signedReport = { ...report, customerSignerName: 'Customer', signatureAttachmentId: proof.id }
       const reported = await tickets.reportRepair(ticket.id, signedReport, technician)
       assert.equal(reported.repairNotes, report.repairNotes)
-      assert.equal(reported.status, 'IN_PROGRESS')
+      assert.equal(reported.status, 'CLOSED')
+      assert.equal(reported.customerConfirmationName, 'Customer')
+      assert.deepEqual(reported.confirmedAt, now)
+      assert.equal(reported.invoiceByTicket.total.toFixed(2), '600.50')
       assert.deepEqual(reported.repairReportedAt, now)
       assert.equal(reported.repairSignatureId, proof.id)
       assert.equal(reported.laborRateSnapshot.toFixed(2), '600.00')
@@ -65,14 +68,7 @@ test('uncovered repair bills parts and labour and requires customer confirmation
       assert.deepEqual((await tickets.reportRepair(ticket.id, signedReport, technician)).repairReportedAt, reported.repairReportedAt)
       await assert.rejects(tickets.part(ticket.id, used, technician), { code: 'INVALID_TRANSITION' })
       await assert.rejects(tickets.resolve(ticket.id, { coverageDecision: 'COVERED', resolutionNotes: 'Repaired' }, support), { code: 'INVALID_TRANSITION' })
-      const resolution = { coverageDecision: 'NOT_COVERED', resolutionNotes: 'Replaced both connectors.' }
-      const resolved = await tickets.resolve(ticket.id, resolution, support)
-      assert.equal(resolved.status, 'RESOLVED_PENDING_CONFIRMATION')
-      assert.equal(resolved.invoiceByTicket.total.toFixed(2), '600.50')
-      await tickets.resolve(ticket.id, resolution, support)
       assert.equal(await tx.invoice.count({ where: { ticketId: ticket.id } }), 1)
-      const closed = await tickets.confirm(ticket.id, { customerConfirmationName: 'Customer' }, support)
-      assert.equal(closed.status, 'CLOSED')
       await assert.rejects(tickets.reportRepair(ticket.id, report, technician), { code: 'INVALID_TRANSITION' })
       throw new Error('Rollback service fixture')
     }), { message: 'Rollback service fixture' })

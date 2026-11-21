@@ -450,7 +450,7 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
       </label>}
       {uploaded && <p role="status" className="text-sm text-gray-600">Evidence uploaded: {uploaded}</p>}
       {action.signServiceVisit && <fieldset disabled={busy}>
-        <legend className="mb-2 text-sm text-gray-600">Ask the customer to sign. Submitting the signed report ends the visit timer.</legend>
+        <legend className="mb-2 text-sm text-gray-600">Ask the customer to sign. Submitting the signed report ends the visit and closes the ticket.</legend>
         <Signature canvas={canvas} disabled={busy} onChange={value => { signature.current = null; setSigned(value) }} />
       </fieldset>}
       {error && <p className="notice" role="alert">{error}</p>}

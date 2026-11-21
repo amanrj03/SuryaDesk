@@ -52,6 +52,20 @@ function billingLines(ticket) {
   return lines
 }
 
+async function settleRepairCharges(tx, ticket, covered, issuedAt) {
+  if (covered) {
+    await tx.ticketPart.updateMany({ where: { ticketId: ticket.id }, data: { chargeSnapshot: 0 } })
+    return
+  }
+  const lines = billingLines(ticket)
+  const subtotal = lines.reduce((sum, line) => sum.plus(line.lineTotal), new Prisma.Decimal(0))
+  if (subtotal.greaterThan(0)) await tx.invoice.create({ data: {
+    invoiceNumber: 'INV-' + randomUUID().toUpperCase(), customerId: ticket.customerId, ticketId: ticket.id,
+    subtotal, tax: 0, total: subtotal, status: 'ISSUED', issuedAt,
+    invoiceLinesByInvoice: { createMany: { data: lines } },
+  } })
+}
+
 const labourRateId = 'default'
 
 export function ticketsService(db, clock = () => new Date()) {
@@ -254,12 +268,12 @@ export function ticketsService(db, clock = () => new Date()) {
       return db.$transaction(async tx => {
         const ticket = await locked(tx, id, user)
         if (!canReportRepair(ticket, user)) throw notFound()
-        if (ticket.status !== 'IN_PROGRESS') throw invalid('Start work on the ticket before reporting a repair.')
         if (ticket.repairReportedAt) {
           if (ticket.repairNotes === repairNotes && ticket.repairSignerName === customerSignerName &&
             ticket.repairSignatureId === signatureAttachmentId) return ticket
           throw invalid('A repair report has already been submitted.')
         }
+        if (ticket.status !== 'IN_PROGRESS') throw invalid('Start work on the ticket before reporting a repair.')
         if (!ticket.repairStartedAt) throw invalid('Start the visit timer before reporting work done.')
         const proof = await tx.attachment.findFirst({ where: {
           id: signatureAttachmentId, ownerId: id, ownerType: 'TICKET', uploadedById: user.id,
@@ -275,11 +289,16 @@ export function ticketsService(db, clock = () => new Date()) {
         const laborCharge = covered ? new Prisma.Decimal(0)
           : rate.hourlyRate.mul(elapsed).div(3_600_000).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
         if (laborCharge.gte(10_000_000_000)) throw invalid('The calculated labour charge exceeds the supported amount.')
+        await settleRepairCharges(tx, { ...ticket, laborCharge }, covered, clock())
+        const coverageDecision = covered ? 'COVERED' : 'NOT_COVERED'
         const updated = await tx.serviceTicket.update({ where: { id }, include, data: {
           repairNotes, repairReportedAt, repairSignerName: customerSignerName, repairSignatureId: proof.id,
-          laborRateSnapshot: rate?.hourlyRate, laborCharge,
+          laborRateSnapshot: rate?.hourlyRate, laborCharge, coverageDecision, notes: repairNotes,
+          status: 'CLOSED', resolvedAt: repairReportedAt, confirmedAt: repairReportedAt,
+          customerConfirmationName: customerSignerName,
         } })
         await audit(tx, id, 'REPAIR_REPORTED', user.id, { customerSignerName, signatureAttachmentId: proof.id })
+        await audit(tx, id, 'CLOSED', user.id, { customerConfirmationName: customerSignerName, coverageDecision })
         return updated
       })
     },
@@ -292,17 +311,7 @@ export function ticketsService(db, clock = () => new Date()) {
         const covered = ticketCovered(ticket)
         if ((coverageDecision === 'COVERED') !== covered) throw invalid('Coverage must match the serial warranty at the incident date.')
         const now = new Date()
-        if (covered) {
-          await tx.ticketPart.updateMany({ where: { ticketId: id }, data: { chargeSnapshot: 0 } })
-        } else {
-          const lines = billingLines(ticket)
-          const subtotal = lines.reduce((sum, line) => sum.plus(line.lineTotal), new Prisma.Decimal(0))
-          if (lines.length) await tx.invoice.create({ data: {
-            invoiceNumber: 'INV-' + randomUUID().toUpperCase(), customerId: ticket.customerId, ticketId: id,
-            subtotal, tax: 0, total: subtotal, status: 'ISSUED', issuedAt: now,
-            invoiceLinesByInvoice: { createMany: { data: lines } },
-          } })
-        }
+        await settleRepairCharges(tx, ticket, covered, now)
         await audit(tx, id, 'RESOLVED_PENDING_CONFIRMATION', user.id, { coverageDecision, resolutionNotes })
         return tx.serviceTicket.update({ where: { id }, include, data: {
           status: 'RESOLVED_PENDING_CONFIRMATION', resolvedAt: now, coverageDecision, coverageReason,

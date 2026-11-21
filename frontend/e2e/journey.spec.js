@@ -458,7 +458,7 @@ test('administrator can open the global service labour rate settings', async ({ 
   await expect(settings.getByLabel('Customer labour rate (INR per hour)')).toBeVisible()
 })
 
-test('customer service request reaches the assigned technician and closes after confirmation', async ({ page, browser, baseURL }) => {
+test('customer service request closes when the assigned technician submits the signed repair', async ({ page, browser, baseURL }) => {
   const db = createDatabase(process.env.DATABASE_URL)
   const description = 'Intermittent generation alarm after rain ' + randomUUID()
   const email = 'customer0001@demo.suryadesk.test'
@@ -587,26 +587,9 @@ test('customer service request reaches the assigned technician and closes after 
     await expect(field.getByRole('button', { name: 'Report work done' })).toHaveCount(0)
     await expect(field.getByText('Parts and replacements used', { exact: true })).toHaveCount(0)
 
-    await support.getByLabel('Filter by status').selectOption('IN_PROGRESS')
-    const active = supportRow
-    await expect(active).toContainText('Repair reported')
-    await expect(active.getByRole('button')).toHaveText(['Resolve ticket'])
-    await active.getByRole('button', { name: 'Resolve ticket' }).click()
-    const resolveTicket = support.getByRole('dialog', { name: 'Resolve ticket' })
-    await expect(resolveTicket.getByLabel('Repair details')).toHaveValue(repairNotes)
-    await resolveTicket.getByRole('button', { name: 'Resolve ticket' }).click()
-    await expect(resolveTicket).toHaveCount(0)
-    await support.getByLabel('Filter by status').selectOption('RESOLVED_PENDING_CONFIRMATION')
-    await expect(active).toContainText('Resolved pending confirmation')
-    await expect(active.getByRole('button')).toHaveText(['Confirm repair'])
-    await active.getByRole('button', { name: 'Confirm repair' }).click()
-    const confirm = support.getByRole('dialog', { name: 'Confirm repair' })
-    await expect(confirm.getByLabel('Evidence photo (optional)')).toBeVisible()
-    await confirm.getByRole('button', { name: 'Close', exact: true }).click()
-
     await page.reload()
-    await card.getByRole('button', { name: 'Confirm resolution' }).click()
     await expect(card).toContainText('Closed')
+    await expect(card.getByRole('button', { name: 'Confirm resolution' })).toHaveCount(0)
     await support.getByLabel('Filter by status').selectOption('CLOSED')
     await expect(supportRow).toContainText('Closed')
     await expect(supportRow.getByRole('button')).toHaveCount(0)
