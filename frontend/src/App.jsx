@@ -1,9 +1,21 @@
-﻿import { useEffect, useState } from 'react'
-import { Link, Navigate, NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import {
-  ArrowLeftStartOnRectangleIcon, BoltIcon, ClipboardDocumentCheckIcon,
-  CubeIcon, DocumentTextIcon, InboxStackIcon, ShoppingBagIcon, CreditCardIcon,
-  TruckIcon, ShieldCheckIcon, Squares2X2Icon, ChartBarSquareIcon, WrenchScrewdriverIcon,
+  BoltIcon,
+  ClipboardDocumentCheckIcon,
+  CubeIcon,
+  DocumentTextIcon,
+  InboxStackIcon,
+  ShoppingBagIcon,
+  CreditCardIcon,
+  EnvelopeIcon,
+  LockClosedIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  TruckIcon,
+  ShieldCheckIcon,
+  Squares2X2Icon,
+  WrenchScrewdriverIcon,
 } from '@heroicons/react/24/outline'
 import { api } from './api.js'
 import Dashboard from './Dashboard.jsx'
@@ -11,60 +23,290 @@ import InstallationSignoff from './InstallationSignoff.jsx'
 import RecordDetail, { hasDetail } from './RecordDetail.jsx'
 import PackageEditor from './PackageEditor.jsx'
 import WorkflowAction, { collectionActions, recordActions } from './WorkflowAction.jsx'
+import { AppShell } from './components/layout/AppShell.jsx'
+import { PageHeader } from './components/ui/PageHeader.jsx'
+import { StatusBadge } from './components/ui/Badge.jsx'
+import { TableSkeleton } from './components/ui/States.jsx'
+import { words } from './lib/format.js'
 
-const date = value => value ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeZone: 'Asia/Kolkata' }).format(new Date(value)) : '—'
-const currency = value => value == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(value))
-const words = value => value?.toLowerCase().replaceAll('_', ' ').replace(/^./, first => first.toUpperCase())
-const sections = [
-  { path: 'leads', title: 'Enquiries', capability: 'leads:read', icon: InboxStackIcon, search: true,
-    columns: [['Reference', row => row.leadNumber], ['Customer', row => row.customer.name], ['Phone', row => row.customer.phone], ['Source', row => words(row.source)], ['Status', row => <Status value={row.status} />], ['Received', row => date(row.createdAt)]] },
-  { path: 'customers', title: 'Customers', capabilities: ['leads:write', 'tickets:create', 'reports:view', 'orders:create'],
-    icon: InboxStackIcon, search: true, columns: [['Customer', row => row.name], ['Phone', row => row.phone],
-      ['Email', row => row.email], ['Address', row => row.address]] },
-  { path: 'surveys', title: 'Surveys', capability: 'surveys:read', icon: ClipboardDocumentCheckIcon,
-    columns: [['Customer', row => row.lead.customer.name], ['Scheduled', row => date(row.scheduledAt)], ['Status', row => <Status value={row.status} />]] },
-  { path: 'packages', title: 'Packages', capability: 'catalog:read', icon: CubeIcon, search: true,
-    columns: [['Code', row => row.code], ['Package', row => row.name], ['System', row => words(row.type)], ['Capacity', row => row.capacityKw ? row.capacityKw + ' kW' : '—'], ['Price', row => currency(row.basePrice)]] },
-  { path: 'products', title: 'Products', capability: 'catalog:read', icon: CubeIcon, search: true,
-    columns: [['SKU', row => row.sku], ['Product', row => row.name], ['Category', row => words(row.category)],
-      ['Sale price', row => currency(row.salePrice)], ['Status', row => row.isActive ? 'Active' : 'Inactive']] },
-  { path: 'quotes', title: 'Quotations', capability: 'quotes:read', icon: DocumentTextIcon, search: true,
-    columns: [['Reference', row => row.quoteNumber], ['Customer', row => row.lead.customer.name], ['Total', row => currency(row.total)], ['Status', row => <Status value={row.status} />], ['Created', row => date(row.createdAt)]] },
-  { path: 'orders', title: 'Orders', capability: 'orders:read', icon: ShoppingBagIcon, search: true,
-    columns: [['Reference', row => row.orderNumber], ['Customer', row => row.customer.name], ['Total', row => currency(row.total)], ['Status', row => <Status value={row.status} />], ['Confirmed', row => date(row.confirmedAt)]] },
-  { path: 'inventory', title: 'Inventory', capability: 'inventory:read', icon: Squares2X2Icon, search: true,
-    columns: [['SKU', row => row.sku], ['Product', row => row.name], ['In stock', row => row.onHand], ['Reserved', row => row.reserved], ['Available', row => row.available], ['Reorder', row => row.lowStock ? 'Required' : '—']] },
-  { path: 'assets', title: 'Equipment serials', capability: 'inventory:read', icon: CubeIcon, search: true,
-    columns: [['Serial', row => row.serialNumber], ['Product', row => row.product.name], ['Status', row => <Status value={row.status} />],
-      ['Order', row => row.order?.orderNumber], ['Customer', row => row.customer?.name]] },
-  { path: 'dispatches', title: 'Dispatch', capability: 'dispatch:prepare', icon: TruckIcon,
-    columns: [['Reference', row => row.dispatchNumber], ['Customer', row => row.order.customer.name], ['Status', row => <Status value={row.status} />], ['Delivered', row => date(row.deliveredAt)]] },
-  { path: 'warranties', title: 'Warranties', capability: 'warranties:read', icon: ShieldCheckIcon, search: true,
-    columns: [['Serial', row => row.asset.serialNumber], ['Product', row => row.asset.product.name], ['Customer', row => row.customer.name], ['Status', row => <Status value={row.status} />], ['Expires', row => date(row.endAt)]] },
-  { path: 'installations', title: 'Installations', capability: 'installations:read', icon: WrenchScrewdriverIcon,
-    columns: [['Customer', row => row.order.customer.name], ['Capacity', row => row.capacityKw + ' kW'], ['Scheduled', row => date(row.scheduledAt)], ['Status', row => <Status value={row.status} />]] },
-  { path: 'tickets', title: 'Service tickets', capability: 'tickets:read', icon: ClipboardDocumentCheckIcon, search: true,
-    columns: [['Reference', row => row.ticketNumber], ['Customer', row => row.customer.name], ['Fault', row => row.faultCode || '—'], ['Priority', row => words(row.priority)], ['Status', row => <Status value={row.status} />]] },
-  { path: 'invoices', title: 'Invoices', capability: 'invoices:read', icon: DocumentTextIcon, search: true,
-    columns: [['Reference', row => row.invoiceNumber], ['Customer', row => row.customer.name], ['Total', row => currency(row.total)], ['Status', row => <Status value={row.status} />], ['Issued', row => date(row.issuedAt)]] },
-  { path: 'subsidies', title: 'Subsidies', capability: 'subsidies:read', icon: ClipboardDocumentCheckIcon,
-    columns: [['Order', row => row.order.orderNumber], ['Customer', row => row.order.customer.name], ['Reference', row => row.reference || '—'], ['Status', row => <Status value={row.status} />]] },
-  { path: 'suppliers', title: 'Suppliers', capability: 'inventory:read', icon: CubeIcon, search: true,
-    columns: [['Code', row => row.code], ['Supplier', row => row.name], ['Email', row => row.email], ['Phone', row => row.phone]] },
-  { path: 'purchases', title: 'Purchase orders', capability: 'inventory:read', icon: TruckIcon, search: true,
-    columns: [['Reference', row => row.purchaseNumber], ['Supplier', row => row.supplier.name], ['Expected', row => date(row.expectedAt)], ['Status', row => <Status value={row.status} />]] },
-  { path: 'users', title: 'Staff', capability: 'users:manage', icon: ClipboardDocumentCheckIcon, search: true,
-    columns: [['Name', row => row.name], ['Email', row => row.email], ['Role', row => words(row.role)], ['Account', row => row.isActive ? 'Active' : 'Inactive']] },
-  { path: 'payments', title: 'Payments', capability: 'payments:read', icon: CreditCardIcon,
-    columns: [['Reference', row => row.reference || '—'], ['Amount', row => currency(row.amount)], ['Method', row => words(row.method)], ['Received', row => date(row.receivedAt)]] },
+const date = (value) =>
+  value
+    ? new Intl.DateTimeFormat('en-IN', {
+        dateStyle: 'medium',
+        timeZone: 'Asia/Kolkata',
+      }).format(new Date(value))
+    : '—'
+
+const currency = (value) =>
+  value == null
+    ? '—'
+    : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(value))
+
+export const sections = [
+  {
+    path: 'leads',
+    title: 'Enquiries',
+    capability: 'leads:read',
+    icon: InboxStackIcon,
+    search: true,
+    columns: [
+      ['Reference', (row) => row.leadNumber],
+      ['Customer', (row) => row.customer.name],
+      ['Phone', (row) => row.customer.phone],
+      ['Source', (row) => words(row.source)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Received', (row) => date(row.createdAt)],
+    ],
+  },
+  {
+    path: 'customers',
+    title: 'Customers',
+    capabilities: ['leads:write', 'tickets:create', 'reports:view', 'orders:create'],
+    icon: InboxStackIcon,
+    search: true,
+    columns: [
+      ['Customer', (row) => row.name],
+      ['Phone', (row) => row.phone],
+      ['Email', (row) => row.email],
+      ['Address', (row) => row.address],
+    ],
+  },
+  {
+    path: 'surveys',
+    title: 'Surveys',
+    capability: 'surveys:read',
+    icon: ClipboardDocumentCheckIcon,
+    columns: [
+      ['Customer', (row) => row.lead.customer.name],
+      ['Scheduled', (row) => date(row.scheduledAt)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+    ],
+  },
+  {
+    path: 'packages',
+    title: 'Packages',
+    capability: 'catalog:read',
+    icon: CubeIcon,
+    search: true,
+    columns: [
+      ['Code', (row) => row.code],
+      ['Package', (row) => row.name],
+      ['System', (row) => words(row.type)],
+      ['Capacity', (row) => (row.capacityKw ? row.capacityKw + ' kW' : '—')],
+      ['Price', (row) => currency(row.basePrice)],
+    ],
+  },
+  {
+    path: 'products',
+    title: 'Products',
+    capability: 'catalog:read',
+    icon: CubeIcon,
+    search: true,
+    columns: [
+      ['SKU', (row) => row.sku],
+      ['Product', (row) => row.name],
+      ['Category', (row) => words(row.category)],
+      ['Sale price', (row) => currency(row.salePrice)],
+      ['Status', (row) => (row.isActive ? 'Active' : 'Inactive')],
+    ],
+  },
+  {
+    path: 'quotes',
+    title: 'Quotations',
+    capability: 'quotes:read',
+    icon: DocumentTextIcon,
+    search: true,
+    columns: [
+      ['Reference', (row) => row.quoteNumber],
+      ['Customer', (row) => row.lead.customer.name],
+      ['Total', (row) => currency(row.total)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Created', (row) => date(row.createdAt)],
+    ],
+  },
+  {
+    path: 'orders',
+    title: 'Orders',
+    capability: 'orders:read',
+    icon: ShoppingBagIcon,
+    search: true,
+    columns: [
+      ['Reference', (row) => row.orderNumber],
+      ['Customer', (row) => row.customer.name],
+      ['Total', (row) => currency(row.total)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Confirmed', (row) => date(row.confirmedAt)],
+    ],
+  },
+  {
+    path: 'inventory',
+    title: 'Inventory',
+    capability: 'inventory:read',
+    icon: Squares2X2Icon,
+    search: true,
+    columns: [
+      ['SKU', (row) => row.sku],
+      ['Product', (row) => row.name],
+      ['In stock', (row) => row.onHand],
+      ['Reserved', (row) => row.reserved],
+      ['Available', (row) => row.available],
+      ['Reorder', (row) => (row.lowStock ? 'Required' : '—')],
+    ],
+  },
+  {
+    path: 'assets',
+    title: 'Equipment serials',
+    capability: 'inventory:read',
+    icon: CubeIcon,
+    search: true,
+    columns: [
+      ['Serial', (row) => row.serialNumber],
+      ['Product', (row) => row.product.name],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Order', (row) => row.order?.orderNumber],
+      ['Customer', (row) => row.customer?.name],
+    ],
+  },
+  {
+    path: 'dispatches',
+    title: 'Dispatch',
+    capability: 'dispatch:prepare',
+    icon: TruckIcon,
+    columns: [
+      ['Reference', (row) => row.dispatchNumber],
+      ['Customer', (row) => row.order.customer.name],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Delivered', (row) => date(row.deliveredAt)],
+    ],
+  },
+  {
+    path: 'warranties',
+    title: 'Warranties',
+    capability: 'warranties:read',
+    icon: ShieldCheckIcon,
+    search: true,
+    columns: [
+      ['Serial', (row) => row.asset.serialNumber],
+      ['Product', (row) => row.asset.product.name],
+      ['Customer', (row) => row.customer.name],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Expires', (row) => date(row.endAt)],
+    ],
+  },
+  {
+    path: 'installations',
+    title: 'Installations',
+    capability: 'installations:read',
+    icon: WrenchScrewdriverIcon,
+    columns: [
+      ['Customer', (row) => row.order.customer.name],
+      ['Capacity', (row) => row.capacityKw + ' kW'],
+      ['Scheduled', (row) => date(row.scheduledAt)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+    ],
+  },
+  {
+    path: 'tickets',
+    title: 'Service tickets',
+    capability: 'tickets:read',
+    icon: ClipboardDocumentCheckIcon,
+    search: true,
+    columns: [
+      ['Reference', (row) => row.ticketNumber],
+      ['Customer', (row) => row.customer.name],
+      ['Fault', (row) => row.faultCode || '—'],
+      ['Priority', (row) => words(row.priority)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+    ],
+  },
+  {
+    path: 'invoices',
+    title: 'Invoices',
+    capability: 'invoices:read',
+    icon: DocumentTextIcon,
+    search: true,
+    columns: [
+      ['Reference', (row) => row.invoiceNumber],
+      ['Customer', (row) => row.customer.name],
+      ['Total', (row) => currency(row.total)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Issued', (row) => date(row.issuedAt)],
+    ],
+  },
+  {
+    path: 'subsidies',
+    title: 'Subsidies',
+    capability: 'subsidies:read',
+    icon: ClipboardDocumentCheckIcon,
+    columns: [
+      ['Order', (row) => row.order.orderNumber],
+      ['Customer', (row) => row.order.customer.name],
+      ['Reference', (row) => row.reference || '—'],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+    ],
+  },
+  {
+    path: 'suppliers',
+    title: 'Suppliers',
+    capability: 'inventory:read',
+    icon: CubeIcon,
+    search: true,
+    columns: [
+      ['Code', (row) => row.code],
+      ['Supplier', (row) => row.name],
+      ['Email', (row) => row.email],
+      ['Phone', (row) => row.phone],
+    ],
+  },
+  {
+    path: 'purchases',
+    title: 'Purchase orders',
+    capability: 'inventory:read',
+    icon: TruckIcon,
+    search: true,
+    columns: [
+      ['Reference', (row) => row.purchaseNumber],
+      ['Supplier', (row) => row.supplier.name],
+      ['Expected', (row) => date(row.expectedAt)],
+      ['Status', (row) => <StatusBadge status={row.status} />],
+    ],
+  },
+  {
+    path: 'users',
+    title: 'Staff',
+    capability: 'users:manage',
+    icon: ClipboardDocumentCheckIcon,
+    search: true,
+    columns: [
+      ['Name', (row) => row.name],
+      ['Email', (row) => row.email],
+      ['Role', (row) => words(row.role)],
+      ['Account', (row) => (row.isActive ? 'Active' : 'Inactive')],
+    ],
+  },
+  {
+    path: 'payments',
+    title: 'Payments',
+    capability: 'payments:read',
+    icon: CreditCardIcon,
+    columns: [
+      ['Reference', (row) => row.reference || '—'],
+      ['Amount', (row) => currency(row.amount)],
+      ['Method', (row) => words(row.method)],
+      ['Received', (row) => date(row.receivedAt)],
+    ],
+  },
 ]
 
-function Status({ value }) {
-  return <span className="status">{words(value)}</span>
-}
-
 function Brand() {
-  return <div className="brand"><span><BoltIcon /></span>SuryaDesk</div>
+  return (
+    <div className="brand flex items-center gap-2.5">
+      <span className="flex size-9 items-center justify-center rounded-full bg-black text-white shadow-xs">
+        <BoltIcon className="size-5 text-amber-400" />
+      </span>
+      <span className="text-base font-bold tracking-tight text-gray-900">SuryaDesk</span>
+    </div>
+  )
 }
 
 function Notice({ children }) {
@@ -74,7 +316,9 @@ function Notice({ children }) {
 function Login({ onLogin }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
+
   async function submit(event) {
     event.preventDefault()
     setError('')
@@ -90,25 +334,158 @@ function Login({ onLogin }) {
       setBusy(false)
     }
   }
-  return <main className="public-screen">
-    <section className="public-panel">
-      <Brand />
-      <h1>Staff sign in</h1>
-      <form className="form" onSubmit={submit}>
-        <label>Work email<input name="email" type="email" autoComplete="username" required /></label>
-        <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
-        <Notice>{error}</Notice>
-        <button className="primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-      </form>
-      <Link to="/enquiry">Request a solar quote</Link>
-    </section>
-  </main>
+
+  return (
+    <main className="login-screen w-full min-h-screen flex items-center justify-center bg-[#E5E3E0] p-2 sm:p-6 text-[#2D2D2E] antialiased box-border overflow-x-hidden">
+      <div className="w-full max-w-sm sm:max-w-md lg:max-w-[1000px] rounded-[24px] border border-white/40 bg-[#EFECE6] p-2.5 sm:p-4 shadow-2xl sm:rounded-shell lg:grid lg:grid-cols-[1.05fr_0.95fr] gap-4 box-border overflow-hidden">
+        {/* Brand / Value proposition panel: hidden on mobile so sign in fits within viewport without overflow */}
+        <section
+          className="login-context hidden lg:flex flex-col justify-between gap-8 rounded-[22px] border border-white/60 bg-white/50 p-6 backdrop-blur-md sm:rounded-panel sm:p-8"
+          aria-labelledby="login-context-title"
+        >
+          <div>
+            <Brand />
+            <h1 className="mt-8 text-3xl font-semibold tracking-tight text-gray-400 sm:text-4xl">
+              Operations portal
+              <span className="block font-bold text-gray-900">for rooftop solar teams</span>
+            </h1>
+            <p className="mt-3 max-w-sm text-xs text-gray-500 sm:text-sm leading-relaxed">
+              Run your solar projects in one place. Follow each job from the first enquiry through delivery, installation, and after-sales service.
+            </p>
+          </div>
+
+          <ul className="flex flex-col gap-2.5">
+            {[
+              {
+                icon: ClipboardDocumentCheckIcon,
+                label: 'Surveys and quotations',
+                detail: 'Qualify leads, schedule site surveys, and generate system BOMs',
+              },
+              {
+                icon: TruckIcon,
+                label: 'Inventory and dispatch',
+                detail: 'Track panels, inverters, and battery serial numbers to the roof',
+              },
+              {
+                icon: ShieldCheckIcon,
+                label: 'Warranties and service',
+                detail: 'Automatic warranty timers, service tickets, and field repairs',
+              },
+            ].map(({ icon: Icon, label: itemLabel, detail }) => (
+              <li
+                key={itemLabel}
+                className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white/80 p-2.5 shadow-2xs"
+              >
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#E62E6B]/10 text-[#E62E6B]">
+                  <Icon className="size-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-semibold text-gray-900">
+                    {itemLabel}
+                  </span>
+                  <span className="block truncate text-[11px] text-gray-400">{detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Staff Sign-in Form Card */}
+        <section
+          className="login-entry flex flex-col justify-center rounded-[20px] sm:rounded-[22px] border border-white/60 bg-white/75 p-4 sm:p-8 backdrop-blur-md shadow-2xs box-border"
+          aria-labelledby="login-title"
+        >
+          <div className="login-content w-full">
+            <div className="mb-4 lg:hidden">
+              <Brand />
+            </div>
+            <h1 id="login-title" className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
+              Staff sign in
+            </h1>
+            <p className="mt-1 text-xs text-gray-500">
+              Welcome back to SuryaDesk. Sign in with your work email to access your workspace.
+            </p>
+
+            <form className="form login-form mt-4 sm:mt-6 grid gap-3 sm:gap-4" onSubmit={submit}>
+              <div className="login-field grid gap-1">
+                <label htmlFor="login-email" className="text-xs font-semibold text-gray-700">
+                  Work email
+                </label>
+                <div className="login-input relative flex items-center">
+                  <EnvelopeIcon className="pointer-events-none absolute left-3 size-4 text-gray-400" aria-hidden="true" />
+                  <input
+                    id="login-email"
+                    name="email"
+                    type="email"
+                    autoComplete="username"
+                    placeholder="Enter your work email"
+                    required
+                    className="w-full rounded-xl border border-gray-200 bg-white/90 py-2 sm:py-2.5 pl-9 pr-3 text-xs text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-black/10 focus:border-gray-400"
+                  />
+                </div>
+              </div>
+
+              <div className="login-field grid gap-1">
+                <label htmlFor="login-password" className="text-xs font-semibold text-gray-700">
+                  Password
+                </label>
+                <div className="login-input login-password relative flex items-center">
+                  <LockClosedIcon className="pointer-events-none absolute left-3 size-4 text-gray-400" aria-hidden="true" />
+                  <input
+                    id="login-password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
+                    required
+                    className="w-full rounded-xl border border-gray-200 bg-white/90 py-2 sm:py-2.5 pl-9 pr-10 text-xs text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-black/10 focus:border-gray-400"
+                  />
+                  <button
+                    type="button"
+                    className="login-reveal absolute right-2.5 p-1 text-gray-400 hover:text-gray-700"
+                    onClick={() => setShowPassword((v) => !v)}
+                  >
+                    <span className="sr-only">{showPassword ? 'Hide password' : 'Show password'}</span>
+                    {showPassword ? (
+                      <EyeSlashIcon className="size-4" aria-hidden="true" />
+                    ) : (
+                      <EyeIcon className="size-4" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <Notice>{error}</Notice>
+
+              <button
+                type="submit"
+                className="primary login-submit w-full rounded-full py-2.5 text-xs font-semibold shadow-xs"
+                disabled={busy}
+              >
+                {busy ? 'Signing in…' : 'Sign in'}
+              </button>
+            </form>
+
+            <div className="mt-4 sm:mt-6 text-center">
+              <Link
+                className="login-enquiry text-xs font-semibold text-[#E62E6B] transition hover:underline"
+                to="/enquiry"
+              >
+                Request a solar quote
+              </Link>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  )
 }
 
 function Enquiry() {
   const [result, setResult] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
   async function submit(event) {
     event.preventDefault()
     setBusy(true)
@@ -125,36 +502,162 @@ function Enquiry() {
       setBusy(false)
     }
   }
-  return <main className="public-screen">
-    <section className="public-panel enquiry">
-      <Brand />
-      <h1>Request a solar quote</h1>
-      {result ? <div className="success" role="status">
-        <h2>Enquiry received</h2><p>Keep this reference for your follow-up.</p><strong>{result.leadNumber}</strong>
-      </div> : <form className="form" onSubmit={submit}>
-        <div className="form-grid">
-          <label>Full name<input name="name" autoComplete="name" required maxLength={120} /></label>
-          <label>Phone<input name="phone" type="tel" autoComplete="tel" required maxLength={20} /></label>
-          <label>Email<input name="email" type="email" autoComplete="email" /></label>
-          <label>System size (kW)<input name="desiredKw" type="number" min="1" max="5" step="0.1" /></label>
-          <label>System type<select name="systemType"><option value="">Help me decide</option><option value="ON_GRID">On-grid</option><option value="OFF_GRID">Off-grid</option><option value="PANEL_SET">Panel set</option></select></label>
-          <label>Monthly bill (INR)<input name="monthlyBill" type="number" min="0" step="0.01" /></label>
-        </div>
-        <label>Installation address<textarea name="address" autoComplete="street-address" required maxLength={500} /></label>
-        <label>Anything else<textarea name="notes" maxLength={2000} /></label>
-        <label className="check"><input name="subsidyInterest" type="checkbox" /> I’m interested in subsidy options</label>
-        <Notice>{error}</Notice>
-        <button className="primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit enquiry'}</button>
-      </form>}
-      <Link to="/login">Staff sign in</Link>
-    </section>
-  </main>
+
+  return (
+    <main className="public-screen flex min-h-screen items-center justify-center bg-[#E5E3E0] p-3 text-[#2D2D2E] antialiased sm:p-6">
+      <div className="w-full max-w-2xl rounded-[24px] border border-white/40 bg-[#EFECE6] p-4 shadow-2xl sm:rounded-shell sm:p-6">
+        <section className="rounded-[22px] border border-white/60 bg-white/70 p-6 backdrop-blur-md sm:rounded-panel sm:p-8 shadow-2xs">
+          <Brand />
+          <h1 className="mt-6 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+            Request a solar quote
+          </h1>
+          <p className="mt-1 text-xs text-gray-500">
+            Tell us about your rooftop and power requirements. Our engineers will prepare an exact proposal.
+          </p>
+
+          {result ? (
+            <div className="mt-6 space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-5 text-emerald-950" role="status">
+              <h2 className="text-base font-bold">Enquiry received</h2>
+              <p className="text-xs">Keep this reference number for your follow-up with our sales team.</p>
+              <strong className="block text-xl tracking-wider text-emerald-900">{result.leadNumber}</strong>
+            </div>
+          ) : (
+            <form className="form mt-6 grid gap-4" onSubmit={submit}>
+              <div className="form-grid grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-semibold text-gray-700">
+                  Full name
+                  <input
+                    name="name"
+                    autoComplete="name"
+                    required
+                    maxLength={120}
+                    placeholder="E.g. Ramesh Patel"
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-black/10 focus:outline-hidden"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-700">
+                  Phone
+                  <input
+                    name="phone"
+                    type="tel"
+                    autoComplete="tel"
+                    required
+                    maxLength={20}
+                    placeholder="+91 98765 43210"
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-black/10 focus:outline-hidden"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-700">
+                  Email
+                  <input
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="name@example.com"
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-black/10 focus:outline-hidden"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-700">
+                  System size (kW)
+                  <input
+                    name="desiredKw"
+                    type="number"
+                    min="1"
+                    max="5"
+                    step="0.1"
+                    placeholder="3.0"
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-black/10 focus:outline-hidden"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-700">
+                  System type
+                  <select
+                    name="systemType"
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-black/10 focus:outline-hidden"
+                  >
+                    <option value="">Help me decide</option>
+                    <option value="ON_GRID">On-grid</option>
+                    <option value="OFF_GRID">Off-grid</option>
+                    <option value="PANEL_SET">Panel set</option>
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-700">
+                  Monthly bill (INR)
+                  <input
+                    name="monthlyBill"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="3500"
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-black/10 focus:outline-hidden"
+                  />
+                </label>
+              </div>
+
+              <label className="grid gap-1 text-xs font-semibold text-gray-700">
+                Installation address
+                <textarea
+                  name="address"
+                  autoComplete="street-address"
+                  required
+                  maxLength={500}
+                  rows={2}
+                  placeholder="Plot number, building name, locality, city and pin code"
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-black/10 focus:outline-hidden resize-y"
+                />
+              </label>
+
+              <label className="grid gap-1 text-xs font-semibold text-gray-700">
+                Anything else
+                <textarea
+                  name="notes"
+                  maxLength={2000}
+                  rows={2}
+                  placeholder="Rooftop type, shading concerns, preferred appointment times…"
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-black/10 focus:outline-hidden resize-y"
+                />
+              </label>
+
+              <label className="check flex items-center gap-2 text-xs font-medium text-gray-700">
+                <input
+                  name="subsidyInterest"
+                  type="checkbox"
+                  className="size-4 rounded-xs accent-black"
+                />
+                I’m interested in government solar subsidy options
+              </label>
+
+              <Notice>{error}</Notice>
+
+              <button
+                type="submit"
+                className="primary w-full sm:w-auto py-2.5 px-6 rounded-full text-xs font-semibold shadow-xs"
+                disabled={busy}
+              >
+                {busy ? 'Submitting…' : 'Submit enquiry'}
+              </button>
+            </form>
+          )}
+
+          <div className="mt-6 border-t border-gray-200/60 pt-4 text-center">
+            <Link to="/login" className="text-xs font-semibold text-gray-600 transition hover:text-black">
+              ← Return to staff sign in
+            </Link>
+          </div>
+        </section>
+      </div>
+    </main>
+  )
 }
 
 function LeadEditor({ lead, token, onClose, onSaved }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const next = { NEW: ['CONTACTED', 'LOST'], CONTACTED: ['QUALIFIED', 'LOST'], QUALIFIED: ['LOST'] }
+  const next = {
+    NEW: ['CONTACTED', 'LOST'],
+    CONTACTED: ['QUALIFIED', 'LOST'],
+    QUALIFIED: ['LOST'],
+  }
   const allowed = next[lead.status] ?? []
 
   async function save(event) {
@@ -183,22 +686,95 @@ function LeadEditor({ lead, token, onClose, onSaved }) {
     }
   }
 
-  return <section className="lead-editor" aria-labelledby="lead-editor-title">
-    <div className="toolbar"><h2 id="lead-editor-title">{lead.customer.name}</h2><button className="secondary ml-auto" disabled={busy} onClick={onClose}>Close</button></div>
-    <form className="form p-4" onSubmit={save}>
-      <div className="form-grid">
-        <label>Status<select name="status"><option value="">{words(lead.status)}</option>
-          {allowed.map(status => <option key={status} value={status}>{words(status)}</option>)}</select></label>
-        <label>Shadow-free roof area (m²)<input name="roofArea" type="number" min="0.01" step="0.01" defaultValue={lead.roofArea ?? ''} /></label>
-        <label>Monthly bill (INR)<input name="monthlyBill" type="number" min="0" step="0.01" defaultValue={lead.monthlyBill ?? ''} /></label>
-        <label>Grid suitable<select name="gridSuitable" defaultValue={lead.gridSuitable == null ? '' : lead.gridSuitable ? 'yes' : 'no'}>
-          <option value="">Unknown</option><option value="yes">Yes</option><option value="no">No</option></select></label>
+  return (
+    <section className="lead-editor p-4 mb-4" aria-labelledby="lead-editor-title">
+      <div className="toolbar flex items-center justify-between border-b border-gray-100 pb-3">
+        <h2 id="lead-editor-title" className="text-xs font-bold text-gray-900">
+          Edit Enquiry · {lead.customer.name}
+        </h2>
+        <button
+          type="button"
+          className="secondary ml-auto"
+          disabled={busy}
+          onClick={onClose}
+        >
+          Close
+        </button>
       </div>
-      <label>Notes<textarea name="notes" maxLength={2000} defaultValue={lead.notes ?? ''} /></label>
-      <Notice>{error}</Notice>
-      <button className="primary w-fit" disabled={busy}>{busy ? 'Saving…' : 'Save enquiry'}</button>
-    </form>
-  </section>
+      <form className="form mt-3 grid gap-3" onSubmit={save}>
+        <div className="form-grid grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-xs font-semibold text-gray-700">
+            Status
+            <select
+              name="status"
+              className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs focus:outline-hidden focus:ring-2 focus:ring-black/10"
+            >
+              <option value="">{words(lead.status)}</option>
+              {allowed.map((status) => (
+                <option key={status} value={status}>
+                  {words(status)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-gray-700">
+            Shadow-free roof area (m²)
+            <input
+              name="roofArea"
+              type="number"
+              min="0.01"
+              step="0.01"
+              defaultValue={lead.roofArea ?? ''}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs focus:outline-hidden focus:ring-2 focus:ring-black/10"
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-gray-700">
+            Monthly bill (INR)
+            <input
+              name="monthlyBill"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={lead.monthlyBill ?? ''}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs focus:outline-hidden focus:ring-2 focus:ring-black/10"
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-gray-700">
+            Grid suitable
+            <select
+              name="gridSuitable"
+              defaultValue={lead.gridSuitable == null ? '' : lead.gridSuitable ? 'yes' : 'no'}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs focus:outline-hidden focus:ring-2 focus:ring-black/10"
+            >
+              <option value="">Unknown</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+        </div>
+        <label className="grid gap-1 text-xs font-semibold text-gray-700">
+          Notes
+          <textarea
+            name="notes"
+            maxLength={2000}
+            rows={2}
+            defaultValue={lead.notes ?? ''}
+            className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs focus:outline-hidden focus:ring-2 focus:ring-black/10 resize-y"
+          />
+        </label>
+        <Notice>{error}</Notice>
+        <div className="flex justify-end pt-1">
+          <button
+            type="submit"
+            className="primary py-2 px-5 text-xs font-semibold"
+            disabled={busy}
+          >
+            {busy ? 'Saving…' : 'Save enquiry'}
+          </button>
+        </div>
+      </form>
+    </section>
+  )
 }
 
 const statuses = {
@@ -226,21 +802,29 @@ function Records({ section, token, capabilities }) {
   const [state, setState] = useState({ busy: true })
   const [selected, setSelected] = useState(null)
   const canEditLead = section.path === 'leads' && capabilities.includes('leads:write')
-  const canSign = section.path === 'installations' && capabilities.includes('installations:complete_assigned')
+  const canSign =
+    section.path === 'installations' && capabilities.includes('installations:complete_assigned')
   const [action, setAction] = useState(null)
   const [detail, setDetail] = useState(null)
   const [packageEdit, setPackageEdit] = useState(null)
   const managePackages = section.path === 'packages' && capabilities.includes('catalog:manage')
-  const hasActions = hasDetail(section.path) || canEditLead || canSign || state.result?.data.some(row => recordActions(section.path, row, capabilities).length)
+  const hasActions =
+    hasDetail(section.path) ||
+    canEditLead ||
+    canSign ||
+    state.result?.data.some((row) => recordActions(section.path, row, capabilities).length)
   const Editor = canEditLead ? LeadEditor : InstallationSignoff
+
   useEffect(() => {
     const controller = new AbortController()
     const params = new URLSearchParams({ page: String(page), limit: '20' })
     if (search) params.set('q', search)
     if (status) params.set('status', status)
     api('/' + section.path + '?' + params, { token, signal: controller.signal })
-      .then(result => setState({ result }))
-      .catch(error => { if (!controller.signal.aborted) setState({ error: error.message }) })
+      .then((result) => setState({ result }))
+      .catch((error) => {
+        if (!controller.signal.aborted) setState({ error: error.message })
+      })
     return () => controller.abort()
   }, [section.path, token, page, search, status, retry])
 
@@ -250,7 +834,7 @@ function Records({ section, token, capabilities }) {
     setDetail(null)
     setPackageEdit(null)
     setState({ busy: true })
-    setRetry(value => value + 1)
+    setRetry((value) => value + 1)
   }
 
   function go(nextPage) {
@@ -258,80 +842,306 @@ function Records({ section, token, capabilities }) {
     setPage(nextPage)
   }
 
-  return <>
-    <header className="page-header"><h1>{section.title}</h1>
-      {state.result && <p>{state.result.meta.total} {state.result.meta.total === 1 ? 'record' : 'records'}</p>}
-    </header>
-    <div className="records">
-      {managePackages && <div className="toolbar"><button className="primary"
-        onClick={() => { setDetail(null); setPackageEdit({}) }}>Add package</button></div>}
-      {packageEdit && <PackageEditor key={packageEdit.id ?? 'new'} id={packageEdit.id} token={token}
-        onSaved={refresh} onClose={() => setPackageEdit(null)} />}
-      {collectionActions(section.path, capabilities).map(candidate => <div className="toolbar" key={candidate.key}>
-        <button className="primary" onClick={() => { setDetail(null); setSelected(null); setAction(candidate) }}>{candidate.label}</button>
-      </div>)}
-      {detail && <RecordDetail key={detail} id={detail} section={section.path} token={token} onClose={() => setDetail(null)} />}
-      {selected && <Editor key={selected.id} lead={selected} job={selected} token={token} onClose={() => setSelected(null)} onSaved={refresh} />}
-      {action && <WorkflowAction key={action.path + action.key} action={action} token={token} onSaved={refresh} onClose={() => setAction(null)} />}
-      {(section.search || choices) && <form className="toolbar" onSubmit={event => {
-        event.preventDefault()
-        setState({ busy: true })
-        setSearch(query.trim())
-        setPage(1)
-        setRetry(value => value + 1)
-      }}>
-        {section.search && <input aria-label={'Search ' + section.title.toLowerCase()} placeholder="Search records" maxLength={120} value={query} onChange={event => setQuery(event.target.value)} />}
-        {choices && <select aria-label="Filter by status" className="max-w-56" value={status} onChange={event => {
-          setPage(1)
-          setState({ busy: true })
-          setStatus(event.target.value)
-        }}>
-          <option value="">All statuses</option>
-          {choices.map(value => <option key={value} value={value}>{words(value)}</option>)}
-        </select>}
-        {section.search && <button className="secondary">Search</button>}
-      </form>}
-      {state.busy && <p className="feedback" role="status">Loading {section.title.toLowerCase()}…</p>}
-      {state.error && <div className="feedback"><Notice>{state.error}</Notice><button className="secondary" onClick={() => {
-        setState({ busy: true }); setRetry(value => value + 1)
-      }}>Try again</button></div>}
-      {state.result && (!state.result.data.length
-        ? <p className="feedback">No {section.title.toLowerCase()} found.</p>
-        : <><div className="overflow-x-auto"><table><thead><tr>{section.columns.map(([label]) => <th key={label}>{label}</th>)}{hasActions && <th scope="col">Action</th>}</tr></thead>
-          <tbody>{state.result.data.map(row => <tr key={row.id}>{section.columns.map(([label, value]) => <td key={label}>{value(row)}</td>)}{hasActions && <td>{hasDetail(section.path) && <button className="secondary mb-1 mr-1" onClick={() => {
-            setPackageEdit(null); setAction(null); setSelected(null); setDetail(section.path === 'assets' ? row.serialNumber : row.id)
-          }}>View</button>}{managePackages && <button className="secondary mr-1"
-            onClick={() => { setDetail(null); setPackageEdit({ id: row.id }) }}>Edit package</button>}{(canEditLead || (canSign && row.status !== 'COMPLETED' && ['DELIVERED', 'INSTALLATION_IN_PROGRESS'].includes(row.order.status) && row.installationAssignmentsByInstallation.length > 0)) &&
-            <button className="secondary mb-1" onClick={() => { setDetail(null); setAction(null); setSelected(row) }}>{canEditLead ? 'Edit' : 'Sign off'}</button>}
-            {recordActions(section.path, row, capabilities).map(candidate => <button className="secondary mb-1 ml-1" key={candidate.key}
-              onClick={() => { setSelected(null); setAction(candidate) }}>{candidate.label}</button>)}</td>}</tr>)}</tbody>
-        </table></div>
-        <div className="pager"><button className="secondary" disabled={page <= 1} onClick={() => go(page - 1)}>Previous</button>
-          <span>Page {page} of {state.result.meta.totalPages}</span>
-          <button className="secondary" disabled={page >= state.result.meta.totalPages} onClick={() => go(page + 1)}>Next</button>
-        </div></>)}
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title={section.title}
+        subtitle={
+          state.result
+            ? `${state.result.meta.total} ${state.result.meta.total === 1 ? 'record' : 'records'}`
+            : undefined
+        }
+      />
+
+      <div className="records">
+        {managePackages && (
+          <div className="toolbar mb-2">
+            <button
+              type="button"
+              className="primary"
+              onClick={() => {
+                setDetail(null)
+                setPackageEdit({})
+              }}
+            >
+              Add package
+            </button>
+          </div>
+        )}
+
+        {packageEdit && (
+          <PackageEditor
+            key={packageEdit.id ?? 'new'}
+            id={packageEdit.id}
+            token={token}
+            onSaved={refresh}
+            onClose={() => setPackageEdit(null)}
+          />
+        )}
+
+        {collectionActions(section.path, capabilities).map((candidate) => (
+          <div className="toolbar mb-2" key={candidate.key}>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => {
+                setDetail(null)
+                setSelected(null)
+                setAction(candidate)
+              }}
+            >
+              {candidate.label}
+            </button>
+          </div>
+        ))}
+
+        {detail && (
+          <RecordDetail
+            key={detail}
+            id={detail}
+            section={section.path}
+            token={token}
+            onClose={() => setDetail(null)}
+          />
+        )}
+
+        {selected && (
+          <Editor
+            key={selected.id}
+            lead={selected}
+            job={selected}
+            token={token}
+            onClose={() => setSelected(null)}
+            onSaved={refresh}
+          />
+        )}
+
+        {action && (
+          <WorkflowAction
+            key={action.path + action.key}
+            action={action}
+            token={token}
+            onSaved={refresh}
+            onClose={() => setAction(null)}
+          />
+        )}
+
+        {/* Filter and Search Bar styled as Toolbar */}
+        {(section.search || choices) && (
+          <form
+            className="toolbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-gray-100 bg-white/80 p-2 shadow-2xs backdrop-blur-xs"
+            onSubmit={(event) => {
+              event.preventDefault()
+              setState({ busy: true })
+              setSearch(query.trim())
+              setPage(1)
+              setRetry((value) => value + 1)
+            }}
+          >
+            {section.search && (
+              <input
+                aria-label={'Search ' + section.title.toLowerCase()}
+                placeholder="Search records…"
+                maxLength={120}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="w-full max-w-xs rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-black/10"
+              />
+            )}
+            {choices && (
+              <select
+                aria-label="Filter by status"
+                className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-2xs focus:outline-hidden focus:ring-2 focus:ring-black/10"
+                value={status}
+                onChange={(event) => {
+                  setPage(1)
+                  setState({ busy: true })
+                  setStatus(event.target.value)
+                }}
+              >
+                <option value="">All statuses</option>
+                {choices.map((value) => (
+                  <option key={value} value={value}>
+                    {words(value)}
+                  </option>
+                ))}
+              </select>
+            )}
+            {section.search && (
+              <button type="submit" className="secondary">
+                Search
+              </button>
+            )}
+          </form>
+        )}
+
+        {state.busy && <TableSkeleton rows={6} columns={section.columns.length + (hasActions ? 1 : 0)} />}
+
+        {state.error && (
+          <div className="feedback">
+            <Notice>{state.error}</Notice>
+            <button
+              type="button"
+              className="secondary mt-2"
+              onClick={() => {
+                setState({ busy: true })
+                setRetry((value) => value + 1)
+              }}
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {state.result &&
+          (!state.result.data.length ? (
+            <p className="feedback">No {section.title.toLowerCase()} found.</p>
+          ) : (
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
+              <div className="overflow-x-auto scrollbar-thin">
+                <table>
+                  <thead>
+                    <tr>
+                      {section.columns.map(([label]) => (
+                        <th key={label}>{label}</th>
+                      ))}
+                      {hasActions && <th scope="col">Action</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.result.data.map((row) => (
+                      <tr key={row.id}>
+                        {section.columns.map(([label, value]) => (
+                          <td key={label}>{value(row)}</td>
+                        ))}
+                        {hasActions && (
+                          <td>
+                            {hasDetail(section.path) && (
+                              <button
+                                type="button"
+                                className="secondary mb-1 mr-1"
+                                onClick={() => {
+                                  setPackageEdit(null)
+                                  setAction(null)
+                                  setSelected(null)
+                                  setDetail(section.path === 'assets' ? row.serialNumber : row.id)
+                                }}
+                              >
+                                View
+                              </button>
+                            )}
+                            {managePackages && (
+                              <button
+                                type="button"
+                                className="secondary mb-1 mr-1"
+                                onClick={() => {
+                                  setDetail(null)
+                                  setPackageEdit({ id: row.id })
+                                }}
+                              >
+                                Edit package
+                              </button>
+                            )}
+                            {(canEditLead ||
+                              (canSign &&
+                                row.status !== 'COMPLETED' &&
+                                ['DELIVERED', 'INSTALLATION_IN_PROGRESS'].includes(row.order?.status) &&
+                                row.installationAssignmentsByInstallation?.length > 0)) && (
+                              <button
+                                type="button"
+                                className="secondary mb-1"
+                                onClick={() => {
+                                  setDetail(null)
+                                  setAction(null)
+                                  setSelected(row)
+                                }}
+                              >
+                                {canEditLead ? 'Edit' : 'Sign off'}
+                              </button>
+                            )}
+                            {recordActions(section.path, row, capabilities).map((candidate) => (
+                              <button
+                                type="button"
+                                className="secondary mb-1 ml-1"
+                                key={candidate.key}
+                                onClick={() => {
+                                  setSelected(null)
+                                  setAction(candidate)
+                                }}
+                              >
+                                {candidate.label}
+                              </button>
+                            ))}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="pager">
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={page <= 1}
+                  onClick={() => go(page - 1)}
+                >
+                  Previous
+                </button>
+                <span>
+                  Page {page} of {state.result.meta.totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={page >= state.result.meta.totalPages}
+                  onClick={() => go(page + 1)}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ))}
+      </div>
     </div>
-  </>
+  )
 }
 
-
 const workspaceAliases = [
-  ['catalog/products', 'products'], ['catalog/packages', 'packages'], ['dispatch', 'dispatches'],
-  ['support/tickets', 'tickets'], ['finance/invoices', 'invoices'], ['finance/payments', 'payments'],
-  ['finance/subsidies', 'subsidies'], ['admin/users', 'users'],
+  ['catalog/products', 'products'],
+  ['catalog/packages', 'packages'],
+  ['dispatch', 'dispatches'],
+  ['support/tickets', 'tickets'],
+  ['finance/invoices', 'invoices'],
+  ['finance/payments', 'payments'],
+  ['finance/subsidies', 'subsidies'],
+  ['admin/users', 'users'],
 ]
 
 function DetailPage({ section, token }) {
   const { id } = useParams()
   const navigate = useNavigate()
-  return <div className="records"><RecordDetail id={id} section={section.path} token={token}
-    onClose={() => navigate('/' + section.path)} /></div>
+  return (
+    <div className="records">
+      <RecordDetail
+        id={id}
+        section={section.path}
+        token={token}
+        onClose={() => navigate('/' + section.path)}
+      />
+    </div>
+  )
 }
 
 function Workspace({ session, onLogout }) {
-  const allowed = sections.filter(section => (section.capabilities ?? [section.capability]).some(capability => session.user.capabilities.includes(capability)))
+  const allowed = sections.filter((section) =>
+    (section.capabilities ?? [section.capability]).some((capability) =>
+      session.user.capabilities.includes(capability),
+    ),
+  )
   const hasReports = session.user.capabilities.includes('reports:view')
   const [error, setError] = useState('')
+
   async function logout() {
     try {
       await api('/auth/logout', { token: session.accessToken, method: 'POST' })
@@ -340,44 +1150,91 @@ function Workspace({ session, onLogout }) {
       setError(failure.message)
     }
   }
-  return <div className="workspace">
-    <aside className="sidebar"><Brand />
-      <nav aria-label="Workspace">{hasReports && <NavLink to="/overview"><ChartBarSquareIcon />Overview</NavLink>}{allowed.map(({ path, title, icon: Icon }) =>
-        <NavLink key={path} to={'/' + path}><Icon />{title}</NavLink>)}</nav>
-      <div className="account"><div><strong>{session.user.name}</strong><span>{words(session.user.role)}</span></div>
-        <button aria-label="Sign out" title="Sign out" onClick={logout}><ArrowLeftStartOnRectangleIcon /></button>
-      </div>
-    </aside>
-    <main className="workspace-body">
+
+  return (
+    <AppShell session={session} sections={sections} onLogout={logout}>
       <Notice>{error}</Notice>
       <Routes>
         {hasReports && <Route path="overview" element={<Dashboard session={session} />} />}
-        {hasReports && ['dashboard', 'reports/operations', 'reports/profitability'].map(path =>
-          <Route key={path} path={path} element={<Navigate to="/overview" replace />} />)}
-        {workspaceAliases.filter(([, path]) => allowed.some(section => section.path === path)).map(([alias, path]) =>
-          <Route key={alias} path={alias} element={<Navigate to={'/' + path} replace />} />)}
-        {allowed.filter(section => hasDetail(section.path)).map(section =>
-          <Route key={section.path + '/:id'} path={section.path + '/:id'}
-            element={<DetailPage section={section} token={session.accessToken} />} />)}
-        {allowed.map(section => <Route key={section.path} path={section.path}
-          element={<Records key={section.path} section={section} token={session.accessToken} capabilities={session.user.capabilities} />} />)}
-        <Route path="*" element={hasReports ? <Navigate to="/overview" replace /> : allowed.length ? <Navigate to={'/' + allowed[0].path} replace /> : <header className="page-header"><h1>Workspace</h1><p>No pages are assigned to your role yet.</p></header>} />
+        {hasReports &&
+          ['dashboard', 'reports/operations', 'reports/profitability'].map((path) => (
+            <Route key={path} path={path} element={<Navigate to="/overview" replace />} />
+          ))}
+        {workspaceAliases
+          .filter(([, path]) => allowed.some((section) => section.path === path))
+          .map(([alias, path]) => (
+            <Route key={alias} path={alias} element={<Navigate to={'/' + path} replace />} />
+          ))}
+        {allowed
+          .filter((section) => hasDetail(section.path))
+          .map((section) => (
+            <Route
+              key={section.path + '/:id'}
+              path={section.path + '/:id'}
+              element={<DetailPage section={section} token={session.accessToken} />}
+            />
+          ))}
+        {allowed.map((section) => (
+          <Route
+            key={section.path}
+            path={section.path}
+            element={
+              <Records
+                key={section.path}
+                section={section}
+                token={session.accessToken}
+                capabilities={session.user.capabilities}
+              />
+            }
+          />
+        ))}
+        <Route
+          path="*"
+          element={
+            hasReports ? (
+              <Navigate to="/overview" replace />
+            ) : allowed.length ? (
+              <Navigate to={'/' + allowed[0].path} replace />
+            ) : (
+              <PageHeader
+                title="Workspace"
+                subtitle="No pages are assigned to your role yet."
+              />
+            )
+          }
+        />
       </Routes>
-    </main>
-  </div>
+    </AppShell>
+  )
 }
 
 export default function App() {
   const [session, setSession] = useState(null)
+
   useEffect(() => {
     const expired = () => setSession(null)
     window.addEventListener('suryadesk:session-expired', expired)
     return () => window.removeEventListener('suryadesk:session-expired', expired)
   }, [])
-  return <Routes>
-    <Route path="/enquiry" element={<Enquiry />} />
-    <Route path="/request-quote" element={<Navigate to="/enquiry" replace />} />
-    <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login onLogin={setSession} />} />
-    <Route path="*" element={session ? <Workspace session={session} onLogout={() => setSession(null)} /> : <Navigate to="/login" replace />} />
-  </Routes>
+
+  return (
+    <Routes>
+      <Route path="/enquiry" element={<Enquiry />} />
+      <Route path="/request-quote" element={<Navigate to="/enquiry" replace />} />
+      <Route
+        path="/login"
+        element={session ? <Navigate to="/" replace /> : <Login onLogin={setSession} />}
+      />
+      <Route
+        path="*"
+        element={
+          session ? (
+            <Workspace session={session} onLogout={() => setSession(null)} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+    </Routes>
+  )
 }
