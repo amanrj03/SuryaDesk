@@ -1,5 +1,6 @@
 ﻿import { randomBytes } from 'node:crypto'
 import bcrypt from 'bcrypt'
+import { seedOperations } from './seed-operations.js'
 import { seedFinance } from './seed-finance.js'
 import { seedWarehouse } from './seed-warehouse.js'
 import { seedSales } from './seed-sales.js'
@@ -100,7 +101,8 @@ try {
   await seedSales(db)
   await seedWarehouse(db)
   await seedFinance(db)
-  console.log('Demo sales, warehouse, and finance records seeded.')
+  await seedOperations(db)
+  console.log('Demo sales, warehouse, finance, and service records seeded.')
 } finally {
   await db.$disconnect()
 }
