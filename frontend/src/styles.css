@@ -303,9 +303,19 @@ tbody tr:hover {
 /* Login styling: two-split layout with edge-to-edge presentation */
 .login-screen {
   min-height: 100vh;
-  min-height: 100svh;
+  min-height: 100dvh;
   width: 100%;
   display: grid;
   padding: 0;
   background-color: #FAF9F6;
+  overflow: hidden;
+}
+@media (min-width: 1024px) {
+  .login-screen {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
 }
