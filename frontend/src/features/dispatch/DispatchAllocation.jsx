@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
+import { ChevronDownIcon } from '@heroicons/react/24/outline'
 import { RecordDialog } from '../../components/ui/RecordDialog.jsx'
 import { Notice } from '../../components/ui/Notice.jsx'
 import { api } from '../../lib/api.js'
@@ -17,11 +18,14 @@ function SerialPicker({ item, selected, onSelect, token, revision, disabled }) {
   const [result, setResult] = useState({})
   const [scanError, setScanError] = useState('')
   const [scanning, setScanning] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [active, setActive] = useState(null)
+  const listId = useId()
   const term = query.trim()
   const full = selected.length >= item.quantity
 
   useEffect(() => {
-    if (full) return
+    if (!open || full || disabled) return
     const controller = new AbortController()
     const timer = setTimeout(async () => {
       try {
@@ -35,21 +39,52 @@ function SerialPicker({ item, selected, onSelect, token, revision, disabled }) {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [full, item.productId, revision, term, token])
+  }, [open, full, disabled, item.productId, revision, term, token])
 
   const current = result.term === term && result.revision === revision ? result : null
   const options = current?.serials?.filter(serial => !selected.includes(serial)) ?? []
+  const activeIndex = options.indexOf(active)
+  const expanded = open && !disabled && !scanning && !full
+  const activeId = expanded && activeIndex >= 0 ? listId + '-' + activeIndex : undefined
+
+  useEffect(() => {
+    if (activeId) document.getElementById(activeId)?.scrollIntoView({ block: 'nearest' })
+  }, [activeId])
 
   function add(serial) {
     onSelect([...selected, serial])
     setQuery('')
     setScanError('')
+    setActive(null)
   }
 
-  async function scan(event) {
+  async function handleKey(event) {
+    if (event.nativeEvent.isComposing) return
+    if (event.key === 'Escape' && expanded) {
+      event.preventDefault()
+      setOpen(false)
+      setActive(null)
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setOpen(true)
+      if (options.length) {
+        const next = event.key === 'ArrowDown'
+          ? (activeIndex + 1) % options.length
+          : activeIndex <= 0 ? options.length - 1 : activeIndex - 1
+        setActive(options[next])
+      }
+      return
+    }
     if (event.key !== 'Enter') return
     event.preventDefault()
-    if (!term || scanning || disabled || full) return
+    if (scanning || disabled || full) return
+    if (expanded && activeIndex >= 0) {
+      add(options[activeIndex])
+      return
+    }
+    if (!term) return
     setScanError('')
     const expected = term.toUpperCase()
     if (selected.includes(expected)) {
@@ -72,28 +107,48 @@ function SerialPicker({ item, selected, onSelect, token, revision, disabled }) {
     <div className="grid gap-2">
       <p role="status" className="text-xs font-semibold text-gray-700">{selected.length} of {item.quantity} selected</p>
       {!full && (
-        <fieldset disabled={disabled} className="grid min-w-0 gap-2 sm:grid-cols-2">
-          <label>
-            Search or scan serial
+        <div className="grid min-w-0 gap-1">
+          <label htmlFor={listId + '-input'}>Select serial</label>
+          <div className="relative">
             <input
-              type="search" value={query} maxLength={120} autoComplete="off" readOnly={scanning}
-              onChange={event => { setQuery(event.target.value); setScanError('') }}
-              onKeyDown={scan}
+              id={listId + '-input'} role="combobox" aria-autocomplete="list" aria-controls={listId}
+              aria-expanded={expanded} aria-activedescendant={activeId}
+              type="text" value={query} maxLength={120} autoComplete="off" spellCheck={false}
+              placeholder="Search or scan a serial" disabled={disabled} readOnly={scanning}
+              style={{ paddingInlineEnd: '2rem' }}
+              onFocus={() => setOpen(true)}
+              onClick={() => setOpen(true)}
+              onBlur={() => { setOpen(false); setActive(null) }}
+              onChange={event => {
+                setQuery(event.target.value)
+                setOpen(true)
+                setActive(null)
+                setScanError('')
+              }}
+              onKeyDown={handleKey}
             />
-          </label>
-          <label>
-            Available serials
-            <select value="" disabled={!options.length || scanning} onChange={event => add(event.target.value)}>
-              <option value="">
-                {options.length ? 'Choose a serial' : current ? 'No matching serials' : 'Loading serials…'}
-              </option>
-              {options.map(serial => <option key={serial} value={serial}>{serial}</option>)}
-            </select>
-          </label>
-        </fieldset>
+            <ChevronDownIcon aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-gray-500" />
+          </div>
+          <div hidden={!expanded} className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            <ul id={listId} role="listbox" aria-label="Available serials" className="max-h-44 overflow-auto p-1">
+              {expanded && options.map((serial, index) => (
+                <li key={serial} id={listId + '-' + index} role="option" aria-selected={active === serial}
+                  className="cursor-pointer break-all rounded-lg px-3 py-2 text-sm hover:bg-gray-100 aria-selected:bg-gray-100"
+                  onMouseDown={event => event.preventDefault()} onClick={() => add(serial)}>
+                  {serial}
+                </li>
+              ))}
+            </ul>
+            {expanded && !options.length && !current?.error && (
+              <p className="px-3 pb-2 text-xs text-gray-600" aria-live="polite">
+                {current ? 'No matching serials' : 'Loading serials…'}
+              </p>
+            )}
+            {expanded && current?.truncated && <p className="px-3 pb-2 text-xs text-gray-600">Type to narrow the results.</p>}
+          </div>
+        </div>
       )}
-      {current?.truncated && !full && <p className="text-xs text-gray-600">Search to narrow the available serials.</p>}
-      <Notice>{scanError || (!full && current?.error)}</Notice>
+      <Notice>{scanError || (expanded && current?.error)}</Notice>
       {selected.length > 0 && (
         <ul aria-label="Selected serials" className="flex flex-wrap gap-2">
           {selected.map(serial => (
