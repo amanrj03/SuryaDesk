@@ -7,9 +7,12 @@ export default function LandingPage({ signedIn }) {
     <main className="min-h-screen bg-[#FAF9F6] text-gray-900">
       <header className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-5 sm:px-8">
         <Link to="/" aria-label="SuryaDesk home"><Brand /></Link>
-        <Link className="secondary" to={signedIn ? '/workspace' : '/login'}>
-          {signedIn ? 'Open workspace' : 'Staff sign in'}
-        </Link>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Link className="secondary" to="/customer">Customer portal</Link>
+          <Link className="secondary" to={signedIn ? '/workspace' : '/login'}>
+            {signedIn ? 'Open workspace' : 'Staff sign in'}
+          </Link>
+        </div>
       </header>
       <section className="mx-auto grid max-w-6xl gap-7 px-4 py-14 sm:px-8 sm:py-24 lg:grid-cols-[1.5fr_1fr] lg:items-center">
         <div>

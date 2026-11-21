@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom'
 import WorkflowAction, { quotationAfterApproval, recordActions } from './WorkflowAction.jsx'
 import { TrackingLink } from './TrackingLink.jsx'
 import { InvoiceDocument } from './InvoiceDocument.jsx'
+import { CustomerPortalAccess } from '../customer/CustomerPortalAccess.jsx'
 
 const localDate = value => value ? new Intl.DateTimeFormat('en-IN', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata',
@@ -55,11 +56,11 @@ const definition = {
   leads: row => ({
     title: row.customer.name,
     fields: [['Reference', displayReference(row.leadNumber)], ['Status', state(row.status)], ['Phone', row.customer.phone],
-      ['Address', row.customer.address], ['Roof area', row.roofArea && row.roofArea + ' m²'], ['Monthly bill', money(row.monthlyBill)], ['Notes', row.notes]],
+      ['Address', row.siteAddress ?? row.customer.address], ['Roof area', row.roofArea && row.roofArea + ' m²'], ['Monthly bill', money(row.monthlyBill)], ['Notes', row.notes]],
     groups: [['Activity', ['At', 'Notes'], activity(row.leadActivitiesByLead)]],
   }),
   customers: row => ({
-    title: row.name, fields: [['Phone', row.phone], ['Email', displayContactEmail(row.email)], ['Address', row.address]],
+    title: row.name, customerEmail: row.email, fields: [['Phone', row.phone], ['Email', displayContactEmail(row.email)], ['Address', row.address]],
     groups: [
       ['Enquiries', ['Reference', 'Status', 'Received'], row.leadsByCustomer?.map(event => [displayReference(event.leadNumber), state(event.status), localDate(event.createdAt)])],
       ['Orders', ['Reference', 'Status', 'Confirmed'], row.ordersByCustomer?.map(event => [displayReference(event.orderNumber), state(event.status), localDate(event.confirmedAt)])],
@@ -69,6 +70,7 @@ const definition = {
   surveys: row => ({
     title: 'Survey for ' + row.lead.customer.name,
     fields: [['Status', state(row.status)], ['Surveyor', row.surveyor?.name], ['Appointment', localDate(row.scheduledAt)], ['Visited', localDate(row.visitedAt)],
+      ['Site address', row.lead.siteAddress ?? row.lead.customer.address],
       ['Roof direction', row.roofDirection], ['Tilt (degrees)', row.tiltDegrees], ['Cable run (m)', row.cableDistanceMeters],
       ['Shadow-free area (m²)', row.shadowFreeArea], ['Findings', row.findings], ['Review note', row.rejectionReason]], attachments: row.attachments,
   }),
@@ -104,6 +106,7 @@ const definition = {
     title: 'Dispatch for ' + row.order.customer.name,
     invoiceOrder: row.order,
     fields: [['Reference', displayReference(row.dispatchNumber)], ['Order', displayReference(row.order.orderNumber)], ['Status', state(row.status)], ['Recipient', row.recipientName],
+      ['Site address', row.order.quotation?.lead.siteAddress ?? row.order.customer.address],
       ['Dispatched', localDate(row.dispatchedAt)], ['Delivered', localDate(row.deliveredAt)]],
     groups: [['Required materials', ['Description', 'Quantity'], row.order.orderLinesByOrder
       .filter(item => item.lineKind === 'MATERIAL' && item.productId)
@@ -115,6 +118,7 @@ const definition = {
   installations: row => ({
     title: 'Installation for ' + row.order.customer.name,
     fields: [['Status', state(row.status)], ['Scheduled', localDate(row.scheduledAt)], ['Started', localDate(row.startedAt)],
+      ['Site address', row.order.quotation?.lead.siteAddress ?? row.order.customer.address],
       ['Finished', localDate(row.finishedAt)], ['Signed by', row.customerSignerName], ['Signed at', localDate(row.signedAt)]],
     groups: [['Crew', ['Technician', 'Assigned'], assignment(row.installationAssignmentsByInstallation)]], attachments: row.attachments,
   }),
@@ -236,6 +240,8 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
     {data && <div className="grid gap-5 p-4">
       <dl className="form-grid">{data.fields.filter(([, value]) => value != null && value !== '').map(([label, value]) =>
         <div key={label} className="min-w-0"><dt className="text-sm font-semibold text-slate-600">{label}</dt><dd className="break-words">{value}</dd></div>)}</dl>
+      {section === 'customers' && capabilities.includes('users:manage') &&
+        <CustomerPortalAccess key={id} id={id} email={data.customerEmail} token={token} />}
       {data.groups?.filter(([, , rows, summary]) => rows?.length || summary?.totals).map(([label, columns, rows, summary]) => <section key={label} className="overflow-x-auto">
         <h2 className="mb-2 font-semibold">{label}</h2>
         {summary?.description && <p className="mb-3 text-sm text-gray-600">{summary.description}</p>}

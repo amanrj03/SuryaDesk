@@ -10,9 +10,9 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:55173', channel: 'msedge' },
   webServer: [
     {
-      command: 'node --env-file=.env src/server.js',
-      cwd: fileURLToPath(new URL('../backend', import.meta.url)),
-      env: { PORT: '55300' },
+      command: 'node --env-file=../backend/.env e2e/api-server.js',
+      cwd: fileURLToPath(new URL('.', import.meta.url)),
+      env: { PORT: '55300', CORS_ORIGIN: 'http://127.0.0.1:55173', UPLOAD_DIR: fileURLToPath(new URL('../backend/uploads', import.meta.url)) },
       url: 'http://127.0.0.1:55300/api/v1/health',
       reuseExistingServer: false,
     },

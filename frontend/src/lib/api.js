@@ -1,8 +1,8 @@
-export async function api(path, { token, download = false, method = 'GET', body, signal } = {}) {
+export async function api(path, { token, download = false, method = 'GET', body, signal, credentials } = {}) {
   const base = import.meta.env.VITE_API_BASE ?? '/api/v1'
   const multipart = body instanceof FormData
   const response = await fetch(base + path, {
-    method, signal,
+    method, signal, credentials,
     headers: {
       ...(token && { Authorization: 'Bearer ' + token }),
       ...(body !== undefined && !multipart && { 'Content-Type': 'application/json' }),
@@ -13,7 +13,9 @@ export async function api(path, { token, download = false, method = 'GET', body,
   if (response.status === 401 && token) window.dispatchEvent(new Event('suryadesk:session-expired'))
   const result = response.headers.get('content-type')?.includes('application/json') ? await response.json() : null
   if (!response.ok || !result?.success) {
-    throw new Error(result?.error?.message ?? 'The service is unavailable or returned an unexpected response. Try again.')
+    const error = new Error(result?.error?.message ?? 'The service is unavailable or returned an unexpected response. Try again.')
+    error.status = response.status
+    throw error
   }
   return result
 }

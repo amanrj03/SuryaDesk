@@ -1,5 +1,12 @@
 # SuryaDesk
 
+## Customer portal
+
+- **Request a quote** collects the customer's password and verifies their email before creating the account and enquiry. **Customer portal** opens the same account with a password or an email code. Existing customers can request another quote from their portal.
+- Set `CUSTOMER_EMAIL_FROM` to a verified sender and `RESEND_API_KEY` in the private backend `.env`. Use HTTPS in production and serve the frontend and API on the same site so the customer session cookie can be sent. Apply migrations and regenerate Prisma with `npm run db:migrate` and `npm run db:generate` from `backend`.
+- Existing customer records matched by email are reused. An administrator can grant or revoke historical access from **Customers → View → Customer portal access** after verifying who owns the record.
+- For local demos, run `npm run db:seed -- --portal-accounts` from `backend` with `SEED_DEMO_PASSWORD` configured. The command lists the seeded email addresses. It adds portal logins to existing completed demo orders.
+
 SuryaDesk tracks rooftop solar work from the public enquiry through survey, quotation, order, payment, serialized dispatch, delivery, signed installation, and after-sales service. It runs locally with React, Express, Prisma, and PostgreSQL.
 
 ## Local setup

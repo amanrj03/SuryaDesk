@@ -6,6 +6,8 @@ import Workspace from './Workspace.jsx'
 import LandingPage from '../features/public/LandingPage.jsx'
 import TrackingPage from '../features/public/TrackingPage.jsx'
 import WarrantyStatusPage from '../features/public/WarrantyStatusPage.jsx'
+import CustomerLogin from '../features/customer/CustomerLogin.jsx'
+import CustomerPortal from '../features/customer/CustomerPortal.jsx'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -21,6 +23,8 @@ export default function App() {
       <Route path="/" element={<LandingPage signedIn={Boolean(session)} />} />
       <Route path="/track" element={<TrackingPage />} />
       <Route path="/warranty" element={<WarrantyStatusPage />} />
+      <Route path="/customer/login" element={<CustomerLogin />} />
+      <Route path="/customer/*" element={<CustomerPortal />} />
       <Route path="/enquiry" element={<Enquiry />} />
       <Route path="/request-quote" element={<Navigate to="/enquiry" replace />} />
       <Route
