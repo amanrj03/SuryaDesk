@@ -248,6 +248,16 @@ test('dispatch pick lists show quantities and serials while orders show package 
   await expect(page.getByRole('row').filter({ hasText: '550 W mono solar panel' }).getByRole('cell'))
     .toHaveText(['550 W mono solar panel', '2', 'Included in package'])
   await expect(page.getByRole('cell', { name: '₹73,400.00', exact: true })).toBeVisible()
+  await nav.getByRole('link', { name: 'Quotations', exact: true }).click()
+  const quoteSearch = page.getByRole('textbox', { name: 'Search quotations' })
+  await quoteSearch.fill('QUO-0151')
+  await quoteSearch.press('Enter')
+  await page.getByRole('row').filter({ hasText: 'QUO-0151' }).getByRole('link', { name: 'View', exact: true }).click()
+  const quotation = page.getByRole('table', { name: 'Quotation lines' })
+  await expect(quotation.getByRole('row').filter({ hasText: 'Lithium storage module' }).getByRole('cell').last())
+    .toHaveText(/^₹[\d,]+\.\d{2}$/)
+  await expect(quotation.locator('tfoot').getByRole('row').last()).toContainText('Grand total')
+  await expect(quotation.locator('tfoot').getByRole('cell').last()).toHaveText('₹1,35,870.00')
 })
 
 test('lists and details recover from non-JSON failures and expired sessions return to sign in', async ({ page }) => {

@@ -59,9 +59,13 @@ const definition = {
   }),
   quotes: row => ({
     title: 'Quotation for ' + row.lead.customer.name,
-    fields: [['Reference', displayReference(row.quoteNumber)], ['Status', state(row.status)], ['Subtotal', money(row.subtotal)],
-      ['Tax', money(row.tax)], ['Total', money(row.total)], ['Valid until', localDate(row.validUntil)]],
-    groups: [['Quotation lines', ['Description', 'Quantity', 'Total'], lines(row.quotationLinesByQuotation)],
+    fields: [['Reference', displayReference(row.quoteNumber)], ['Status', state(row.status)], ['Valid until', localDate(row.validUntil)]],
+    groups: [['Quotation lines', ['Description', 'Quantity', 'Amount'],
+      row.pricing?.lines.map(line => [line.description, line.quantity, money(line.amount)]) ?? lines(row.quotationLinesByQuotation),
+      {
+        description: row.pricing?.packageName && `Product amounts are shares of the ${row.pricing.packageName} package price.`,
+        totals: [['Subtotal', money(row.subtotal)], ['Tax', money(row.tax)], ['Grand total', money(row.total)]],
+      }],
       ['History', ['At', 'Action'], activity(row.timeline)]],
   }),
   orders: row => ({
@@ -191,10 +195,19 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
     {data && <div className="grid gap-5 p-4">
       <dl className="form-grid">{data.fields.filter(([, value]) => value != null && value !== '').map(([label, value]) =>
         <div key={label} className="min-w-0"><dt className="text-sm font-semibold text-slate-600">{label}</dt><dd className="break-words">{value}</dd></div>)}</dl>
-      {data.groups?.filter(([, , rows]) => rows?.length).map(([label, columns, rows]) => <section key={label} className="overflow-x-auto">
+      {data.groups?.filter(([, , rows, summary]) => rows?.length || summary?.totals).map(([label, columns, rows, summary]) => <section key={label} className="overflow-x-auto">
         <h2 className="mb-2 font-semibold">{label}</h2>
+        {summary?.description && <p className="mb-3 text-sm text-gray-600">{summary.description}</p>}
         <table aria-label={label}><thead><tr>{columns.map(column => <th key={column}>{column}</th>)}</tr></thead>
-          <tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows?.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}</tbody>
+          {summary?.totals && <tfoot className="border-t border-gray-200 bg-gray-50">
+            {summary.totals.map(([name, amount]) => (
+              <tr key={name}>
+                <th scope="row" colSpan={columns.length - 1} className="text-right">{name}</th>
+                <td className="font-semibold">{amount}</td>
+              </tr>
+            ))}
+          </tfoot>}
         </table>
       </section>)}
       {data.attachments?.length > 0 && <div><h2 className="mb-2 font-semibold">Evidence</h2>

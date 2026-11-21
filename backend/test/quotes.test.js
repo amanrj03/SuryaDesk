@@ -25,6 +25,11 @@ test('approved surveys produce immutable quotation prices and material costs', {
         code: key, name: 'Panel set fixture', type: 'PANEL_SET', basePrice: '9999.99',
         packageComponentsByPackage: { create: { productId: product.id, quantity: 2 } },
       } })
+      const wire = await tx.product.create({ data: {
+        sku: key + '-wire', name: 'Wiring fixture', category: 'WIRING', unit: 'unit',
+        cost: '750.25', salePrice: 1000, serialized: false, warrantyMonths: 0, reorderLevel: 0,
+      } })
+      await tx.packageComponent.create({ data: { packageId: pack.id, productId: wire.id, quantity: 3 } })
       const quotes = quotesService({ quotation: tx.quotation, auditLog: tx.auditLog, $transaction: callback => callback(tx) })
       const request = { leadId: lead.id, surveyId: survey.id, packageId: pack.id, includeInstallation: false, taxRate: 18 }
       await assert.rejects(quotes.create(request, user), { code: 'SURVEY_NOT_APPROVED' })
@@ -34,10 +39,16 @@ test('approved surveys produce immutable quotation prices and material costs', {
       await quotes.transition(quote.id, 'SENT', {}, user)
       await tx.product.update({ where: { id: product.id }, data: { cost: 4000, name: 'Renamed panel fixture' } })
       const accepted = await quotes.transition(quote.id, 'ACCEPTED', {}, user)
-      const material = accepted.quotationLinesByQuotation.find(line => line.lineKind === 'MATERIAL')
+      const material = accepted.quotationLinesByQuotation.find(line => line.productId === product.id)
       assert.equal(material.unitCostSnapshot.toFixed(2), '2000.50')
       assert.equal(material.descriptionSnapshot, 'Panel fixture')
       assert.equal(accepted.lead.status, 'WON')
+      const detail = await quotes.detail(quote.id)
+      assert.equal(detail.pricing.packageName, pack.name)
+      assert.equal(detail.pricing.lines.length, 2)
+      assert.ok(detail.pricing.lines.every(line => line.amount.greaterThan(0)))
+      assert.equal(detail.pricing.lines.reduce((sum, line) => sum.plus(line.amount), quote.subtotal.minus(quote.subtotal))
+        .toFixed(2), '9999.99')
       await assert.rejects(quotes.transition(quote.id, 'ACCEPTED', {}, user), { code: 'INVALID_TRANSITION' })
       throw new Error('Rollback quotation fixture')
     }), { message: 'Rollback quotation fixture' })

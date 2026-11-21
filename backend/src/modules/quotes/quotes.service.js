@@ -31,6 +31,35 @@ function snapshotPackage(pack) {
   ]
 }
 
+function pricingBreakdown(lines) {
+  // The core package is snapshotted before any optional installation charge.
+  const packageLine = lines.find(line => line.lineKind === 'SERVICE')
+  const bundled = lines.filter(line => line.lineKind === 'MATERIAL' && line.lineTotal.isZero())
+  const allocated = new Map()
+  if (packageLine && bundled.length) {
+    const costs = bundled.map(line => line.unitCostSnapshot.mul(line.quantity))
+    const costTotal = costs.reduce((total, cost) => total.plus(cost), new Prisma.Decimal(0))
+    const useQuantity = costTotal.isZero()
+    const weight = useQuantity ? bundled.reduce((sum, item) => sum + item.quantity, 0) : costTotal
+    // Round cumulative shares so the displayed amounts add up to the exact package charge.
+    let cumulative = new Prisma.Decimal(0)
+    let billed = new Prisma.Decimal(0)
+    for (const [index, line] of bundled.entries()) {
+      cumulative = cumulative.plus(useQuantity ? line.quantity : costs[index])
+      const next = packageLine.lineTotal.mul(cumulative).div(weight).toDecimalPlaces(2)
+      allocated.set(line.id, next.minus(billed))
+      billed = next
+    }
+  }
+  return {
+    packageName: allocated.size ? packageLine.descriptionSnapshot : null,
+    lines: lines.filter(line => !allocated.size || line !== packageLine).map(line => ({
+      description: line.descriptionSnapshot, quantity: line.quantity,
+      amount: allocated.get(line.id) ?? line.lineTotal,
+    })),
+  }
+}
+
 async function audit(tx, id, action, actorId, summary = {}) {
   await tx.auditLog.create({ data: { actorId, entityType: 'Quotation', entityId: id, action, summary } })
 }
@@ -97,7 +126,7 @@ export function quotesService(db) {
         where: { entityType: 'Quotation', entityId: id }, orderBy: { createdAt: 'asc' },
         select: { action: true, createdAt: true, summary: true },
       })
-      return { ...quote, timeline }
+      return { ...quote, timeline, pricing: pricingBreakdown(quote.quotationLinesByQuotation) }
     },
     async transition(id, status, options, user) {
       return db.$transaction(async tx => {
