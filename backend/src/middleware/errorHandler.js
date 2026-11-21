@@ -1,7 +1,13 @@
+import { Prisma } from '@prisma/client'
 import { ApiError } from '../utils/ApiError.js'
 
 export function errorHandler(error, request, response, next) {
   if (response.headersSent) return next(error)
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2002') error = new ApiError(409, 'CONFLICT', 'A record with these details already exists.')
+    if (error.code === 'P2025') error = new ApiError(404, 'NOT_FOUND', 'Record not found.')
+  }
 
   if (error instanceof ApiError) {
     return response.status(error.status).json({ success: false, error: {
