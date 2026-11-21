@@ -87,7 +87,7 @@ test('all administrator modules load live records and open actions in modal dial
       await expect(view).toBeVisible()
       viewed++
     }
-    const entryPoints = page.locator('.records > .toolbar > button.primary, .records tbody button')
+    const entryPoints = page.locator('.records > .toolbar > button.primary, .records tbody button:not([data-invoice-actions] button)')
     const actions = [...new Set(await entryPoints.allTextContents())]
     for (const action of actions) {
       const trigger = entryPoints.and(page.getByRole('button', { name: action, exact: true })).first()
@@ -238,6 +238,14 @@ test('dispatch pick lists show quantities and serials while orders show package 
   await expect(allocated.getByRole('cell', { name: 'SD-PANEL-00481', exact: true })).toBeVisible()
   await expect(allocated.getByRole('row').filter({ hasText: 'Solar connector pair' }).getByRole('cell'))
     .toHaveText(['Solar connector pair', '2', 'Not serialized'])
+  const pdf = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download invoice PDF' }).click()
+  const download = await pdf
+  expect(download.suggestedFilename()).toBe('INV-0081.pdf')
+  const { readFile } = await import('node:fs/promises')
+  expect((await readFile(await download.path())).subarray(0, 5).toString()).toBe('%PDF-')
+  await page.getByRole('link', { name: 'View invoice' }).click()
+  await expect(page.getByRole('button', { name: 'Print invoice', exact: true })).toBeVisible()
 
   await nav.getByRole('link', { name: 'Orders', exact: true }).click()
   const search = page.getByRole('textbox', { name: 'Search orders' })

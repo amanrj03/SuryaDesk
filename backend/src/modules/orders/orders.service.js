@@ -5,6 +5,7 @@ import { paymentTotals } from '../payments/payments.service.js'
 const related = {
   customer: true,
   quotation: { select: { quoteNumber: true } },
+  invoiceByOrder: { select: { id: true, invoiceNumber: true, status: true } },
   dispatchesByOrder: true,
   installationByOrder: true,
 }

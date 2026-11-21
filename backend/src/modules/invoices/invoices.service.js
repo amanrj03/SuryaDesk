@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { ApiError } from '../../utils/ApiError.js'
 
-const include = { customer: true, invoiceLinesByInvoice: true }
+const include = {
+  customer: true, invoiceLinesByInvoice: { orderBy: { id: 'asc' } },
+  order: { select: { orderNumber: true, confirmedAt: true } },
+  ticket: { select: { ticketNumber: true } },
+}
 const missing = () => new ApiError(404, 'NOT_FOUND', 'Invoice not found.')
 const invalid = message => new ApiError(409, 'INVALID_TRANSITION', message)
 
@@ -25,13 +29,22 @@ async function audit(tx, row, action, actorId) {
 
 export function invoiceService(db) {
   return {
-    async create({ orderId, ticketId, customerId, dueAt, taxRate, lines: supplied }, user) {
+    async create({ orderId, ticketId, customerId, dueAt, taxRate, lines: supplied }, user, { forAllocatedOrder = false } = {}) {
       return db.$transaction(async tx => {
         let lines, subtotal, tax
         if (orderId) {
           await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${orderId} FOR UPDATE`
           const order = await tx.order.findUnique({ where: { id: orderId }, include: { orderLinesByOrder: true, invoiceByOrder: true } })
-          if (!order || order.customerId !== customerId || order.status === 'CANCELLED') throw invalid('Choose a confirmed order for this customer.')
+          if (!order || (!forAllocatedOrder && order.customerId !== customerId) || order.status === 'CANCELLED') {
+            throw invalid('Choose a confirmed order for this customer.')
+          }
+          if (forAllocatedOrder) {
+            if (!['READY_TO_DISPATCH', 'DISPATCHED', 'DELIVERED', 'INSTALLATION_IN_PROGRESS', 'COMPLETED'].includes(order.status)) {
+              throw invalid('Allocate stock before preparing the invoice from dispatch.')
+            }
+            if (order.invoiceByOrder) return order.invoiceByOrder
+            customerId = order.customerId
+          }
           if (order.invoiceByOrder) throw invalid('This order already has an invoice.')
           lines = supplied ? suppliedLines(supplied) : orderLines(order.orderLinesByOrder)
           subtotal = order.subtotal

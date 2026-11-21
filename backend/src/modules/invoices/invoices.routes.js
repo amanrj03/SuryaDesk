@@ -7,12 +7,19 @@ import { invoiceService } from './invoices.service.js'
 
 export function invoiceRoutes(db, auth) {
   const router = Router()
-  const controller = invoiceController(invoiceService(db))
+  const controller = invoiceController(invoiceService(db), {
+    name: process.env.INVOICE_SELLER_NAME || 'SuryaDesk',
+    address: process.env.INVOICE_SELLER_ADDRESS,
+    pan: process.env.INVOICE_SELLER_PAN,
+    gstin: process.env.INVOICE_SELLER_GSTIN,
+  })
   const read = authorize('invoices:read')
   const manage = authorize('invoices:manage')
   router.use('/invoices', authenticate(auth))
   router.get('/invoices', read, validate({ query: schema.query }), controller.list)
   router.get('/invoices/:id', read, validate({ params: schema.params }), controller.detail)
+  router.get('/invoices/:id/pdf', read, validate({ params: schema.params }), controller.pdf)
+  router.post('/invoices/for-order/:id', manage, validate({ params: schema.params }), controller.prepare)
   router.post('/invoices', manage, validate({ body: schema.create }), controller.create)
   router.post('/invoices/:id/issue', manage, validate({ params: schema.params, body: schema.issue }), controller.issue)
   return router

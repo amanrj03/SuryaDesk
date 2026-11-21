@@ -90,6 +90,17 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.equal((await request('GET', assetQuery))[0].serialNumber, key)
         await post(dispatch + '/allocate', { items })
         assert.deepEqual(await request('GET', assetQuery), [])
+        const invoice = await post('/invoices/for-order/' + order.id)
+        assert.equal(invoice.status, 'DRAFT')
+        assert.equal((await post('/invoices/for-order/' + order.id)).id, invoice.id)
+        assert.equal((await fetch(url + '/invoices/' + invoice.id + '/pdf')).status, 401)
+        const pdf = await fetch(url + '/invoices/' + invoice.id + '/pdf', {
+          headers: { Authorization: 'Bearer ' + token },
+        })
+        assert.equal(pdf.status, 200)
+        assert.match(pdf.headers.get('content-type'), /^application\/pdf/)
+        assert.match(pdf.headers.get('content-disposition'), /attachment;.*\.pdf/)
+        assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0, 5).toString(), '%PDF-')
         await post(dispatch + '/dispatch')
         const delivered = await post(dispatch + '/deliver', { recipientName: key })
         const coverage = await request('GET', '/assets/' + key + '/warranty')

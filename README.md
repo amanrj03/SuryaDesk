@@ -62,6 +62,7 @@ Integration checks use the migrated local database and remove their synthetic fi
 - Contract revenue excludes tax. Cash collections and invoice totals are reported separately. Job profitability uses fulfilled material costs, technician work logs, and explicitly recorded costs. Open jobs show a cost completeness indicator.
 - A delivery warranty uses India-local calendar months with an exclusive end timestamp. Covered replacements inherit any remaining term and preserve the links to the returned serial and original warranty.
 - The application records quote and invoice issue inside the staff workspace. It provides downloadable report CSVs and tracks subsidy paperwork locally. Staff handle external customer communication and government submission.
+- Admin and Finance can download or print invoice PDFs from invoice details and linked orders. Dispatch shows the invoice actions after stock is allocated for users with invoice access. Preparing a PDF from an allocated order reuses its invoice or creates a draft. Finance can issue drafts in **Invoices**. Set the optional `INVOICE_SELLER_NAME`, `INVOICE_SELLER_ADDRESS`, `INVOICE_SELLER_PAN`, and `INVOICE_SELLER_GSTIN` fields in `backend/.env` to include seller details.
 
 ## Evaluator walkthrough
 

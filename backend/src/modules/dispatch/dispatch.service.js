@@ -3,7 +3,10 @@ import { ApiError } from '../../utils/ApiError.js'
 import { warrantyEnd } from '../warranties/coverage.js'
 
 const include = {
-  order: { include: { customer: true, orderLinesByOrder: true } },
+  order: { include: {
+    customer: true, orderLinesByOrder: true,
+    invoiceByOrder: { select: { id: true, invoiceNumber: true, status: true } },
+  } },
   dispatchItemsByDispatch: { include: { asset: true, product: true } },
 }
 const missing = entity => new ApiError(404, 'NOT_FOUND', entity + ' not found.')

@@ -5,6 +5,7 @@ import { TableSkeleton } from '../../components/ui/States.jsx'
 import { words } from '../../lib/format.js'
 import LeadEditor from '../enquiries/LeadEditor.jsx'
 import InstallationSignoff from '../installations/InstallationSignoff.jsx'
+import { InvoiceDocument } from './InvoiceDocument.jsx'
 import DispatchAllocation from '../dispatch/DispatchAllocation.jsx'
 import PackageEditor from '../catalog/PackageEditor.jsx'
 import { hasDetail } from './RecordDetail.jsx'
@@ -230,6 +231,9 @@ export default function Records({ section, token, capabilities }) {
                               <Link className="secondary mb-1 mr-1" to={'/orders/' + encodeURIComponent(row.orderByQuotation.id)}>
                                 View order
                               </Link>
+                            )}
+                            {section.path === 'dispatches' && row.status !== 'DRAFT' && (
+                              <InvoiceDocument order={row.order} token={token} capabilities={capabilities} />
                             )}
                             {managePackages && (
                               <button
