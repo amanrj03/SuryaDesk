@@ -31,7 +31,7 @@ Open `http://localhost:5173` for the staff workspace or `http://localhost:5173/e
 
 Role accounts use `<role>@demo.suryadesk.test` for admin, director, sales, surveyor, warehouse, technician, support, and finance. Use the password configured for the first seed. If you omit it, the seed prints a generated password when it first creates the accounts. Reruns preserve existing users and records.
 
-The seed includes staff, 200 customers, 300 enquiries, 150 surveys, 180 quotations, 120 orders, 200 payments, 20 system packages, 500 serialized units, 20 suppliers, 60 purchase orders, shipment and warranty history, crew schedules, 12 completed installations with 24 labeled synthetic evidence files, invoices, subsidies, and 100 service tickets. Names, prices, systems, and contact information are illustrative. The database also contains covered and billable service cases. Choose **Last 180 days** on the overview to inspect historical collections and profitability.
+The seed includes staff, 200 customers, 300 enquiries, 150 surveys, 180 quotations, 120 orders, 200 payments, 20 system packages, 500 serialized units, 20 suppliers, 60 purchase orders, shipment and warranty history, crew schedules, 12 completed installations with 24 labeled synthetic evidence files, invoices, subsidies, and 100 service tickets. Names, prices, systems, and contact information are illustrative. The database also contains covered and billable service cases. Choose **Last 365 days** on the overview to inspect historical collections and profitability.
 
 The demo can be used to exercise the workflow:
 
@@ -59,3 +59,34 @@ Integration checks use the migrated local database and remove their synthetic fi
 - Contract revenue excludes tax. Cash collections and invoice totals are reported separately. Job profitability uses fulfilled material costs, technician work logs, and explicitly recorded costs. Open jobs show a cost completeness indicator.
 - A delivery warranty uses India-local calendar months with an exclusive end timestamp. Covered replacements inherit any remaining term and preserve the links to the returned serial and original warranty.
 - The application records quote and invoice issue inside the staff workspace. It provides downloadable report CSVs and tracks subsidy paperwork locally. Staff handle external customer communication and government submission.
+
+## Evaluator walkthrough
+
+For this workspace, keep the existing database and use independent API and web ports. Run each command block in its own PowerShell terminal from the repository root.
+
+If PostgreSQL is stopped:
+
+```powershell
+& 'C:/Program Files/PostgreSQL/18/bin/pg_ctl.exe' -D .postgres/cluster -l .postgres/server.log -o '-p 55432 -h 127.0.0.1' -w start
+```
+
+Backend:
+
+```powershell
+$env:PORT = '55300'
+npm.cmd --prefix backend run dev
+```
+
+Frontend:
+
+```powershell
+$env:SURYADESK_API_TARGET = 'http://127.0.0.1:55300'
+npm.cmd --prefix frontend run dev -- --host 127.0.0.1 --port 55173
+```
+
+Sign in at `http://127.0.0.1:55173/login` as `admin@demo.suryadesk.test`. To retrieve the seeded demo password locally, use `node --env-file=backend/.env -p "process.env.SEED_DEMO_PASSWORD"`. The director, sales, surveyor, warehouse, technician, support, and finance demo accounts use the same password.
+
+1. Send a 3 kW enquiry from `/enquiry`. In Enquiries, find it by customer name, record qualification details, and schedule a survey.
+2. Open Dispatch, set the status filter to Allocated, and inspect `DEMO-DSP-0037` for an allocated pick with serials. In Equipment serials, look up `SD-INVERTER-00001` for delivered warranty coverage.
+3. Inspect `DEMO-ORD-0001` and its completed installation evidence. In Service tickets, find `DEMO-TKT-0041` and its chargeable service invoice `DEMO-SVC-0041`.
+4. Open Overview, choose Last 365 days, inspect job profitability and technician costs, then download the CSV.
