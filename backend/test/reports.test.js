@@ -27,8 +27,11 @@ test('report counts and cash reconcile to PostgreSQL without counting payments a
     assert.ok(overview.cashCollected.equals(cash._sum.amount ?? 0))
     assert.ok(overview.revenue.equals(orders._sum.subtotal ?? 0))
     assert.equal(profit.meta.total, orders._count)
-    assert.ok(profit.data.every(row =>
-      row.revenue.minus(row.materialCost).minus(row.laborCost).minus(row.otherCost).minus(row.margin).abs().lte('0.01')))
+    const profitRows = await reports.export({ ...period, type: 'profitability' })
+    assert.ok(profitRows.some(row => !row.costComplete))
+    assert.ok(profitRows.every(row => row.costComplete
+      ? row.revenue.minus(row.materialCost).minus(row.laborCost).minus(row.otherCost).minus(row.margin).abs().lte('0.01')
+      : row.margin === null))
     const csvRows = await reports.export({ ...period, type: 'orders' })
     assert.ok(csvRows.length >= Math.min(orders._count, 10000))
   } finally {

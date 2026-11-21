@@ -12,6 +12,7 @@ import { Avatar } from '../../components/ui/Avatar.jsx'
 import { Button } from '../../components/ui/Button.jsx'
 import { TableSkeleton, ErrorState } from '../../components/ui/States.jsx'
 import { BarChart } from '../../components/charts/BarChart.jsx'
+import { formatNumber } from '../../lib/format.js'
 
 const money = (value) =>
   new Intl.NumberFormat('en-IN', {
@@ -259,7 +260,7 @@ export default function Dashboard({ session }) {
                     Recent job profitability
                   </h2>
                   <span className="text-[10px] font-medium text-gray-400">
-                    Calculated job gross margin
+                    Recorded costs · Margin shown when costs are complete
                   </span>
                 </div>
 
@@ -288,9 +289,16 @@ export default function Dashboard({ session }) {
                               <td className="font-semibold text-gray-900">{row.customerName}</td>
                               <td>{money(row.revenue)}</td>
                               <td>{money(row.materialCost)}</td>
-                              <td>{money(row.laborCost)}</td>
+                              <td>
+                                {money(row.laborCost)}
+                                {row.laborMinutes != null && <span className="block text-xs text-gray-600">
+                                  {formatNumber(row.laborMinutes)} min logged
+                                </span>}
+                              </td>
                               <td>{money(row.otherCost)}</td>
-                              <td className="font-bold text-[#E62E6B]">{money(row.margin)}</td>
+                              <td className={row.margin == null ? 'text-gray-600' : 'font-semibold'}>
+                                {row.margin == null ? 'Pending' : money(row.margin)}
+                              </td>
                               <td>
                                 <span
                                   className={

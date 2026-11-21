@@ -35,11 +35,12 @@ async function profitability(tx, { from, to }, page, limit) {
     SELECT o.id, o."orderNumber", o."confirmedAt", o.status,
       c.name AS "customerName", o.subtotal AS revenue,
       COALESCE(material.cost, 0) AS "materialCost",
-      ROUND(COALESCE(labor.cost, 0), 2) AS "laborCost", COALESCE(other.cost, 0) AS "otherCost",
-      ROUND(o.subtotal - COALESCE(material.cost, 0) - COALESCE(labor.cost, 0) - COALESCE(other.cost, 0), 2) AS margin,
-      (o.status = 'COMPLETED' AND COALESCE(labor.entries, 0) > 0
-        AND (NOT EXISTS (SELECT 1 FROM "OrderLine" l WHERE l."orderId" = o.id AND l."lineKind" = 'MATERIAL')
-          OR COALESCE(material.entries, 0) > 0)) AS "costComplete"
+      ROUND(COALESCE(labor.cost, 0), 2) AS "laborCost", ROUND(labor.minutes, 2) AS "laborMinutes",
+      COALESCE(other.cost, 0) AS "otherCost",
+      CASE WHEN costs.complete THEN
+        ROUND(o.subtotal - COALESCE(material.cost, 0) - COALESCE(labor.cost, 0) - COALESCE(other.cost, 0), 2)
+      END AS margin,
+      costs.complete AS "costComplete"
     FROM selected o
     JOIN "Customer" c ON c.id = o."customerId"
     LEFT JOIN LATERAL (
@@ -48,10 +49,16 @@ async function profitability(tx, { from, to }, page, limit) {
     ) material ON true
     LEFT JOIN LATERAL (
       SELECT SUM(EXTRACT(EPOCH FROM (w."endAt" - w."startAt")) / 3600 * w."hourlyCostSnapshot") AS cost,
+        SUM(EXTRACT(EPOCH FROM (w."endAt" - w."startAt")) / 60) AS minutes,
         COUNT(w.id) AS entries
       FROM "Installation" i JOIN "WorkLog" w ON w."installationId" = i.id WHERE i."orderId" = o.id
     ) labor ON true
     LEFT JOIN LATERAL (SELECT SUM(j.amount) AS cost FROM "JobCost" j WHERE j."orderId" = o.id) other ON true
+    CROSS JOIN LATERAL (
+      SELECT (o.status = 'COMPLETED' AND labor.entries > 0
+        AND (NOT EXISTS (SELECT 1 FROM "OrderLine" l WHERE l."orderId" = o.id AND l."lineKind" = 'MATERIAL')
+          OR material.entries > 0)) AS complete
+    ) costs
     ORDER BY o."confirmedAt" DESC, o.id DESC
   `
 }
