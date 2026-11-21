@@ -1,0 +1,115 @@
+import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
+import { once } from 'node:events'
+import { mkdtemp, readdir, rmdir, unlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import test from 'node:test'
+import bcrypt from 'bcrypt'
+import { createApp } from '../src/app.js'
+import { createDatabase } from '../src/lib/prisma.js'
+
+test('Express connects public intake to paid delivery, signed completion, and covered service', {
+  skip: !process.env.DATABASE_URL,
+}, async () => {
+  const db = createDatabase(process.env.DATABASE_URL)
+  const key = randomUUID().toUpperCase()
+  const email = key.toLowerCase() + '@example.invalid'
+  const password = randomUUID()
+  const root = await mkdtemp(join(tmpdir(), 'suryadesk-journey-'))
+  process.env.UPLOAD_DIR = root
+  try {
+    await assert.rejects(db.$transaction(async tx => {
+      const admin = await tx.user.create({ data: {
+        name: 'Journey fixture', email, role: 'ADMIN', passwordHash: await bcrypt.hash(password, 4),
+      } })
+      const database = new Proxy(tx, {
+        get(target, property, receiver) {
+          if (property === '$transaction') return work => typeof work === 'function' ? work(tx) : Promise.all(work)
+          return Reflect.get(target, property, receiver)
+        },
+      })
+      const app = createApp({ CORS_ORIGIN: 'http://localhost:5173', JWT_SECRET: process.env.JWT_SECRET }, database)
+      const server = app.listen(0, '127.0.0.1')
+      await once(server, 'listening')
+      const url = 'http://127.0.0.1:' + server.address().port + '/api/v1'
+      let token
+      async function request(method, path, body) {
+        const multipart = body instanceof FormData
+        const response = await fetch(url + path, {
+          method, body: multipart ? body : JSON.stringify(body),
+          headers: { ...(!multipart && { 'Content-Type': 'application/json' }),
+            ...(token && { Authorization: 'Bearer ' + token }) },
+        })
+        const result = await response.json()
+        assert.ok(response.ok, path + ' returned ' + response.status + ': ' + JSON.stringify(result))
+        return result.data
+      }
+      const post = (path, body = {}) => request('POST', path, body)
+      const patch = (path, body) => request('PATCH', path, body)
+      try {
+        const enquiry = await post('/public/enquiries', { name: key, phone: '+910000000000', address: 'Test residence' })
+        token = (await post('/auth/login', { email, password })).accessToken
+        const [lead] = await request('GET', '/leads?q=' + enquiry.leadNumber)
+        await patch('/leads/' + lead.id, { status: 'CONTACTED' })
+        await patch('/leads/' + lead.id, { status: 'QUALIFIED', roofArea: 40, monthlyBill: '2100.00', gridSuitable: true })
+        const survey = await post('/leads/' + lead.id + '/surveys', { surveyorId: admin.id, scheduledAt: new Date().toISOString() })
+        await patch('/surveys/' + survey.id, { status: 'SUBMITTED', visitedAt: new Date().toISOString(),
+          roofDirection: 'S', tiltDegrees: 12, cableDistanceMeters: 15, shadowFreeArea: 40,
+          gridSuitable: true, findings: 'Clear roof and cable route.' })
+        await post('/surveys/' + survey.id + '/approve', { approved: true })
+        const product = await post('/products', { sku: key, name: 'Demo panel', category: 'PANEL', unit: 'unit',
+          cost: '120.00', salePrice: '200.00', serialized: true, warrantyMonths: 240, reorderLevel: 1 })
+        const pack = await post('/packages', { code: key, name: 'Journey package', type: 'PANEL_SET',
+          basePrice: '250.00', components: [{ productId: product.id, quantity: 1 }] })
+        const quote = await post('/quotes', { leadId: lead.id, surveyId: survey.id, packageId: pack.id })
+        await post('/quotes/' + quote.id + '/send')
+        await post('/quotes/' + quote.id + '/accept')
+        const order = await post('/quotes/' + quote.id + '/convert-to-order')
+        const payment = await post('/orders/' + order.id + '/payments', { amount: '250.00', method: 'UPI', reference: key })
+        assert.equal(payment.balance, '0')
+        const items = [{ productId: product.id, quantity: 1, serialNumbers: [key] }]
+        await post('/inventory/receipts', { ...items[0], unitCost: '120.00' })
+        const dispatch = '/dispatches/' + order.dispatchesByOrder[0].id
+        await post(dispatch + '/allocate', { items })
+        await post(dispatch + '/dispatch')
+        const delivered = await post(dispatch + '/deliver', { recipientName: key })
+        const coverage = await request('GET', '/assets/' + key + '/warranty')
+        assert.equal(coverage.coveredAsOf, true)
+        assert.equal(coverage.warranty.startAt, delivered.deliveredAt)
+
+        const installationId = order.installationByOrder.id
+        const installation = '/installations/' + installationId
+        await patch(installation, { technicianIds: [admin.id], scheduledAt: new Date().toISOString() })
+        await patch(installation, { startedAt: new Date().toISOString(), generationReading: 1.8 })
+        const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Yv1cAAAAASUVORK5CYII=', 'base64')
+        async function evidence(filename) {
+          const form = new FormData()
+          form.set('ownerType', 'INSTALLATION')
+          form.set('ownerId', installationId)
+          form.set('file', new Blob([png], { type: 'image/png' }), filename)
+          return post('/attachments', form)
+        }
+        await evidence('roof.png')
+        const signature = await evidence('signature.png')
+        const signed = await post(installation + '/complete', { finishedAt: new Date().toISOString(),
+          capacityKw: 2, checklist: { mounting: true, electrical: true, earthing: true, generation: true },
+          generationTestPassed: true, signatureAttachmentId: signature.id, customerSignerName: key })
+        assert.equal(signed.order.status, 'COMPLETED')
+        const ticket = await post('/tickets', { customerId: order.customerId, assetId: coverage.asset.id,
+          description: 'Test alarm on supplied panel circuit', priority: 'LOW' })
+        const resolution = await post('/tickets/' + ticket.id + '/resolve', { coverageDecision: 'COVERED', resolutionNotes: 'Reconnected the circuit.' })
+        assert.equal(resolution.invoiceByTicket, null)
+        const closed = await post('/tickets/' + ticket.id + '/confirm', { customerConfirmationName: key })
+        assert.equal(closed.status, 'CLOSED')
+      } finally {
+        await new Promise(resolve => server.close(resolve))
+      }
+      throw new Error('Rollback verified connected journey')
+    }, { timeout: 20000 }), { message: 'Rollback verified connected journey' })
+  } finally {
+    await db.$disconnect()
+    for (const name of await readdir(root)) await unlink(join(root, name))
+    await rmdir(root)
+  }
+})
