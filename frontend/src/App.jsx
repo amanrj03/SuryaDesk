@@ -25,7 +25,7 @@ const sections = [
   { path: 'orders', title: 'Orders', capability: 'orders:read', icon: ShoppingBagIcon, search: true,
     columns: [['Reference', row => row.orderNumber], ['Customer', row => row.customer.name], ['Total', row => currency(row.total)], ['Status', row => <Status value={row.status} />], ['Confirmed', row => date(row.confirmedAt)]] },
   { path: 'inventory', title: 'Inventory', capability: 'inventory:read', icon: Squares2X2Icon, search: true,
-    columns: [['SKU', row => row.sku], ['Product', row => row.name], ['In stock', row => row.onHand], ['Reserved', row => row.reserved], ['Available', row => row.available], ['Reorder', row => row.lowStock ? 'Required' : '?']] },
+    columns: [['SKU', row => row.sku], ['Product', row => row.name], ['In stock', row => row.onHand], ['Reserved', row => row.reserved], ['Available', row => row.available], ['Reorder', row => row.lowStock ? 'Required' : '—']] },
   { path: 'dispatches', title: 'Dispatch', capability: 'dispatch:prepare', icon: TruckIcon,
     columns: [['Reference', row => row.dispatchNumber], ['Customer', row => row.order.customer.name], ['Status', row => <Status value={row.status} />], ['Delivered', row => date(row.deliveredAt)]] },
   { path: 'warranties', title: 'Warranties', capability: 'warranties:read', icon: ShieldCheckIcon, search: true,
@@ -33,11 +33,11 @@ const sections = [
   { path: 'installations', title: 'Installations', capability: 'installations:read', icon: WrenchScrewdriverIcon,
     columns: [['Customer', row => row.order.customer.name], ['Capacity', row => row.capacityKw + ' kW'], ['Scheduled', row => date(row.scheduledAt)], ['Status', row => <Status value={row.status} />]] },
   { path: 'tickets', title: 'Service tickets', capability: 'tickets:read', icon: ClipboardDocumentCheckIcon, search: true,
-    columns: [['Reference', row => row.ticketNumber], ['Customer', row => row.customer.name], ['Fault', row => row.faultCode || '?'], ['Priority', row => words(row.priority)], ['Status', row => <Status value={row.status} />]] },
+    columns: [['Reference', row => row.ticketNumber], ['Customer', row => row.customer.name], ['Fault', row => row.faultCode || '—'], ['Priority', row => words(row.priority)], ['Status', row => <Status value={row.status} />]] },
   { path: 'invoices', title: 'Invoices', capability: 'invoices:read', icon: DocumentTextIcon, search: true,
     columns: [['Reference', row => row.invoiceNumber], ['Customer', row => row.customer.name], ['Total', row => currency(row.total)], ['Status', row => <Status value={row.status} />], ['Issued', row => date(row.issuedAt)]] },
   { path: 'subsidies', title: 'Subsidies', capability: 'subsidies:read', icon: ClipboardDocumentCheckIcon,
-    columns: [['Order', row => row.order.orderNumber], ['Customer', row => row.order.customer.name], ['Reference', row => row.reference || '?'], ['Status', row => <Status value={row.status} />]] },
+    columns: [['Order', row => row.order.orderNumber], ['Customer', row => row.order.customer.name], ['Reference', row => row.reference || '—'], ['Status', row => <Status value={row.status} />]] },
   { path: 'payments', title: 'Payments', capability: 'payments:read', icon: CreditCardIcon,
     columns: [['Reference', row => row.reference || '—'], ['Amount', row => currency(row.amount)], ['Method', row => words(row.method)], ['Received', row => date(row.receivedAt)]] },
 ]
@@ -172,14 +172,14 @@ function LeadEditor({ lead, token, onClose, onSaved }) {
       <div className="form-grid">
         <label>Status<select name="status"><option value="">{words(lead.status)}</option>
           {allowed.map(status => <option key={status} value={status}>{words(status)}</option>)}</select></label>
-        <label>Shadow-free roof area (m?)<input name="roofArea" type="number" min="0.01" step="0.01" defaultValue={lead.roofArea ?? ''} /></label>
+        <label>Shadow-free roof area (m²)<input name="roofArea" type="number" min="0.01" step="0.01" defaultValue={lead.roofArea ?? ''} /></label>
         <label>Monthly bill (INR)<input name="monthlyBill" type="number" min="0" step="0.01" defaultValue={lead.monthlyBill ?? ''} /></label>
         <label>Grid suitable<select name="gridSuitable" defaultValue={lead.gridSuitable == null ? '' : lead.gridSuitable ? 'yes' : 'no'}>
           <option value="">Unknown</option><option value="yes">Yes</option><option value="no">No</option></select></label>
       </div>
       <label>Notes<textarea name="notes" maxLength={2000} defaultValue={lead.notes ?? ''} /></label>
       <Notice>{error}</Notice>
-      <button className="primary w-fit" disabled={busy}>{busy ? 'Saving?' : 'Save enquiry'}</button>
+      <button className="primary w-fit" disabled={busy}>{busy ? 'Saving…' : 'Save enquiry'}</button>
     </form>
   </section>
 }

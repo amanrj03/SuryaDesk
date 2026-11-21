@@ -90,7 +90,7 @@ export function recordActions(section, row, capabilities) {
       }
       const requirements = [...items.values()]
       return [post('allocate', 'Allocate stock', url + '/allocate', requirements.map(item =>
-        input(item.productId, item.name + ' ? ' + item.quantity + ' ? serials if tracked', 'textarea', { optional: true })
+        input(item.productId, item.name + ' × ' + item.quantity + ' · serials if tracked', 'textarea', { optional: true })
       ), values => ({ items: requirements.map(({ productId, quantity }) => ({
         productId, quantity, serialNumbers: values[productId]?.split(/\r?\n/).map(value => value.trim()).filter(Boolean) ?? [],
       })) }))]

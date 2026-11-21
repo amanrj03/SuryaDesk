@@ -17,3 +17,5 @@ coverage/
 .DS_Store
 /backend/uploads/
 /backend/storage/
+test-results/
+playwright-report/
