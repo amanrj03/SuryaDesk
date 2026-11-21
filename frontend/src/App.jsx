@@ -298,13 +298,26 @@ export const sections = [
   },
 ]
 
-function Brand() {
-  return (
-    <div className="brand flex items-center gap-2.5">
-      <span className="flex size-9 items-center justify-center rounded-full bg-black text-white shadow-xs">
-        <BoltIcon className="size-5 text-amber-400" />
-      </span>
-      <span className="text-base font-bold tracking-tight text-gray-900">SuryaDesk</span>
+function Brand({ full = true, className = '' }) {
+  return full ? (
+    <div className={`brand flex items-center ${className}`}>
+      <img
+        src="/fulllogo.png"
+        alt="SuryaDesk"
+        width="866"
+        height="288"
+        className="h-9 w-auto max-w-[190px] object-contain sm:h-10"
+      />
+    </div>
+  ) : (
+    <div className={`brand flex items-center ${className}`}>
+      <img
+        src="/logo.png"
+        alt="SuryaDesk"
+        width="222"
+        height="195"
+        className="h-8 w-auto object-contain sm:h-9"
+      />
     </div>
   )
 }

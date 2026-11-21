@@ -78,8 +78,14 @@ export function Sidebar({ user, sections = [], onLogout }) {
           className="hidden shrink-0 flex-col items-center gap-3.5 pt-0.5 text-gray-600 lg:flex"
           aria-hidden="true"
         >
-          <div className="flex size-6 items-center justify-center rounded-lg bg-[#E62E6B] text-[10px] font-bold text-white shadow-2xs">
-            SD
+          <div className="flex size-7 items-center justify-center rounded-lg bg-white p-0.5 shadow-2xs border border-white/60">
+            <img
+              src="/logo.png"
+              alt="SuryaDesk"
+              width="222"
+              height="195"
+              className="size-full object-contain"
+            />
           </div>
           {ICON_RAIL.map((entry) => {
             const Icon = entry.icon

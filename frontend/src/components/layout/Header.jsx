@@ -7,7 +7,6 @@ import {
   PlusIcon,
   ArrowRightStartOnRectangleIcon,
 } from '@heroicons/react/24/outline'
-import { BoltIcon } from '@heroicons/react/24/solid'
 import { Avatar } from '../ui/Avatar.jsx'
 import { Badge } from '../ui/Badge.jsx'
 import { words } from '../../lib/format.js'
@@ -52,14 +51,22 @@ export function Header({ user, onOpenMenu, onLogout }) {
           <Bars3Icon className="size-5" />
         </button>
 
-        <Link to="/" className="flex items-center gap-2.5">
-          <span className="flex size-9 items-center justify-center rounded-full bg-black text-white shadow-xs">
-            <BoltIcon className="size-5 text-amber-400" />
-          </span>
-          <span className="hidden items-center gap-1 text-sm font-bold tracking-tight text-gray-900 sm:flex">
-            SuryaDesk
-            <ChevronDownIcon className="size-3.5 text-gray-400" />
-          </span>
+        <Link to="/" className="flex items-center gap-1.5" aria-label="SuryaDesk Home">
+          <img
+            src="/logo.png"
+            alt="SuryaDesk"
+            width="222"
+            height="195"
+            className="h-8 w-auto object-contain sm:hidden"
+          />
+          <img
+            src="/fulllogo.png"
+            alt="SuryaDesk"
+            width="866"
+            height="288"
+            className="hidden h-9 w-auto max-w-[170px] object-contain sm:block"
+          />
+          <ChevronDownIcon className="hidden size-3.5 text-gray-400 sm:block" />
         </Link>
       </div>
 

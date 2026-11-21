@@ -145,6 +145,12 @@ input:not([type=checkbox]), textarea, select {
   height: 1.25rem;
   width: 1.25rem;
 }
+.brand img {
+  display: block;
+  height: auto;
+  max-height: 2.5rem;
+  object-fit: contain;
+}
 
 /* Feedback & alerts */
 .notice {
