@@ -42,7 +42,19 @@ export function catalogService(db) {
       return db.product.create({ data: { ...data, stockBalanceByProduct: { create: { onHand: 0, reserved: 0 } } } })
     },
     updateProduct(id, data) {
-      return db.product.update({ where: { id }, data })
+      return db.$transaction(async tx => {
+        await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id} FOR UPDATE`
+        const product = await tx.product.findUnique({ where: { id } })
+        if (!product) throw missing()
+        if (data.serialized !== undefined && data.serialized !== product.serialized) {
+          const [history, orders] = [
+            await tx.stockMovement.count({ where: { productId: id } }),
+            await tx.orderLine.count({ where: { productId: id } }),
+          ]
+          if (history || orders) throw new ApiError(409, 'CONFLICT', 'Stock or order history fixes how this product is tracked.')
+        }
+        return tx.product.update({ where: { id }, data })
+      })
     },
     createPackage({ components, ...data }) {
       return db.$transaction(async tx => {
