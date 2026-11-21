@@ -11,8 +11,9 @@ const missing = () => new ApiError(404, 'NOT_FOUND', 'Invoice not found.')
 const invalid = message => new ApiError(409, 'INVALID_TRANSITION', message)
 
 function orderLines(rows) {
-  return rows.map(({ descriptionSnapshot, quantity, unitPriceSnapshot, lineTotal }) => ({
-    description: descriptionSnapshot, quantity, unitPrice: unitPriceSnapshot, lineTotal,
+  const billable = rows.some(row => row.taxAmount != null) ? rows.filter(row => row.taxAmount != null) : rows
+  return billable.map(({ descriptionSnapshot, quantity, unitPriceSnapshot, lineTotal, taxRateSnapshot, taxAmount }) => ({
+    description: descriptionSnapshot, quantity, unitPrice: unitPriceSnapshot, lineTotal, taxRateSnapshot, taxAmount,
   }))
 }
 function suppliedLines(rows) {
@@ -46,6 +47,9 @@ export function invoiceService(db) {
             customerId = order.customerId
           }
           if (order.invoiceByOrder) throw invalid('This order already has an invoice.')
+          if (supplied && order.orderLinesByOrder.some(line => line.taxAmount != null)) {
+            throw invalid('Use the order’s saved amounts and taxes for this invoice.')
+          }
           lines = supplied ? suppliedLines(supplied) : orderLines(order.orderLinesByOrder)
           subtotal = order.subtotal
           tax = order.tax

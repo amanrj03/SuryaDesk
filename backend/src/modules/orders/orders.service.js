@@ -12,8 +12,8 @@ const related = {
 const detail = { ...related, orderLinesByOrder: true }
 const notFound = () => new ApiError(404, 'NOT_FOUND', 'Order not found.')
 
-function snapshot({ productId, descriptionSnapshot, quantity, unitPriceSnapshot, unitCostSnapshot, lineTotal, lineKind }) {
-  return { productId, descriptionSnapshot, quantity, unitPriceSnapshot, unitCostSnapshot, lineTotal, lineKind }
+function snapshot({ productId, descriptionSnapshot, quantity, unitPriceSnapshot, unitCostSnapshot, lineTotal, lineKind, taxRateSnapshot, taxAmount }) {
+  return { productId, descriptionSnapshot, quantity, unitPriceSnapshot, unitCostSnapshot, lineTotal, lineKind, taxRateSnapshot, taxAmount }
 }
 
 async function withPaymentTotals(tx, orders) {

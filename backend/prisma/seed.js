@@ -41,6 +41,20 @@ const materials = [
   ['CONNECTOR', 'Solar connector pair', 'WIRING', 140, 240, false, 0, 30],
 ]
 
+// Illustrative rates for the fictional local catalog only.
+const sampleTax = category => category === 'PANEL' ? 5 : category === 'BATTERY' ? 12 : 18
+
+async function configureSampleTaxes(db) {
+  for (const rate of [5, 12, 18]) {
+    const skus = materials.filter(([, , category]) => sampleTax(category) === rate).map(([code]) => 'DEMO-' + code)
+    await db.product.updateMany({ where: { sku: { in: skus }, taxRate: null }, data: { taxRate: rate } })
+  }
+  await db.solarPackage.updateMany({
+    where: { code: { in: [1, 2, 3, 4, 5].map(capacity => 'DEMO-INSTALLATION-' + capacity) }, taxRate: null },
+    data: { taxRate: 18 },
+  })
+}
+
 function packageTemplates(products) {
   const component = (code, quantity) => ({ productId: products.get(code).id, quantity })
   const standard = [
@@ -58,6 +72,7 @@ function packageTemplates(products) {
       ['OFF_GRID', 'Off-grid system', 110000 + 19400 * capacityKw, [...standard, component('PANEL', panelCount), component('STAND', capacityKw), component('CONNECTOR', panelCount), component('BATTERY', Math.ceil(capacityKw / 2))]],
     ]) {
       templates.push({ code: 'DEMO-' + type.replaceAll('_', '-') + '-' + capacityKw, type, name: label + ' · ' + capacityKw + ' kW',
+        ...(type === 'INSTALLATION' && { taxRate: 18 }),
         capacityKw, basePrice, description: 'Demonstration package. Equipment and sizing are illustrative.', components })
     }
   }
@@ -87,6 +102,7 @@ async function seed(db) {
       const product = await tx.product.upsert({
         where: { sku }, update: {},
         create: { sku, name, category, cost, salePrice, serialized, warrantyMonths, reorderLevel, unit: 'unit',
+          taxRate: sampleTax(category),
           stockBalanceByProduct: { create: { onHand: 0, reserved: 0 } } },
       })
       products.set(code, product)
@@ -135,7 +151,10 @@ async function removeMedia(files) {
 const db = createDatabase(databaseUrl)
 const writtenMedia = []
 try {
-  if (process.argv.includes('--pending-order-quotes')) {
+  if (process.argv.includes('--configure-demo-tax')) {
+    await db.$transaction(configureSampleTaxes)
+    console.log('Configured illustrative rates on local sample catalog items with no rate.')
+  } else if (process.argv.includes('--pending-order-quotes')) {
     const added = await seedPendingOrderQuotes(db)
     console.log('Accepted demo quotations added without orders:', added)
   } else if (process.argv.includes('--replace-demo')) {

@@ -69,14 +69,16 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.equal(surveyDetail.attachments[0].id, surveyEvidence.id)
         await post('/surveys/' + survey.id + '/approve', { approved: true })
         const product = await post('/products', { sku: key, name: 'Demo panel', category: 'PANEL', unit: 'unit',
-          cost: '120.00', salePrice: '200.00', serialized: true, warrantyMonths: 240, reorderLevel: 1 })
+          cost: '120.00', salePrice: '200.00', taxRate: '5', serialized: true, warrantyMonths: 240, reorderLevel: 1 })
         const pack = await post('/packages', { code: key, name: 'Journey package', type: 'PANEL_SET',
           basePrice: '250.00', components: [{ productId: product.id, quantity: 1 }] })
-        const quote = await post('/quotes', { leadId: lead.id, surveyId: survey.id, packageId: pack.id, taxRate: '0.00' })
+        const quote = await post('/quotes', { leadId: lead.id, surveyId: survey.id, packageId: pack.id })
         await post('/quotes/' + quote.id + '/send')
         await post('/quotes/' + quote.id + '/accept')
         const order = await post('/quotes/' + quote.id + '/convert-to-order')
-        const payment = await post('/orders/' + order.id + '/payments', { amount: '250.00', method: 'UPI', reference: key })
+        assert.equal(order.tax, '12.5')
+        assert.equal(order.orderLinesByOrder.find(line => line.productId === product.id).taxRateSnapshot, '5')
+        const payment = await post('/orders/' + order.id + '/payments', { amount: '262.50', method: 'UPI', reference: key })
         assert.equal(payment.balance, '0')
         const items = [{ productId: product.id, quantity: 1, serialNumbers: [key] }]
         const dispatch = '/dispatches/' + order.dispatchesByOrder[0].id
@@ -92,6 +94,9 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.deepEqual(await request('GET', assetQuery), [])
         const invoice = await post('/invoices/for-order/' + order.id)
         assert.equal(invoice.status, 'DRAFT')
+        assert.equal(invoice.invoiceLinesByInvoice.length, 1)
+        assert.equal(invoice.invoiceLinesByInvoice[0].taxAmount, '12.5')
+        assert.equal(invoice.total, '262.5')
         assert.equal((await post('/invoices/for-order/' + order.id)).id, invoice.id)
         assert.equal((await fetch(url + '/invoices/' + invoice.id + '/pdf')).status, 401)
         const pdf = await fetch(url + '/invoices/' + invoice.id + '/pdf', {

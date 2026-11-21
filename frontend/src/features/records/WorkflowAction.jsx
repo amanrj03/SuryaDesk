@@ -20,6 +20,7 @@ function productFields(product = {}) {
     input('unit', 'Unit of measure', 'text', { defaultValue: product.unit ?? 'unit' }),
     number('cost', 'Unit cost (INR)', { min: 0, defaultValue: product.cost }),
     number('salePrice', 'Sale price (INR)', { min: 0, defaultValue: product.salePrice }),
+    number('taxRate', 'Product tax rate (%)', { min: 0, max: 100, optional: true, defaultValue: product.taxRate ?? '' }),
     number('warrantyMonths', 'Warranty (months)', { min: 0, max: 600, step: 1, defaultValue: product.warrantyMonths ?? 0 }),
     number('reorderLevel', 'Reorder threshold', { min: 0, max: 1000000, step: 1, defaultValue: product.reorderLevel ?? 0 }),
     input('serialized', 'Track individual serials', 'checkbox', { defaultChecked: product.serialized, disabled: Boolean(product.id) }),
@@ -27,8 +28,8 @@ function productFields(product = {}) {
   ]
 }
 
-function productData({ warrantyMonths, reorderLevel, ...values }) {
-  return { ...values, warrantyMonths: Number(warrantyMonths), reorderLevel: Number(reorderLevel) }
+function productData({ warrantyMonths, reorderLevel, taxRate, ...values }) {
+  return { ...values, taxRate: taxRate ?? null, warrantyMonths: Number(warrantyMonths), reorderLevel: Number(reorderLevel) }
 }
 
 function baseRecordActions(section, row, capabilities) {
@@ -64,9 +65,8 @@ function baseRecordActions(section, row, capabilities) {
     if (row.status === 'APPROVED' && ['SURVEY_APPROVED', 'QUOTED'].includes(row.lead.status) && can('quotes:create')) {
       return [post('quote', 'Create quotation', '/quotes', [
         { ...choice('packageId', 'Solar package', []), source: '/packages?limit=100' },
-        number('taxRate', 'Tax rate (%)', { min: 0, max: 100, defaultValue: 0 }),
         input('includeInstallation', 'Include installation', 'checkbox'), time('validUntil', 'Valid until'),
-      ], ({ validUntil, ...values }) => ({ ...values, validUntil: toDate(validUntil), taxRate: Number(values.taxRate),
+      ], ({ validUntil, ...values }) => ({ ...values, validUntil: toDate(validUntil),
         leadId: row.lead.id, surveyId: id }))]
     }
   }

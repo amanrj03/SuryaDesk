@@ -27,20 +27,25 @@ test('approved surveys produce immutable quotation prices and material costs', {
       } })
       const wire = await tx.product.create({ data: {
         sku: key + '-wire', name: 'Wiring fixture', category: 'WIRING', unit: 'unit',
-        cost: '750.25', salePrice: 1000, serialized: false, warrantyMonths: 0, reorderLevel: 0,
+        cost: '750.25', salePrice: 1000, taxRate: 18, serialized: false, warrantyMonths: 0, reorderLevel: 0,
       } })
       await tx.packageComponent.create({ data: { packageId: pack.id, productId: wire.id, quantity: 3 } })
       const quotes = quotesService({ quotation: tx.quotation, auditLog: tx.auditLog, $transaction: callback => callback(tx) })
-      const request = { leadId: lead.id, surveyId: survey.id, packageId: pack.id, includeInstallation: false, taxRate: 18 }
+      const request = { leadId: lead.id, surveyId: survey.id, packageId: pack.id, includeInstallation: false }
       await assert.rejects(quotes.create(request, user), { code: 'SURVEY_NOT_APPROVED' })
       await tx.siteSurvey.update({ where: { id: survey.id }, data: { status: 'APPROVED' } })
+      await assert.rejects(quotes.create(request, user), { code: 'TAX_RATE_REQUIRED' })
+      await tx.product.update({ where: { id: product.id }, data: { taxRate: 5 } })
       const quote = await quotes.create(request, user)
-      assert.equal(quote.total.toFixed(2), '11799.99')
+      assert.equal(quote.tax.toFixed(2), '933.33')
+      assert.equal(quote.total.toFixed(2), '10933.32')
       await quotes.transition(quote.id, 'SENT', {}, user)
-      await tx.product.update({ where: { id: product.id }, data: { cost: 4000, name: 'Renamed panel fixture' } })
+      await tx.product.update({ where: { id: product.id }, data: { cost: 4000, taxRate: 12, name: 'Renamed panel fixture' } })
       const accepted = await quotes.transition(quote.id, 'ACCEPTED', {}, user)
       const material = accepted.quotationLinesByQuotation.find(line => line.productId === product.id)
       assert.equal(material.unitCostSnapshot.toFixed(2), '2000.50')
+      assert.equal(material.taxRateSnapshot.toFixed(2), '5.00')
+      assert.equal(material.taxAmount.toFixed(2), '333.33')
       assert.equal(material.descriptionSnapshot, 'Panel fixture')
       assert.equal(accepted.lead.status, 'WON')
       const detail = await quotes.detail(quote.id)

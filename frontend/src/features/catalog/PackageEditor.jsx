@@ -39,6 +39,7 @@ export default function PackageEditor({ id, token, onClose, onSaved }) {
     const capacityKw = fields.get('capacityKw')
     const body = {
       name: fields.get('name'), type: fields.get('type'), basePrice: fields.get('basePrice'),
+      ...(fields.has('taxRate') && { taxRate: fields.get('taxRate') || null }),
       capacityKw: capacityKw === '' ? null : Number(capacityKw), isActive: fields.has('isActive'),
       description: fields.get('description'),
       components: components.map(({ productId, quantity }) => ({ productId, quantity: Number(quantity) })),
@@ -66,6 +67,9 @@ export default function PackageEditor({ id, token, onClose, onSaved }) {
         </select></label>
         <label>Capacity (kW)<input name="capacityKw" type="number" min={1} max={5} step=".01" defaultValue={pack.capacityKw ?? ''} /></label>
         <label>Package price (INR)<input name="basePrice" type="number" min={0} step=".01" defaultValue={pack.basePrice} required /></label>
+        {components.length === 0 && (
+          <label>Service tax rate (%)<input name="taxRate" type="number" min={0} max={100} step=".01" defaultValue={pack.taxRate ?? ''} /></label>
+        )}
         <label className="check"><input type="checkbox" name="isActive" defaultChecked={pack.isActive ?? true} />Active package</label>
       </div>
       <label>Description<textarea name="description" defaultValue={displayPackageDescription(pack.description) ?? ''} maxLength={2000} /></label>

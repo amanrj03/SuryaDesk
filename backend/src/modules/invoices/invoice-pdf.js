@@ -35,7 +35,9 @@ export function invoicePdf(invoice, seller) {
   })
   const width = pdf.page.width - 2 * margin
   const bottom = pdf.page.height - margin - 25
-  const columns = [26, width - 26 - 44 - 88 - 98, 44, 88, 98]
+  const detailedTax = invoice.invoiceLinesByInvoice.some(line => line.taxRateSnapshot != null)
+  const columns = detailedTax ? [26, width - 26 - 32 - 71 - 44 - 74 - 82, 32, 71, 44, 74, 82]
+    : [26, width - 26 - 44 - 88 - 98, 44, 88, 98]
   const draft = invoice.status === 'DRAFT'
   const title = draft ? 'Draft invoice' : invoice.status === 'VOID' ? 'Void invoice' : 'Invoice'
 
@@ -65,7 +67,12 @@ export function invoicePdf(invoice, seller) {
     })
   }
 
-  const header = y => { tableRow(['No.', 'Description', 'Qty', 'Unit price (INR)', 'Amount (INR)'], y, 24, true); return y + 24 }
+  const header = y => {
+    tableRow(detailedTax
+      ? ['No.', 'Description', 'Qty', 'Net (INR)', 'Rate %', 'Tax (INR)', 'Total (INR)']
+      : ['No.', 'Description', 'Qty', 'Unit price (INR)', 'Amount (INR)'], y, 24, true)
+    return y + 24
+  }
 
   function continuation() {
     pdf.addPage()
@@ -101,13 +108,16 @@ export function invoicePdf(invoice, seller) {
     const description = line.description
     const height = Math.max(26, pdf.heightOfString(description, { width: columns[1] - 10 }) + 12)
     if (y + height > bottom) y = continuation()
-    tableRow([String(index + 1), description, String(line.quantity), currency.format(Number(line.unitPrice)),
-      currency.format(Number(line.lineTotal))], y, height)
+    const prices = detailedTax
+      ? [currency.format(Number(line.lineTotal)), String(line.taxRateSnapshot), currency.format(Number(line.taxAmount)),
+        currency.format(Number(line.lineTotal) + Number(line.taxAmount))]
+      : [currency.format(Number(line.unitPrice)), currency.format(Number(line.lineTotal))]
+    tableRow([String(index + 1), description, String(line.quantity), ...prices], y, height)
     y += height
   }
   if (y + 137 > bottom) y = continuation()
   for (const [label, amount] of [['Subtotal', invoice.subtotal], ['Tax', invoice.tax], ['Total', invoice.total]]) {
-    tableRow(['', label, '', '', currency.format(Number(amount))], y, 24, label === 'Total')
+    tableRow(['', label, ...Array(columns.length - 3).fill(''), currency.format(Number(amount))], y, 24, label === 'Total')
     y += 24
   }
   y = text('Amount in words', margin, y + 16, { bold: true })

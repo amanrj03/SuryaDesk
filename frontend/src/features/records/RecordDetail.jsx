@@ -20,6 +20,19 @@ const lines = rows => rows?.map(row => [
     ? 'Included in package'
     : money(row.lineTotal),
 ])
+const taxColumns = ['Description', 'Quantity', 'Net amount', 'Tax rate', 'Tax', 'Total']
+const taxRows = rows => rows.map(row => [
+  row.description, row.quantity, money(row.amount), Number(row.taxRate) + '%', money(row.taxAmount),
+  money(Number(row.amount) + Number(row.taxAmount)),
+])
+function invoiceLineGroup(label, rows) {
+  const taxed = rows.filter(row => row.taxAmount != null)
+  if (!taxed.length) return [label, ['Description', 'Quantity', 'Total'], lines(rows)]
+  return [label, taxColumns, taxRows(taxed.map(row => ({
+    description: row.descriptionSnapshot ?? row.description, quantity: row.quantity,
+    amount: row.lineTotal, taxRate: row.taxRateSnapshot, taxAmount: row.taxAmount,
+  })))]
+}
 const assignment = rows => rows.map(row => [row.technician.name, localDate(row.assignedAt)])
 const evidenceName = item => item.id.startsWith('DEMO-')
   ? item.originalName.replace(/-demo(?=\.png$)/, '')
@@ -61,8 +74,9 @@ const definition = {
   quotes: row => ({
     title: 'Quotation for ' + row.lead.customer.name,
     fields: [['Reference', displayReference(row.quoteNumber)], ['Status', state(row.status)], ['Valid until', localDate(row.validUntil)]],
-    groups: [['Quotation lines', ['Description', 'Quantity', 'Amount'],
-      row.pricing?.lines.map(line => [line.description, line.quantity, money(line.amount)]) ?? lines(row.quotationLinesByQuotation),
+    groups: [['Quotation lines', row.pricing?.lines.some(line => line.taxRate != null) ? taxColumns : ['Description', 'Quantity', 'Amount'],
+      row.pricing?.lines.some(line => line.taxRate != null) ? taxRows(row.pricing.lines)
+        : row.pricing?.lines.map(line => [line.description, line.quantity, money(line.amount)]) ?? lines(row.quotationLinesByQuotation),
       {
         description: row.pricing?.packageName && `Product amounts are shares of the ${row.pricing.packageName} package price.`,
         totals: [['Subtotal', money(row.subtotal)], ['Tax', money(row.tax)], ['Grand total', money(row.total)]],
@@ -75,7 +89,7 @@ const definition = {
     fields: [['Reference', displayReference(row.orderNumber)], ['Quotation', displayReference(row.quotation?.quoteNumber)], ['Status', state(row.status)], ['Total', money(row.total)],
       ['Paid', money(row.paidTotal)], ['Remaining', row.status === 'CANCELLED' ? '—' : money(row.balance)],
       ['Confirmed', localDate(row.confirmedAt)], ['Installation', state(row.installationByOrder?.status)]],
-    groups: [['Order lines', ['Description', 'Quantity', 'Total'], lines(row.orderLinesByOrder)],
+    groups: [invoiceLineGroup('Order lines', row.orderLinesByOrder),
       ['Dispatches', ['Reference', 'Status', 'Delivered'], row.dispatchesByOrder.map(item =>
         [displayReference(item.dispatchNumber), state(item.status), localDate(item.deliveredAt)])]],
   }),
@@ -117,7 +131,7 @@ const definition = {
     invoice: row,
     fields: [['Reference', displayReference(row.invoiceNumber)], ['Status', state(row.status)], ['Subtotal', money(row.subtotal)], ['Tax', money(row.tax)],
       ['Total', money(row.total)], ['Due', localDate(row.dueAt)]],
-    groups: [['Invoice lines', ['Description', 'Quantity', 'Total'], lines(row.invoiceLinesByInvoice)]],
+    groups: [invoiceLineGroup('Invoice lines', row.invoiceLinesByInvoice)],
   }),
 }
 

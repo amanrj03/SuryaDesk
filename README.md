@@ -63,6 +63,7 @@ Integration checks use the migrated local database and remove their synthetic fi
 - A delivery warranty uses India-local calendar months with an exclusive end timestamp. Covered replacements inherit any remaining term and preserve the links to the returned serial and original warranty.
 - The application records quote and invoice issue inside the staff workspace. It provides downloadable report CSVs and tracks subsidy paperwork locally. Staff handle external customer communication and government submission.
 - Admin and Finance can download or print invoice PDFs from invoice details and linked orders. Dispatch shows the invoice actions after stock is allocated for users with invoice access. Preparing a PDF from an allocated order reuses its invoice or creates a draft. Finance can issue drafts in **Invoices**. Set the optional `INVOICE_SELLER_NAME`, `INVOICE_SELLER_ADDRESS`, `INVOICE_SELLER_PAN`, and `INVOICE_SELLER_GSTIN` fields in `backend/.env` to include seller details.
+- Configure tax rates in **Products**, or in **Packages** for services without products. Enter `0` for a zero rate and leave the field blank when the rate is unknown. New quotes split package prices by catalog selling-price weights, round tax on each line, and save the rates and amounts through order conversion and invoicing. Existing quotes retain their original totals. For a previously seeded local database, `npm.cmd --prefix backend run db:seed -- --configure-demo-tax` fills only missing rates on known fictional catalog items with illustrative rates.
 
 ## Evaluator walkthrough
 

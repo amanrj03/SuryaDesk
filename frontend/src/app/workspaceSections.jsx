@@ -83,6 +83,7 @@ export const sections = [
       ['Product', (row) => row.name],
       ['Category', (row) => words(row.category)],
       ['Sale price', (row) => currency(row.salePrice)],
+      ['Tax rate', (row) => row.taxRate == null ? 'Not set' : Number(row.taxRate) + '%'],
       ['Status', (row) => (row.isActive ? 'Active' : 'Inactive')],
     ],
   },

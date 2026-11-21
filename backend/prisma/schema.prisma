@@ -340,6 +340,7 @@ model Product {
   unit                       String
   cost                       Decimal            @db.Decimal(12, 2)
   salePrice                  Decimal            @db.Decimal(12, 2)
+  taxRate                    Decimal?           @db.Decimal(5, 2)
   serialized                 Boolean
   warrantyMonths             Int
   reorderLevel               Int
@@ -367,6 +368,7 @@ model SolarPackage {
   type                       PackageType
   capacityKw                 Decimal?           @db.Decimal(10, 2)
   basePrice                  Decimal            @db.Decimal(12, 2)
+  taxRate                    Decimal?           @db.Decimal(5, 2)
   isActive                   Boolean            @default(true)
   description                String?
   createdAt                  DateTime           @default(now())
@@ -432,6 +434,8 @@ model QuotationLine {
   unitPriceSnapshot   Decimal   @db.Decimal(12, 2)
   unitCostSnapshot    Decimal   @db.Decimal(12, 2)
   lineTotal           Decimal   @db.Decimal(12, 2)
+  taxRateSnapshot     Decimal?  @db.Decimal(5, 2)
+  taxAmount           Decimal?  @db.Decimal(12, 2)
   lineKind            LineKind
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
@@ -482,6 +486,8 @@ model OrderLine {
   unitPriceSnapshot   Decimal  @db.Decimal(12, 2)
   unitCostSnapshot    Decimal  @db.Decimal(12, 2)
   lineTotal           Decimal  @db.Decimal(12, 2)
+  taxRateSnapshot     Decimal? @db.Decimal(5, 2)
+  taxAmount           Decimal? @db.Decimal(12, 2)
   lineKind            LineKind
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -792,6 +798,8 @@ model InvoiceLine {
   quantity    Int
   unitPrice   Decimal  @db.Decimal(12, 2)
   lineTotal   Decimal  @db.Decimal(12, 2)
+  taxRateSnapshot Decimal? @db.Decimal(5, 2)
+  taxAmount   Decimal? @db.Decimal(12, 2)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   invoice     Invoice  @relation("InvoiceLine_invoice", fields: [invoiceId], references: [id], onDelete: Restrict)

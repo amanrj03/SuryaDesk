@@ -21,35 +21,64 @@ function priceLine(title, price) {
   }
 }
 
+function apportion(amount, weights, quantities) {
+  const total = weights.reduce((sum, weight) => sum.plus(weight), new Prisma.Decimal(0))
+  const shares = total.isZero() ? quantities : weights
+  const basis = total.isZero() ? quantities.reduce((sum, quantity) => sum + quantity, 0) : total
+  let cumulative = new Prisma.Decimal(0)
+  let billed = new Prisma.Decimal(0)
+  return shares.map(weight => {
+    cumulative = cumulative.plus(weight)
+    const next = amount.mul(cumulative).div(basis).toDecimalPlaces(2)
+    const share = next.minus(billed)
+    billed = next
+    return share
+  })
+}
+
+function lineTax(name, amount, rate) {
+  if (rate == null) {
+    throw new ApiError(409, 'TAX_RATE_REQUIRED', 'Set a catalog tax rate for ' + name + ' before creating the quotation.')
+  }
+  return { taxRateSnapshot: rate, taxAmount: amount.mul(rate).div(100).toDecimalPlaces(2) }
+}
+
 function snapshotPackage(pack) {
+  const components = pack.packageComponentsByPackage
+  if (!components.length) {
+    return [{ ...priceLine(pack.name, pack.basePrice), ...lineTax(pack.name, pack.basePrice, pack.taxRate) }]
+  }
+  const amounts = apportion(pack.basePrice,
+    components.map(({ product, quantity }) => product.salePrice.mul(quantity)),
+    components.map(({ quantity }) => quantity))
   return [
-    priceLine(pack.name, pack.basePrice),
-    ...pack.packageComponentsByPackage.map(({ product, quantity }) => ({
+    priceLine(pack.name, 0),
+    ...components.map(({ product, quantity }, index) => ({
       productId: product.id, descriptionSnapshot: product.name, quantity,
-      unitPriceSnapshot: 0, unitCostSnapshot: product.cost, lineTotal: 0, lineKind: 'MATERIAL',
+      unitPriceSnapshot: amounts[index].div(quantity).toDecimalPlaces(2), unitCostSnapshot: product.cost,
+      lineTotal: amounts[index], lineKind: 'MATERIAL', ...lineTax(product.name, amounts[index], product.taxRate),
     })),
   ]
 }
 
 function pricingBreakdown(lines) {
+  if (lines.some(line => line.taxAmount != null)) {
+    return {
+      packageName: lines.find(line => line.taxAmount == null)?.descriptionSnapshot ?? null,
+      lines: lines.filter(line => line.taxAmount != null).map(line => ({
+        description: line.descriptionSnapshot, quantity: line.quantity, amount: line.lineTotal,
+        taxRate: line.taxRateSnapshot, taxAmount: line.taxAmount,
+      })),
+    }
+  }
   // The core package is snapshotted before any optional installation charge.
   const packageLine = lines.find(line => line.lineKind === 'SERVICE')
   const bundled = lines.filter(line => line.lineKind === 'MATERIAL' && line.lineTotal.isZero())
   const allocated = new Map()
   if (packageLine && bundled.length) {
-    const costs = bundled.map(line => line.unitCostSnapshot.mul(line.quantity))
-    const costTotal = costs.reduce((total, cost) => total.plus(cost), new Prisma.Decimal(0))
-    const useQuantity = costTotal.isZero()
-    const weight = useQuantity ? bundled.reduce((sum, item) => sum + item.quantity, 0) : costTotal
-    // Round cumulative shares so the displayed amounts add up to the exact package charge.
-    let cumulative = new Prisma.Decimal(0)
-    let billed = new Prisma.Decimal(0)
-    for (const [index, line] of bundled.entries()) {
-      cumulative = cumulative.plus(useQuantity ? line.quantity : costs[index])
-      const next = packageLine.lineTotal.mul(cumulative).div(weight).toDecimalPlaces(2)
-      allocated.set(line.id, next.minus(billed))
-      billed = next
-    }
+    const amounts = apportion(packageLine.lineTotal,
+      bundled.map(line => line.unitCostSnapshot.mul(line.quantity)), bundled.map(line => line.quantity))
+    bundled.forEach((line, index) => allocated.set(line.id, amounts[index]))
   }
   return {
     packageName: allocated.size ? packageLine.descriptionSnapshot : null,
@@ -66,7 +95,7 @@ async function audit(tx, id, action, actorId, summary = {}) {
 
 export function quotesService(db) {
   return {
-    async create({ leadId, surveyId, packageId, includeInstallation, taxRate, notes, validUntil }, user) {
+    async create({ leadId, surveyId, packageId, includeInstallation, notes, validUntil }, user) {
       return db.$transaction(async tx => {
         const survey = await tx.siteSurvey.findUnique({ where: { id: surveyId }, include: { lead: true } })
         if (!survey || survey.leadId !== leadId || survey.status !== 'APPROVED' ||
@@ -75,7 +104,7 @@ export function quotesService(db) {
         }
         if (validUntil && validUntil <= new Date()) throw invalid('Choose a future quotation expiry.')
         const pack = await tx.solarPackage.findUnique({
-          where: { id: packageId }, include: { packageComponentsByPackage: { include: { product: true } } },
+          where: { id: packageId }, include: { packageComponentsByPackage: { include: { product: true }, orderBy: { productId: 'asc' } } },
         })
         if (!pack?.isActive) throw missing('Active package')
         if (pack.packageComponentsByPackage.some(({ product }) => !product.isActive)) {
@@ -86,7 +115,7 @@ export function quotesService(db) {
           const installation = await tx.solarPackage.findFirst({
             where: { type: 'INSTALLATION', isActive: true, OR: [{ capacityKw: pack.capacityKw }, { capacityKw: null }] },
             orderBy: [{ capacityKw: { sort: 'desc', nulls: 'last' } }, { code: 'asc' }],
-            include: { packageComponentsByPackage: { include: { product: true } } },
+            include: { packageComponentsByPackage: { include: { product: true }, orderBy: { productId: 'asc' } } },
           })
           if (!installation) throw missing('Installation package')
           if (installation.packageComponentsByPackage.some(({ product }) => !product.isActive)) {
@@ -95,7 +124,7 @@ export function quotesService(db) {
           lines.push(...snapshotPackage(installation))
         }
         const subtotal = lines.reduce((total, line) => total.plus(line.lineTotal), new Prisma.Decimal(0))
-        const tax = subtotal.mul(taxRate).div(100).toDecimalPlaces(2)
+        const tax = lines.reduce((total, line) => total.plus(line.taxAmount ?? 0), new Prisma.Decimal(0))
         const quote = await tx.quotation.create({
           data: {
             quoteNumber: 'QUO-' + randomUUID().toUpperCase(), leadId, surveyId, packageId,

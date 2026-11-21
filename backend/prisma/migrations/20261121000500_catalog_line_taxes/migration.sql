@@ -1,0 +1,5 @@
+ALTER TABLE "Product" ADD COLUMN "taxRate" DECIMAL(5,2) CHECK ("taxRate" BETWEEN 0 AND 100);
+ALTER TABLE "SolarPackage" ADD COLUMN "taxRate" DECIMAL(5,2) CHECK ("taxRate" BETWEEN 0 AND 100);
+ALTER TABLE "QuotationLine" ADD COLUMN "taxRateSnapshot" DECIMAL(5,2), ADD COLUMN "taxAmount" DECIMAL(12,2);
+ALTER TABLE "OrderLine" ADD COLUMN "taxRateSnapshot" DECIMAL(5,2), ADD COLUMN "taxAmount" DECIMAL(12,2);
+ALTER TABLE "InvoiceLine" ADD COLUMN "taxRateSnapshot" DECIMAL(5,2), ADD COLUMN "taxAmount" DECIMAL(12,2);
