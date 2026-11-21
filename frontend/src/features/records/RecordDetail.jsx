@@ -8,6 +8,7 @@ import { TrackingLink } from './TrackingLink.jsx'
 import { InvoiceDocument } from './InvoiceDocument.jsx'
 import { CustomerPortalAccess } from '../customer/CustomerPortalAccess.jsx'
 import { hasRelatedRecords, RelatedRecords } from './RelatedRecords.jsx'
+import { EvidencePreview } from './EvidencePreview.jsx'
 
 const localDate = value => value ? new Intl.DateTimeFormat('en-IN', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata',
@@ -156,6 +157,7 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
   const [state, setState] = useState({})
   const [retry, setRetry] = useState(0)
   const [mediaError, setMediaError] = useState('')
+  const [preview, setPreview] = useState(null)
   const [detailAction, setDetailAction] = useState(null)
   const [surveyAction, setSurveyAction] = useState(null)
   const backButton = useRef(null)
@@ -262,7 +264,8 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
         </table>
       </section>)}
       {data.attachments?.length > 0 && <div><h2 className="mb-2 font-semibold">Evidence</h2>
-        {data.attachments.map(item => <button className="secondary mb-1 mr-1" key={item.id} onClick={() => download(item)}>{evidenceName(item)}</button>)}</div>}
+        {data.attachments.map(item => <button type="button" className="secondary mb-1 mr-1" key={item.id}
+          onClick={() => item.mimeType.startsWith('image/') ? setPreview(item) : download(item)}>{evidenceName(item)}</button>)}</div>}
       {mediaError && <p className="notice" role="alert">{mediaError}</p>}
       {surveyActions.length > 0 && <div className="flex flex-wrap gap-2 border-t border-gray-200 pt-4">
         {surveyActions.map(action => (
@@ -273,6 +276,7 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
         ))}
       </div>}
     </div>}
+    {preview && <EvidencePreview key={preview.id} id={preview.id} name={evidenceName(preview)} token={token} onClose={() => setPreview(null)} />}
     {surveyAction && (
       <WorkflowAction key={surveyAction.key} action={surveyAction} token={token} onClose={() => setSurveyAction(null)}
         onSaved={survey => {
