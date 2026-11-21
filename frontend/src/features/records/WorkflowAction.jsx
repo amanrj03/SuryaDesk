@@ -149,19 +149,7 @@ function baseRecordActions(section, row, capabilities) {
   if (section === 'dispatches') {
     const url = '/dispatches/' + id
     if (row.status === 'DRAFT' && can('dispatch:allocate')) {
-      const items = new Map()
-      for (const line of row.order.orderLinesByOrder) {
-        if (line.lineKind !== 'MATERIAL' || !line.productId) continue
-        const previous = items.get(line.productId)
-        items.set(line.productId, { productId: line.productId, name: line.descriptionSnapshot,
-          quantity: line.quantity + (previous?.quantity ?? 0) })
-      }
-      const requirements = [...items.values()]
-      return [post('allocate', 'Allocate stock', url + '/allocate', requirements.map(item =>
-        input(item.productId, item.name + ' × ' + item.quantity + ' · serials if tracked', 'textarea', { optional: true })
-      ), values => ({ items: requirements.map(({ productId, quantity }) => ({
-        productId, quantity, serialNumbers: values[productId]?.split(/\r?\n/).map(value => value.trim()).filter(Boolean) ?? [],
-      })) }))]
+      return [{ key: 'allocate', label: 'Allocate stock', dispatchId: id }]
     }
     if (row.status === 'ALLOCATED' && can('dispatch:complete')) return [post('dispatch', 'Record dispatch', url + '/dispatch')]
     if (row.status === 'DISPATCHED' && can('dispatch:deliver')) return [post('deliver', 'Confirm delivery', url + '/deliver', [

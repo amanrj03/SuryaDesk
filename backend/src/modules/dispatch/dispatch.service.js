@@ -68,6 +68,37 @@ export function dispatchService(db) {
       return row
     },
 
+    async allocationOptions(id) {
+      return db.$transaction(async tx => {
+        const row = await tx.dispatch.findUnique({
+          where: { id }, select: { status: true, order: { select: { status: true, orderLinesByOrder: true } } },
+        })
+        if (!row) throw missing('Dispatch')
+        if (row.status !== 'DRAFT' || !['CONFIRMED', 'AWAITING_STOCK'].includes(row.order.status)) {
+          throw invalid('Only a draft dispatch for an open order can be allocated.')
+        }
+        const required = pickList(row.order)
+        const products = await tx.product.findMany({
+          where: { id: { in: [...required.keys()] } },
+          select: {
+            id: true, name: true, serialized: true,
+            stockBalanceByProduct: { select: { onHand: true, reserved: true } },
+            _count: { select: { serializedAssetsByProduct: { where: { status: 'IN_STOCK', orderId: null } } } },
+          },
+          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        })
+        return products.map(product => {
+          const balance = product.stockBalanceByProduct
+          const available = balance ? balance.onHand - balance.reserved : 0
+          return {
+            productId: product.id, name: product.name, serialized: product.serialized,
+            quantity: required.get(product.id),
+            available: product.serialized ? Math.min(available, product._count.serializedAssetsByProduct) : available,
+          }
+        })
+      }, { isolationLevel: 'RepeatableRead' })
+    },
+
     async draft(orderId, { notes }, user) {
       return db.$transaction(async tx => {
         await lockOrder(tx, orderId)

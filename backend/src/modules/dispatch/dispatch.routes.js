@@ -15,6 +15,8 @@ export function dispatchRoutes(db, auth) {
   router.use('/dispatches', staff)
   router.get('/dispatches', prepare, validate({ query: schema.query }), controller.list)
   router.get('/dispatches/:id', prepare, validate({ params: schema.params }), controller.detail)
+  router.get('/dispatches/:id/allocation-options', authorize('dispatch:allocate'),
+    validate({ params: schema.params }), controller.allocationOptions)
   router.post('/dispatches/:id/allocate', authorize('dispatch:allocate'),
     validate({ params: schema.params, body: schema.allocation }), controller.allocate)
   router.post('/dispatches/:id/dispatch', authorize('dispatch:complete'),

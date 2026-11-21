@@ -53,7 +53,7 @@ test('all administrator modules load live records and open actions in modal dial
       const panel = page.getByRole('dialog')
       await expect(panel.and(page.locator('dialog:modal'))).toBeVisible()
       await expect(page.locator('.records dialog')).toHaveCount(0)
-      await expect(panel.getByRole('status')).toHaveCount(0)
+      await expect(panel.getByRole('status').filter({ hasText: /Loading|Checking/ })).toHaveCount(0)
       await expect(panel.getByRole('alert')).toHaveCount(0)
       await panel.getByRole('button', { name: 'Close', exact: true }).click()
       await expect(panel).toHaveCount(0)
@@ -117,6 +117,56 @@ test('all administrator modules load live records and open actions in modal dial
   await page.getByRole('button', { name: 'Sign out' }).click()
   await expect(page.getByRole('heading', { name: 'Staff sign in' })).toBeVisible()
   expect(errors).toEqual([])
+})
+
+test('dispatch allocation selects and scans available serials and refreshes after a stock conflict', async ({ page }) => {
+  await signIn(page)
+  await page.getByRole('link', { name: 'Dispatch', exact: true }).click()
+  await page.getByLabel('Filter by status').selectOption('DRAFT')
+  const row = page.getByRole('row').filter({ hasText: 'DSP-0101' })
+  await row.getByRole('button', { name: 'Allocate stock' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Allocate stock' })
+  const panel = dialog.getByRole('region', { name: '550 W mono solar panel' })
+  const select = panel.getByLabel('Available serials')
+  const search = panel.getByLabel('Search or scan serial')
+  const first = await select.locator('option').nth(1).getAttribute('value')
+  const second = await select.locator('option').nth(2).getAttribute('value')
+  await search.fill(first)
+  await select.selectOption(first)
+  await expect(panel.getByRole('status')).toHaveText('1 of 2 selected')
+  await search.fill(first)
+  await search.press('Enter')
+  await expect(panel.getByRole('alert')).toHaveText('That serial is already selected.')
+  await search.fill(second)
+  await search.press('Enter')
+  await expect(panel.getByRole('status')).toHaveText('2 of 2 selected')
+
+  const box = dialog.getByRole('region', { name: 'Weatherproof wiring box' })
+  await expect(box).toContainText('Tracked by quantity')
+  await expect(box.locator('input, select, textarea')).toHaveCount(0)
+  for (const name of ['Maximum power point inverter', 'Solar charge controller']) {
+    const serials = dialog.getByRole('region', { name }).getByLabel('Available serials')
+    await serials.selectOption({ index: 1 })
+  }
+  await page.route('**/api/v1/dispatches/*/allocation-options', async route => {
+    const response = await route.fetch()
+    const result = await response.json()
+    const shortage = result.data.find(item => item.name === 'Weatherproof wiring box')
+    shortage.available = 0
+    await route.fulfill({ response, json: result })
+  })
+  await page.route('**/api/v1/dispatches/*/allocate', route => route.fulfill({
+    status: 409, json: { success: false, error: { message: 'Stock changed. Check availability.' } },
+  }))
+  const submit = dialog.getByRole('button', { name: 'Allocate stock' })
+  const request = page.waitForRequest(item => new URL(item.url()).pathname.endsWith('/allocate'))
+  await submit.click()
+  const { items } = (await request).postDataJSON()
+  expect(items).toContainEqual(expect.objectContaining({ quantity: 2, serialNumbers: [first, second] }))
+  expect(items).toContainEqual(expect.objectContaining({ quantity: 1, serialNumbers: [] }))
+  await expect(dialog.getByRole('alert')).toHaveText('Stock changed. Check availability.')
+  await expect(box).toContainText('Short by 1')
+  await expect(submit).toBeDisabled()
 })
 
 test('dispatch pick lists show quantities and serials while orders show package pricing', async ({ page }) => {

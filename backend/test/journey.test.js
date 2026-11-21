@@ -79,9 +79,17 @@ test('Express connects public intake to paid delivery, signed completion, and co
         const payment = await post('/orders/' + order.id + '/payments', { amount: '250.00', method: 'UPI', reference: key })
         assert.equal(payment.balance, '0')
         const items = [{ productId: product.id, quantity: 1, serialNumbers: [key] }]
-        await post('/inventory/receipts', { ...items[0], unitCost: '120.00' })
         const dispatch = '/dispatches/' + order.dispatchesByOrder[0].id
+        const options = () => request('GET', dispatch + '/allocation-options')
+        assert.deepEqual(await options(), [{
+          productId: product.id, name: product.name, quantity: 1, serialized: true, available: 0,
+        }])
+        await post('/inventory/receipts', { ...items[0], unitCost: '120.00' })
+        assert.equal((await options())[0].available, 1)
+        const assetQuery = '/assets?status=IN_STOCK&unassigned=true&productId=' + product.id + '&serialNumber=' + key
+        assert.equal((await request('GET', assetQuery))[0].serialNumber, key)
         await post(dispatch + '/allocate', { items })
+        assert.deepEqual(await request('GET', assetQuery), [])
         await post(dispatch + '/dispatch')
         const delivered = await post(dispatch + '/deliver', { recipientName: key })
         const coverage = await request('GET', '/assets/' + key + '/warranty')

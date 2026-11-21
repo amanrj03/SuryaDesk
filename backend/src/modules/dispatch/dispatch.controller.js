@@ -10,6 +10,9 @@ export function dispatchController(service) {
     async detail(request, response) {
       response.json({ success: true, data: await service.detail(request.validated.params.id) })
     },
+    async allocationOptions(request, response) {
+      response.json({ success: true, data: await service.allocationOptions(request.validated.params.id) })
+    },
     async draft(request, response) {
       const { row, created } = await service.draft(request.validated.params.id, request.validated.body, request.user)
       response.status(created ? 201 : 200).json({ success: true, data: row })

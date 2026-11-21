@@ -5,6 +5,7 @@ import { TableSkeleton } from '../../components/ui/States.jsx'
 import { words } from '../../lib/format.js'
 import LeadEditor from '../enquiries/LeadEditor.jsx'
 import InstallationSignoff from '../installations/InstallationSignoff.jsx'
+import DispatchAllocation from '../dispatch/DispatchAllocation.jsx'
 import PackageEditor from '../catalog/PackageEditor.jsx'
 import { hasDetail } from './RecordDetail.jsx'
 import WorkflowAction, { collectionActions, recordActions } from './WorkflowAction.jsx'
@@ -303,9 +304,11 @@ export default function Records({ section, token, capabilities }) {
       {panel?.type === 'signoff' && (
         <InstallationSignoff job={panel.row} token={token} onClose={closePanel} onSaved={refresh} />
       )}
-      {panel?.type === 'action' && (
+      {panel?.type === 'action' && (panel.action.key === 'allocate' ? (
+        <DispatchAllocation dispatchId={panel.action.dispatchId} token={token} onClose={closePanel} onSaved={refresh} />
+      ) : (
         <WorkflowAction action={panel.action} token={token} onClose={closePanel} onSaved={refresh} />
-      )}
+      ))}
     </div>
   )
 }

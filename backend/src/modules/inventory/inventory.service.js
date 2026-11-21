@@ -39,9 +39,12 @@ export function inventoryService(db) {
       }, { isolationLevel: 'RepeatableRead' })
     },
 
-    async assets({ page, limit, q, productId, status }) {
+    async assets({ page, limit, q, productId, status, unassigned, serialNumber }) {
       return db.$transaction(async tx => {
-        const where = { productId, status, ...(q && { serialNumber: { contains: q, mode: 'insensitive' } }) }
+        const where = {
+          productId, status, ...(unassigned && { orderId: null }),
+          serialNumber: serialNumber ?? (q ? { contains: q, mode: 'insensitive' } : undefined),
+        }
         const data = await tx.serializedAsset.findMany({
           where, skip: (page - 1) * limit, take: limit, orderBy: { serialNumber: 'asc' },
           include: { product: { select: { id: true, name: true, sku: true } }, customer: { select: { id: true, name: true } }, order: { select: { id: true, orderNumber: true } } },

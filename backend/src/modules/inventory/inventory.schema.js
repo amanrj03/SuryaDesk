@@ -9,7 +9,10 @@ const pagination = {
   q: z.string().trim().max(120).optional(),
 }
 export const inventory = z.object({ ...pagination, lowStock: z.enum(['true', 'false']).optional().transform(value => value === 'true') })
-export const assets = z.object({ ...pagination, status: z.enum(AssetStatus).optional(), productId: id.optional() })
+export const assets = z.object({
+  ...pagination, status: z.enum(AssetStatus).optional(), productId: id.optional(),
+  unassigned: z.literal('true').optional(), serialNumber: serial.optional(),
+})
 export const receipt = z.strictObject({
   productId: id, quantity: z.number().int().min(1).max(10000),
   unitCost: z.union([z.number(), z.string().trim()]).transform(String).pipe(z.string().regex(/^\d{1,10}(\.\d{1,2})?$/)),
