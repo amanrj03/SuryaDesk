@@ -8,6 +8,7 @@ import {
 import { api } from './api.js'
 import Dashboard from './Dashboard.jsx'
 import InstallationSignoff from './InstallationSignoff.jsx'
+import WorkflowAction, { recordActions } from './WorkflowAction.jsx'
 
 const date = value => value ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeZone: 'Asia/Kolkata' }).format(new Date(value)) : '—'
 const currency = value => value == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(value))
@@ -33,6 +34,10 @@ const sections = [
     columns: [['Customer', row => row.order.customer.name], ['Capacity', row => row.capacityKw + ' kW'], ['Scheduled', row => date(row.scheduledAt)], ['Status', row => <Status value={row.status} />]] },
   { path: 'tickets', title: 'Service tickets', capability: 'tickets:read', icon: ClipboardDocumentCheckIcon, search: true,
     columns: [['Reference', row => row.ticketNumber], ['Customer', row => row.customer.name], ['Fault', row => row.faultCode || '?'], ['Priority', row => words(row.priority)], ['Status', row => <Status value={row.status} />]] },
+  { path: 'invoices', title: 'Invoices', capability: 'invoices:read', icon: DocumentTextIcon, search: true,
+    columns: [['Reference', row => row.invoiceNumber], ['Customer', row => row.customer.name], ['Total', row => currency(row.total)], ['Status', row => <Status value={row.status} />], ['Issued', row => date(row.issuedAt)]] },
+  { path: 'subsidies', title: 'Subsidies', capability: 'subsidies:read', icon: ClipboardDocumentCheckIcon,
+    columns: [['Order', row => row.order.orderNumber], ['Customer', row => row.order.customer.name], ['Reference', row => row.reference || '?'], ['Status', row => <Status value={row.status} />]] },
   { path: 'payments', title: 'Payments', capability: 'payments:read', icon: CreditCardIcon,
     columns: [['Reference', row => row.reference || '—'], ['Amount', row => currency(row.amount)], ['Method', row => words(row.method)], ['Received', row => date(row.receivedAt)]] },
 ]
@@ -188,7 +193,8 @@ function Records({ section, token, capabilities }) {
   const [selected, setSelected] = useState(null)
   const canEditLead = section.path === 'leads' && capabilities.includes('leads:write')
   const canSign = section.path === 'installations' && capabilities.includes('installations:complete_assigned')
-  const hasActions = canEditLead || canSign
+  const [action, setAction] = useState(null)
+  const hasActions = canEditLead || canSign || state.result?.data.some(row => recordActions(section.path, row, capabilities).length)
   const Editor = canEditLead ? LeadEditor : InstallationSignoff
   useEffect(() => {
     const controller = new AbortController()
@@ -200,6 +206,13 @@ function Records({ section, token, capabilities }) {
     return () => controller.abort()
   }, [section.path, token, page, search, retry])
 
+  function refresh() {
+    setSelected(null)
+    setAction(null)
+    setState({ busy: true })
+    setRetry(value => value + 1)
+  }
+
   function go(nextPage) {
     setState({ busy: true })
     setPage(nextPage)
@@ -210,11 +223,8 @@ function Records({ section, token, capabilities }) {
       {state.result && <p>{state.result.meta.total} {state.result.meta.total === 1 ? 'record' : 'records'}</p>}
     </header>
     <div className="records">
-      {selected && <Editor key={selected.id} lead={selected} job={selected} token={token} onClose={() => setSelected(null)} onSaved={() => {
-        setSelected(null)
-        setState({ busy: true })
-        setRetry(value => value + 1)
-      }} />}
+      {selected && <Editor key={selected.id} lead={selected} job={selected} token={token} onClose={() => setSelected(null)} onSaved={refresh} />}
+      {action && <WorkflowAction key={action.path + action.key} action={action} token={token} onSaved={refresh} onClose={() => setAction(null)} />}
       {section.search && <form className="toolbar" onSubmit={event => {
         event.preventDefault()
         setState({ busy: true })
@@ -232,8 +242,10 @@ function Records({ section, token, capabilities }) {
       {state.result && (!state.result.data.length
         ? <p className="feedback">No {section.title.toLowerCase()} found.</p>
         : <><div className="overflow-x-auto"><table><thead><tr>{section.columns.map(([label]) => <th key={label}>{label}</th>)}{hasActions && <th scope="col">Action</th>}</tr></thead>
-          <tbody>{state.result.data.map(row => <tr key={row.id}>{section.columns.map(([label, value]) => <td key={label}>{value(row)}</td>)}{hasActions && <td>{(canEditLead || (row.status !== 'COMPLETED' && ['DELIVERED', 'INSTALLATION_IN_PROGRESS'].includes(row.order.status) && row.installationAssignmentsByInstallation.length > 0)) &&
-            <button className="secondary" onClick={() => setSelected(row)}>{canEditLead ? 'Edit' : 'Sign off'}</button>}</td>}</tr>)}</tbody>
+          <tbody>{state.result.data.map(row => <tr key={row.id}>{section.columns.map(([label, value]) => <td key={label}>{value(row)}</td>)}{hasActions && <td>{(canEditLead || (canSign && row.status !== 'COMPLETED' && ['DELIVERED', 'INSTALLATION_IN_PROGRESS'].includes(row.order.status) && row.installationAssignmentsByInstallation.length > 0)) &&
+            <button className="secondary mb-1" onClick={() => { setAction(null); setSelected(row) }}>{canEditLead ? 'Edit' : 'Sign off'}</button>}
+            {recordActions(section.path, row, capabilities).map(candidate => <button className="secondary mb-1 ml-1" key={candidate.key}
+              onClick={() => { setSelected(null); setAction(candidate) }}>{candidate.label}</button>)}</td>}</tr>)}</tbody>
         </table></div>
         <div className="pager"><button className="secondary" disabled={page <= 1} onClick={() => go(page - 1)}>Previous</button>
           <span>Page {page} of {state.result.meta.totalPages}</span>
