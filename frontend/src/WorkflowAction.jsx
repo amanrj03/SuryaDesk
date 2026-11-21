@@ -67,6 +67,67 @@ export function recordActions(section, row, capabilities) {
     if (can('subsidies:manage')) actions.push(post('subsidy', 'Start subsidy application', '/subsidies', [], () => ({ orderId: id })))
     return actions
   }
+  if (section === 'inventory' && can('inventory:write')) {
+    return [post('receipt', 'Receive stock', '/inventory/receipts', [
+      number('quantity', 'Quantity received', { min: 1, max: 10000, step: 1 }),
+      number('unitCost', 'Unit cost (INR)', { min: 0, defaultValue: row.cost }),
+      input('reference', 'Purchase reference', 'text', { optional: true }),
+      ...(row.serialized ? [input('serialNumbers', 'Serials (one per line)', 'textarea')] : []),
+    ], values => ({
+      ...values, productId: id, quantity: Number(values.quantity),
+      serialNumbers: values.serialNumbers?.split(/\r?\n/).map(value => value.trim()).filter(Boolean) ?? [],
+    }))]
+  }
+  if (section === 'dispatches') {
+    const url = '/dispatches/' + id
+    if (row.status === 'DRAFT' && can('dispatch:allocate')) {
+      const items = new Map()
+      for (const line of row.order.orderLinesByOrder) {
+        if (line.lineKind !== 'MATERIAL' || !line.productId) continue
+        const previous = items.get(line.productId)
+        items.set(line.productId, { productId: line.productId, name: line.descriptionSnapshot,
+          quantity: line.quantity + (previous?.quantity ?? 0) })
+      }
+      const requirements = [...items.values()]
+      return [post('allocate', 'Allocate stock', url + '/allocate', requirements.map(item =>
+        input(item.productId, item.name + ' ? ' + item.quantity + ' ? serials if tracked', 'textarea', { optional: true })
+      ), values => ({ items: requirements.map(({ productId, quantity }) => ({
+        productId, quantity, serialNumbers: values[productId]?.split(/\r?\n/).map(value => value.trim()).filter(Boolean) ?? [],
+      })) }))]
+    }
+    if (row.status === 'ALLOCATED' && can('dispatch:complete')) return [post('dispatch', 'Record dispatch', url + '/dispatch')]
+    if (row.status === 'DISPATCHED' && can('dispatch:deliver')) return [post('deliver', 'Confirm delivery', url + '/deliver', [
+      input('recipientName', 'Recipient name', 'text', { defaultValue: row.order.customer.name, maxLength: 120 }),
+    ])]
+  }
+  if (section === 'warranties' && can('tickets:create')) {
+    return [post('ticket', 'Open service ticket', '/tickets', [
+      input('faultCode', 'Fault code', 'text', { optional: true, maxLength: 80 }),
+      input('description', 'Describe the fault', 'textarea', { maxLength: 2000 }),
+      choice('priority', 'Priority', ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
+    ], values => ({ ...values, customerId: row.customerId, assetId: row.assetId, orderId: row.orderId }))]
+  }
+  if (section === 'tickets') {
+    const url = '/tickets/' + id
+    if (row.status === 'RESOLVED_PENDING_CONFIRMATION' && can('tickets:confirm')) {
+      return [post('closeTicket', 'Confirm repair', url + '/confirm', [
+        input('customerConfirmationName', 'Customer confirmation name', 'text', { defaultValue: row.customer.name }),
+      ])]
+    }
+    if (!['RESOLVED_PENDING_CONFIRMATION', 'CLOSED'].includes(row.status) && can('tickets:resolve')) {
+      return [
+        patch('ticketAssignment', 'Assign technician', url, [
+          { ...choice('assignedToId', 'Technician', []), source: '/users/options?kind=technician' },
+        ], values => values),
+        patch('laborCharge', 'Set labour charge', url, [
+          number('laborCharge', 'Labour charge (INR)', { min: 0, defaultValue: row.laborCharge }),
+        ], values => values),
+        post('resolve', 'Resolve ticket', url + '/resolve', [
+          input('resolutionNotes', 'Repair details', 'textarea', { maxLength: 2000 }),
+        ], values => ({ ...values, coverageDecision: row.coverageDecision === 'COVERED' ? 'COVERED' : 'NOT_COVERED' })),
+      ]
+    }
+  }
   if (section === 'invoices' && row.status === 'DRAFT' && can('invoices:manage')) {
     return [post('issueInvoice', 'Issue invoice', '/invoices/' + id + '/issue', [time('dueAt', 'Due date')], values => ({ dueAt: toDate(values.dueAt) }))]
   }
