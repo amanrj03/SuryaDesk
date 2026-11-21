@@ -11,6 +11,7 @@ import { seedFinance } from './seed-finance.js'
 import { seedWarehouse } from './seed-warehouse.js'
 import { seedPendingOrderQuotes, seedSales } from './seed-sales.js'
 import { seedWorkflowScenarios } from './seed-workflow-scenarios.js'
+import { seedServiceScenarios } from './seed-service.js'
 import { createDatabase } from '../src/lib/prisma.js'
 
 const roles = [
@@ -154,6 +155,17 @@ async function removeMedia(files) {
 
 const db = createDatabase(databaseUrl)
 const writtenMedia = []
+async function addServiceSamples() {
+  const media = []
+  try {
+    const added = await seedServiceScenarios(db, media)
+    console.log('Service visit scenarios added:', added)
+  } catch (error) {
+    await removeMedia(media)
+    throw error
+  }
+}
+
 try {
   if (process.argv.includes('--workflow-scenarios')) {
     try {
@@ -163,6 +175,8 @@ try {
       await removeMedia(writtenMedia)
       throw error
     }
+  } else if (process.argv.includes('--service-scenarios')) {
+    await addServiceSamples()
   } else if (process.argv.includes('--portal-accounts')) {
     await seedCustomerAccounts(db)
   } else if (process.argv.includes('--configure-demo-tax')) {
@@ -183,6 +197,7 @@ try {
           },
         })
         await populate(client, writtenMedia)
+        await seedServiceScenarios(client, writtenMedia)
         return obsolete
       }, { timeout: 120_000 })
     } catch (error) {
@@ -193,6 +208,7 @@ try {
     console.log('Replaced the demo dataset. Existing staff accounts were retained.')
   } else {
     await populate(db)
+    await addServiceSamples()
     console.log('Relational SuryaDesk demo records seeded.')
   }
 } finally {

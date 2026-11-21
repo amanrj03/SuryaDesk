@@ -14,6 +14,7 @@ import { surveysService } from '../src/modules/surveys/surveys.service.js'
 import { ticketsService } from '../src/modules/tickets/tickets.service.js'
 import { daysFrom } from './seed-clock.js'
 import { illustration } from './seed-installations.js'
+import { seedServiceRate, signSeedRepair } from './seed-service.js'
 
 const stages = [
   'new', 'contacted', 'lost', 'qualified', 'survey-booked', 'survey-in-progress', 'survey-review',
@@ -267,18 +268,24 @@ async function scenario(tx, client, actors, packages, index, now, passwordHash, 
     const asset = await tx.serializedAsset.findFirstOrThrow({
       where: { orderId: order.id, product: { category: stage === 'expired-warranty' ? 'INVERTER' : 'PANEL' } },
     })
-    const tickets = ticketsService(client)
+    const incidentAt = daysFrom(now, -2)
+    const startedAt = daysFrom(incidentAt, 0.25)
+    const endedAt = new Date(startedAt.getTime() + (stage === 'expired-warranty' ? 120 : 55) * 60_000)
+    let clock = startedAt
+    const tickets = ticketsService(client, () => clock)
     const covered = stage !== 'expired-warranty'
     const ticket = await tickets.create({
-      customerId: customer.id, assetId: asset.id, priority: covered ? 'MEDIUM' : 'HIGH', incidentAt: daysFrom(now, -2),
+      customerId: customer.id, assetId: asset.id, priority: covered ? 'MEDIUM' : 'HIGH', incidentAt,
       description: covered ? 'Production dropped on the west string after heavy rain.' : 'Inverter intermittently restarts when the load changes.',
     }, actors.support)
-    if (!covered) await tickets.update(ticket.id, { status: 'TRIAGED', laborCharge: '1800.00' }, actors.support)
-    await tickets.resolve(ticket.id, {
-      coverageDecision: covered ? 'COVERED' : 'NOT_COVERED',
-      resolutionNotes: covered ? 'Cleaned and reseated the string connector and confirmed generation.' : 'Adjusted inverter settings and completed a load test.',
-    }, actors.support)
-    if (covered) await tickets.confirm(ticket.id, { customerConfirmationName: name }, actors.support)
+    await tx.serviceTicket.update({ where: { id: ticket.id }, data: { createdAt: incidentAt } })
+    await tickets.update(ticket.id, { assignedToId: actors.technician.id }, actors.support)
+    await tickets.update(ticket.id, { status: 'IN_PROGRESS' }, actors.technician)
+    clock = endedAt
+    await signSeedRepair(tx, tickets, ticket, actors.technician, {
+      endedAt, signer: name, index,
+      repairNotes: covered ? 'Cleaned and reseated the string connector and confirmed generation.' : 'Adjusted inverter settings and completed a load test.',
+    }, writtenMedia)
   }
 }
 
@@ -288,6 +295,7 @@ export async function seedWorkflowScenarios(db, writtenMedia) {
   const passwordHash = password ? await bcrypt.hash(password, 12) : null
   return db.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(73126)`
+    await seedServiceRate(tx)
     const client = new Proxy(tx, { get(target, property, receiver) {
       return property === '$transaction' ? callback => callback(tx) : Reflect.get(target, property, receiver)
     } })
