@@ -21,7 +21,7 @@ export const update = z.strictObject({
   status: z.enum(['TRIAGED', 'ASSIGNED', 'IN_PROGRESS']).optional(),
   notes: text.optional(), laborCharge: amount.optional(),
 }).refine(value => Object.keys(value).length > 0)
-export const part = z.strictObject({ productId: id, quantity: z.number().int().min(1).max(10000), chargePerUnit: amount })
+export const part = z.strictObject({ productId: id, quantity: z.number().int().min(1).max(10000), chargePerUnit: amount.optional() })
 export const repairReport = z.strictObject({ repairNotes: text })
 export const resolve = z.strictObject({
   resolutionNotes: text, coverageDecision: z.enum(['COVERED', 'NOT_COVERED']), coverageReason: text.optional(),
@@ -30,4 +30,4 @@ export const confirm = z.strictObject({
   customerConfirmationName: z.string().trim().min(1).max(120), confirmedAt: date.optional(),
 })
 
-export const replacement = z.strictObject({ serialNumber: z.string().trim().min(1).max(120).toUpperCase(), chargePerUnit: amount })
+export const replacement = z.strictObject({ serialNumber: z.string().trim().min(1).max(120).toUpperCase(), chargePerUnit: amount.optional() })

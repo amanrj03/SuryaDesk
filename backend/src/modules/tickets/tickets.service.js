@@ -17,6 +17,18 @@ const limited = user => user.capabilities.includes('installations:complete_assig
 const scope = user => limited(user) ? { assignedToId: user.id } : {}
 const open = ['OPEN', 'TRIAGED', 'ASSIGNED', 'IN_PROGRESS']
 const canReportRepair = (ticket, user) => ticket.assignedToId === user.id && user.capabilities.includes('tickets:report_repair')
+const hasReplacement = ticket => ticket.ticketPartsByTicket.some(part => part.replacementAssetId)
+const ticketCovered = ticket => hasReplacement(ticket) ? ticket.coverageDecision === 'COVERED'
+  : isCovered(ticket.asset?.warrantyByAsset, ticket.incidentAt)
+
+function checkPartAccess(ticket, user, chargePerUnit) {
+  if (user.capabilities.includes('tickets:resolve')) return
+  if (!canReportRepair(ticket, user)) throw notFound()
+  if (ticket.status !== 'IN_PROGRESS' || ticket.repairReportedAt) {
+    throw invalid('Record parts while work is in progress and before submitting the repair report.')
+  }
+  if (chargePerUnit !== undefined) throw new ApiError(403, 'FORBIDDEN', 'Technicians cannot set customer charges.')
+}
 
 async function locked(tx, id, user) {
   await tx.$queryRaw`SELECT id FROM "ServiceTicket" WHERE id = ${id} FOR UPDATE`
@@ -120,9 +132,26 @@ export function ticketsService(db) {
         return tx.serviceTicket.update({ where: { id }, data: { ...data, status }, include })
       })
     },
+    async partOptions(id, user) {
+      const ticket = await db.serviceTicket.findFirst({
+        where: { id, ...scope(user) },
+        select: { status: true, assignedToId: true, repairReportedAt: true },
+      })
+      if (!ticket) throw notFound()
+      checkPartAccess(ticket, user)
+      if (!open.includes(ticket.status)) throw invalid('Parts can only be added to open tickets.')
+      return db.$queryRaw`
+        SELECT p.id, p.name, p.sku, s."onHand" - s.reserved AS available
+        FROM "Product" p
+        JOIN "StockBalance" s ON s."productId" = p.id
+        WHERE p."isActive" AND NOT p.serialized AND s."onHand" > s.reserved
+        ORDER BY p.name, p.sku
+      `
+    },
     async part(id, { productId, quantity, chargePerUnit }, user) {
       return db.$transaction(async tx => {
         const ticket = await locked(tx, id, user)
+        checkPartAccess(ticket, user, chargePerUnit)
         if (!open.includes(ticket.status)) throw invalid('Parts can only be added to open tickets.')
         const product = await tx.product.findUnique({ where: { id: productId } })
         if (!product?.isActive || product.serialized) throw validation('Choose an active quantity-tracked repair part.')
@@ -132,7 +161,8 @@ export function ticketsService(db) {
         `
         if (!changed) throw new ApiError(409, 'INSUFFICIENT_STOCK', 'Not enough unreserved stock for this repair.')
         const part = await tx.ticketPart.create({
-          data: { ticketId: id, productId, quantity, costSnapshot: product.cost, chargeSnapshot: chargePerUnit },
+          data: { ticketId: id, productId, quantity, costSnapshot: product.cost,
+            chargeSnapshot: ticketCovered(ticket) ? 0 : chargePerUnit ?? product.salePrice },
         })
         await tx.stockMovement.create({ data: {
           productId, orderId: ticket.orderId, type: 'ADJUSTMENT', quantity: -quantity, unitCost: product.cost,
@@ -145,8 +175,9 @@ export function ticketsService(db) {
     async replace(id, { serialNumber, chargePerUnit }, user) {
       return db.$transaction(async tx => {
         const ticket = await locked(tx, id, user)
+        checkPartAccess(ticket, user, chargePerUnit)
         if (!open.includes(ticket.status) || !ticket.asset || !ticket.orderId) throw invalid('Select an open ticket with delivered equipment.')
-        if (ticket.ticketPartsByTicket.some(part => part.replacementAssetId)) throw invalid('This ticket already has a replacement.')
+        if (hasReplacement(ticket)) throw invalid('This ticket already has a replacement.')
         const original = ticket.asset
         if (!['DELIVERED', 'INSTALLED', 'UNDER_REPAIR'].includes(original.status)) {
           throw invalid('Only active delivered equipment can be replaced.')
@@ -185,7 +216,7 @@ export function ticketsService(db) {
         }
         const part = await tx.ticketPart.create({ data: {
           ticketId: id, productId: replacement.productId, quantity: 1, costSnapshot: replacement.product.cost,
-          chargeSnapshot: covered ? 0 : chargePerUnit, replacementAssetId: replacement.id,
+          chargeSnapshot: covered ? 0 : chargePerUnit ?? replacement.product.salePrice, replacementAssetId: replacement.id,
         } })
         await tx.stockMovement.create({ data: {
           productId: replacement.productId, orderId: ticket.orderId, type: 'ADJUSTMENT', quantity: -1,
@@ -217,8 +248,7 @@ export function ticketsService(db) {
         const ticket = await locked(tx, id, user)
         if (ticket.status === 'RESOLVED_PENDING_CONFIRMATION') return ticket
         if (!open.includes(ticket.status)) throw invalid('Only an open ticket can be resolved.')
-        const replaced = ticket.ticketPartsByTicket.some(part => part.replacementAssetId)
-        const covered = replaced ? ticket.coverageDecision === 'COVERED' : isCovered(ticket.asset?.warrantyByAsset, ticket.incidentAt)
+        const covered = ticketCovered(ticket)
         if ((coverageDecision === 'COVERED') !== covered) throw invalid('Coverage must match the serial warranty at the incident date.')
         const now = new Date()
         if (covered) {

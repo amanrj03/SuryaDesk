@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import test from 'node:test'
+import { roleCapabilities } from '../src/config/permissions.js'
 import { createDatabase } from '../src/lib/prisma.js'
 import { installationsService } from '../src/modules/installations/installations.service.js'
 import { ticketsService } from '../src/modules/tickets/tickets.service.js'
@@ -83,7 +84,7 @@ test('serialized dispatch, warranty activation, and assigned installation sign-o
         role: 'TECHNICIAN', passwordHash: 'fixture', hourlyCost: 450,
       } })
       const supervisor = { ...user, capabilities: ['installations:manage'] }
-      const technician = { ...installer, capabilities: ['installations:complete_assigned'] }
+      const technician = { ...installer, capabilities: roleCapabilities.TECHNICIAN }
       const job = await tx.installation.create({ data: {
         orderId: order.id, capacityKw: 3, status: 'UNSCHEDULED', checklist: {},
       } })
@@ -128,7 +129,9 @@ test('serialized dispatch, warranty activation, and assigned installation sign-o
         customerId: order.customerId, assetId: warranties[0].assetId, description: 'Fault on supplied equipment',
         priority: 'MEDIUM', incidentAt: complete.signedAt,
       }, support)
-      const replacement = await tickets.replace(ticket.id, { serialNumber: spare.serialNumber, chargePerUnit: '200.00' }, support)
+      await tickets.update(ticket.id, { assignedToId: installer.id }, support)
+      await tickets.update(ticket.id, { status: 'IN_PROGRESS' }, technician)
+      const replacement = await tickets.replace(ticket.id, { serialNumber: spare.serialNumber }, technician)
       assert.equal(replacement.replacementAssetId, spare.id)
       assert.ok(replacement.chargeSnapshot.isZero())
       const inherited = await tx.warranty.findUnique({ where: { assetId: spare.id } })

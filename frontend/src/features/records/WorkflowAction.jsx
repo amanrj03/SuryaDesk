@@ -223,25 +223,29 @@ function baseRecordActions(section, row, capabilities, detail) {
         input('resolutionNotes', 'Repair details', 'textarea', { maxLength: 2000, defaultValue: row.repairNotes ?? '' }),
       ], values => ({ ...values, coverageDecision: row.coverageDecision === 'COVERED' ? 'COVERED' : 'NOT_COVERED' })))
     }
-    if (detail && canResolve) {
-      if (row.coverageDecision !== 'COVERED') {
+    const recordingRepair = row.canReportRepair && !row.repairReportedAt
+    if (detail && (canResolve || recordingRepair)) {
+      const canSetCharges = canResolve && row.coverageDecision !== 'COVERED'
+      const chargeField = label => canSetCharges
+        ? [number('chargePerUnit', label, { min: 0, defaultValue: 0 })] : []
+      if (canSetCharges) {
         actions.push(patch('laborCharge', 'Set labour charge', url, [
           number('laborCharge', 'Labour charge (INR)', { min: 0, defaultValue: row.laborCharge }),
         ], values => values))
       }
-      if (row.asset && !row.ticketPartsByTicket.some(part => part.replacementAssetId)) {
+      if (row.orderId && ['DELIVERED', 'INSTALLED', 'UNDER_REPAIR'].includes(row.asset?.status) &&
+        !row.ticketPartsByTicket.some(part => part.replacementAssetId)) {
         actions.push(post('replacement', 'Replace serialized equipment', url + '/replace', [
-          input('serialNumber', 'Replacement serial'), number('chargePerUnit', 'Customer charge (INR)', { min: 0, defaultValue: 0 }),
+          input('serialNumber', 'Replacement serial'), ...chargeField('Customer charge (INR)'),
         ]))
       }
-      if (can('inventory:read')) {
-        actions.push(post('addPart', 'Record repair part', url + '/parts', [
-          { ...choice('productId', 'Repair part', []), source: '/inventory?limit=100',
-            filter: item => !item.serialized && item.available > 0 },
-          number('quantity', 'Quantity', { min: 1, step: 1 }),
-          number('chargePerUnit', 'Customer charge per unit (INR)', { min: 0, defaultValue: 0 }),
-        ], values => ({ ...values, quantity: Number(values.quantity) })))
-      }
+      actions.push(post('addPart', 'Record repair part', url + '/parts', [
+        { ...choice('productId', 'Repair part', []), source: url + '/part-options',
+          emptyLabel: 'No repair parts in stock',
+          optionLabel: item => `${item.name} · ${item.sku} · ${item.available} available` },
+        number('quantity', 'Quantity used', { min: 1, max: 10000, step: 1 }),
+        ...chargeField('Customer charge per unit (INR)'),
+      ], values => ({ ...values, quantity: Number(values.quantity) })))
     }
     return actions
   }
@@ -343,10 +347,12 @@ function Field({ field, options }) {
   if (type === 'checkbox') return <label className="check"><input type="checkbox" name={name} {...props} />{label}</label>
   if (type === 'textarea') return <label>{label}<textarea {...common} /></label>
   if (type === 'select') return <label>{label}<select {...common} multiple={multiple} defaultValue={multiple ? [] : attributes.defaultValue ?? ''}>
-    {!multiple && <option value="">Choose {label.toLowerCase()}</option>}
+    {!multiple && <option value="">{!options.length && field.emptyLabel ? field.emptyLabel : `Choose ${label.toLowerCase()}`}</option>}
     {options.map(option => typeof option === 'string'
       ? <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>
-      : <option key={option.id} value={option.id}>{name === 'supplierId' ? displaySupplierName(option) : option.name}</option>)}
+      : <option key={option.id} value={option.id}>
+        {field.optionLabel?.(option) ?? (name === 'supplierId' ? displaySupplierName(option) : option.name)}
+      </option>)}
   </select></label>
   return <label>{label}<input type={type} {...common} /></label>
 }

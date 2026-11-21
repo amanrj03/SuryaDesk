@@ -15,6 +15,7 @@ export function ticketsRoutes(db, auth) {
   router.get('/tickets/:id', read, validate({ params: schema.params }), controller.detail)
   router.post('/tickets', authorize('tickets:create'), validate({ body: schema.create }), controller.create)
   router.patch('/tickets/:id', manage, validate({ params: schema.params, body: schema.update }), controller.update)
+  router.get('/tickets/:id/part-options', manage, validate({ params: schema.params }), controller.partOptions)
   router.post('/tickets/:id/parts', manage, validate({ params: schema.params, body: schema.part }), controller.part)
   router.post('/tickets/:id/replace', manage, validate({ params: schema.params, body: schema.replacement }), controller.replace)
   router.post('/tickets/:id/report-repair', authorize('tickets:report_repair'),

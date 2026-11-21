@@ -459,6 +459,7 @@ test('customer service request reaches the assigned technician and closes after 
   const { unlink } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const { fileURLToPath } = await import('node:url')
+  let part
 
   async function findTicket(staff, number) {
     await staff.getByRole('link', { name: 'Service tickets', exact: true }).click()
@@ -477,6 +478,11 @@ test('customer service request reaches the assigned technician and closes after 
       } },
     })
     const technician = await db.user.findUniqueOrThrow({ where: { email: 'technician@demo.suryadesk.test' } })
+    part = await db.product.create({ data: {
+      sku: 'E2E-PART-' + randomUUID(), name: 'Site repair connector fixture', category: 'WIRING', unit: 'unit',
+      serialized: false, cost: 30, salePrice: 50, warrantyMonths: 0, reorderLevel: 0,
+      stockBalanceByProduct: { create: { onHand: 5, reserved: 1 } },
+    } })
     await page.goto('/customer/login')
     await page.getByLabel('Email address').fill(email)
     await page.getByLabel('Password', { exact: true }).fill(process.env.SEED_DEMO_PASSWORD)
@@ -533,6 +539,18 @@ test('customer service request reaches the assigned technician and closes after 
     await support.getByRole('button', { name: 'Back to Service tickets' }).click()
     await support.getByLabel('Filter by status').selectOption('')
     await fieldRow.getByRole('link', { name: 'View', exact: true }).click()
+    await field.getByText('Parts and replacements used', { exact: true }).click()
+    await expect(field.getByRole('button', { name: 'Replace serialized equipment' })).toBeVisible()
+    await field.getByRole('button', { name: 'Record repair part', exact: true }).click()
+    const addPart = field.getByRole('dialog', { name: 'Record repair part' })
+    await expect(addPart.getByRole('option', { name: part.name + ' · ' + part.sku + ' · 4 available' })).toBeAttached()
+    await addPart.getByLabel('Repair part').selectOption(part.id)
+    await expect(addPart.getByLabel('Customer charge per unit (INR)')).toHaveCount(0)
+    await addPart.getByLabel('Quantity used').fill('2')
+    await addPart.getByRole('button', { name: 'Record repair part', exact: true }).click()
+    await expect(field.getByRole('table', { name: 'Parts' }).getByRole('row').filter({ hasText: part.name })).toContainText('₹0.00')
+    const balance = await db.stockBalance.findUniqueOrThrow({ where: { productId: part.id } })
+    expect([balance.onHand, balance.reserved]).toEqual([3, 1])
     await field.getByRole('button', { name: 'Report work done' }).click()
     const report = field.getByRole('dialog', { name: 'Report work done' })
     const repairNotes = 'Re-seated the string connector and verified stable generation.'
@@ -545,6 +563,7 @@ test('customer service request reaches the assigned technician and closes after 
     await expect(field.getByText(repairNotes, { exact: true })).toBeVisible()
     await expect(field.getByRole('button', { name: 'completed-repair.png' })).toBeVisible()
     await expect(field.getByRole('button', { name: 'Report work done' })).toHaveCount(0)
+    await expect(field.getByText('Parts and replacements used', { exact: true })).toHaveCount(0)
 
     await support.getByLabel('Filter by status').selectOption('IN_PROGRESS')
     const active = supportRow
@@ -581,6 +600,7 @@ test('customer service request reaches the assigned technician and closes after 
         await db.$transaction([
           db.attachment.deleteMany({ where }),
           db.auditLog.deleteMany({ where: { entityType: 'ServiceTicket', entityId: ticket.id } }),
+          db.ticketPart.deleteMany({ where: { ticketId: ticket.id } }),
           db.serviceTicket.delete({ where: { id: ticket.id } }),
         ])
         const directory = resolve(fileURLToPath(new URL('../../backend/', import.meta.url)), process.env.UPLOAD_DIR ?? 'uploads')
@@ -588,6 +608,11 @@ test('customer service request reaches the assigned technician and closes after 
           if (error.code !== 'ENOENT') throw error
         })
       }
+      if (part) await db.$transaction([
+        db.stockMovement.deleteMany({ where: { productId: part.id } }),
+        db.stockBalance.delete({ where: { productId: part.id } }),
+        db.product.delete({ where: { id: part.id } }),
+      ])
     } finally {
       await Promise.all([support.close(), field.close(), db.$disconnect()])
     }

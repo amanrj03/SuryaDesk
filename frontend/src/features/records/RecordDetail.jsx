@@ -271,7 +271,10 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
       {reassignTicket && <button type="button" className="secondary justify-self-start"
         onClick={() => setDetailAction(reassignTicket)}>{reassignTicket.label}</button>}
       {repairRecords.length > 0 && <details className="rounded-xl border border-gray-200 p-3">
-        <summary className="cursor-pointer text-sm font-semibold">Record repair parts or charges</summary>
+        <summary className="cursor-pointer text-sm font-semibold">
+          {capabilities.includes('tickets:resolve') ? 'Record repair parts or charges' : 'Parts and replacements used'}
+        </summary>
+        <p className="mt-2 text-sm text-gray-600">Record parts you used or equipment you actually replaced. Saving updates stock.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {repairRecords.map(action => <button key={action.key} type="button" className="secondary"
             onClick={() => setDetailAction(action)}>{action.label}</button>)}

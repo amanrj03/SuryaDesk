@@ -13,6 +13,9 @@ export function ticketsController(tickets) {
     async detail(request, response) {
       response.json({ success: true, data: await tickets.detail(request.validated.params.id, request.user) })
     },
+    async partOptions(request, response) {
+      response.json({ success: true, data: await tickets.partOptions(request.validated.params.id, request.user) })
+    },
     update: action('update'),
     part: action('part', 201),
     replace: action('replace', 201),
