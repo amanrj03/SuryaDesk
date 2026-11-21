@@ -18,7 +18,7 @@
   }
 
   body {
-    background-color: var(--color-canvas);
+    background-color: var(--color-shell);
     color: var(--color-ink);
     font-family: var(--font-sans);
     antialiased: true;
@@ -300,18 +300,12 @@ tbody tr:hover {
   background-color: #ffffff;
 }
 
-/* Login styling matching reference UI */
+/* Login styling: two-split layout with edge-to-edge presentation */
 .login-screen {
   min-height: 100vh;
   min-height: 100svh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--color-canvas);
-  padding: 0.75rem;
-}
-@media (min-width: 640px) {
-  .login-screen {
-    padding: 1.5rem;
-  }
+  width: 100%;
+  display: grid;
+  padding: 0;
+  background-color: #FAF9F6;
 }

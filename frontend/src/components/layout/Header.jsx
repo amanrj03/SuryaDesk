@@ -40,7 +40,7 @@ export function Header({ user, navigationOpen, onToggleNavigation, onLogout }) {
   const canAddPackage = user?.capabilities?.includes('catalog:manage')
 
   return (
-    <header className="flex items-center justify-between gap-3 px-2 py-1">
+    <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-black/5 bg-[#EFECE6]/90 px-3 py-2 backdrop-blur-sm sm:px-4 lg:px-6">
       {/* Brand & Mobile Hamburger */}
       <div className="flex items-center gap-3 lg:w-56">
         <button

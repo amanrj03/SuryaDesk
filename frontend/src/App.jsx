@@ -32,9 +32,9 @@ import { words } from './lib/format.js'
 const date = (value) =>
   value
     ? new Intl.DateTimeFormat('en-IN', {
-        dateStyle: 'medium',
-        timeZone: 'Asia/Kolkata',
-      }).format(new Date(value))
+      dateStyle: 'medium',
+      timeZone: 'Asia/Kolkata',
+    }).format(new Date(value))
     : '—'
 
 const currency = (value) =>
@@ -349,147 +349,135 @@ function Login({ onLogin }) {
   }
 
   return (
-    <main className="login-screen w-full min-h-screen flex items-center justify-center bg-[#E5E3E0] p-2 sm:p-6 text-[#2D2D2E] antialiased box-border overflow-x-hidden">
-      <div className="w-full max-w-sm sm:max-w-md lg:max-w-[1000px] rounded-[24px] border border-white/40 bg-[#EFECE6] p-2.5 sm:p-4 shadow-2xl sm:rounded-shell lg:grid lg:grid-cols-[1.05fr_0.95fr] gap-4 box-border overflow-hidden">
-        {/* Brand / Value proposition panel: hidden on mobile so sign in fits within viewport without overflow */}
-        <section
-          className="login-context hidden lg:flex flex-col justify-between gap-8 rounded-[22px] border border-white/60 bg-white/50 p-6 backdrop-blur-md sm:rounded-panel sm:p-8"
-          aria-labelledby="login-context-title"
-        >
-          <div>
+    <main className="login-screen grid min-h-screen w-full grid-cols-1 lg:grid-cols-2 bg-[#FAF9F6] text-[#2D2D2E] antialiased box-border overflow-x-hidden">
+      {/* Left side: big image from public folder covering half window */}
+      <section
+        className="login-visual relative hidden h-full min-h-screen w-full overflow-hidden bg-neutral-900 lg:block"
+        aria-label="Solar Operations Showcase"
+      >
+        <img
+          src="/LOGIN_PAGE_IMAGE.png"
+          alt="SuryaDesk Solar Operations"
+          className="h-full w-full object-cover object-center"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+        <div className="absolute top-8 left-8 z-10">
+          <div className="flex items-center gap-2 rounded-full bg-white/20 px-3.5 py-1.5 backdrop-blur-md border border-white/30 text-white shadow-sm">
+            <span className="flex size-6 items-center justify-center rounded-full bg-amber-400 text-black">
+              <BoltIcon className="size-3.5" />
+            </span>
+            <span className="text-xs font-semibold tracking-wide">SuryaDesk Operations</span>
+          </div>
+        </div>
+        <div className="absolute bottom-10 left-10 right-10 z-10 text-white">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 px-3 py-1 text-xs font-semibold text-amber-300 backdrop-blur-md border border-amber-300/30">
+            End-to-End Rooftop Solar
+          </span>
+          <h2 className="mt-4 text-2xl font-bold tracking-tight text-white drop-shadow-sm xl:text-3xl leading-snug">
+            Streamlining solar installation and maintenance operations
+          </h2>
+          <p className="mt-2 text-xs text-white/80 max-w-lg leading-relaxed">
+            Follow every project from initial lead qualification and site survey through system dispatch, installation sign-off, and lifetime warranty service.
+          </p>
+        </div>
+      </section>
+
+      {/* Right side: login form */}
+      <section
+        className="login-entry flex min-h-screen w-full flex-col justify-center items-center p-4 sm:p-8 lg:p-12 xl:p-16 bg-[#FAF9F6] box-border"
+        aria-labelledby="login-title"
+      >
+        <div className="login-content w-full max-w-sm sm:max-w-md">
+          <div className="mb-6 flex items-center justify-between">
             <Brand />
-            <h1 className="mt-8 text-3xl font-semibold tracking-tight text-gray-400 sm:text-4xl">
-              Operations portal
-              <span className="block font-bold text-gray-900">for rooftop solar teams</span>
-            </h1>
-            <p className="mt-3 max-w-sm text-xs text-gray-500 sm:text-sm leading-relaxed">
-              Run your solar projects in one place. Follow each job from the first enquiry through delivery, installation, and after-sales service.
-            </p>
+            <Link
+              to="/enquiry"
+              className="text-xs font-semibold text-[#E62E6B] transition hover:underline"
+            >
+              Public quote →
+            </Link>
           </div>
 
-          <ul className="flex flex-col gap-2.5">
-            {[
-              {
-                icon: ClipboardDocumentCheckIcon,
-                label: 'Surveys and quotations',
-                detail: 'Qualify leads, schedule site surveys, and generate system BOMs',
-              },
-              {
-                icon: TruckIcon,
-                label: 'Inventory and dispatch',
-                detail: 'Track panels, inverters, and battery serial numbers to the roof',
-              },
-              {
-                icon: ShieldCheckIcon,
-                label: 'Warranties and service',
-                detail: 'Automatic warranty timers, service tickets, and field repairs',
-              },
-            ].map(({ icon: Icon, label: itemLabel, detail }) => (
-              <li
-                key={itemLabel}
-                className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white/80 p-2.5 shadow-2xs"
-              >
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#E62E6B]/10 text-[#E62E6B]">
-                  <Icon className="size-4" aria-hidden="true" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-xs font-semibold text-gray-900">
-                    {itemLabel}
-                  </span>
-                  <span className="block truncate text-[11px] text-gray-400">{detail}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+          <h1 id="login-title" className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+            Staff sign in
+          </h1>
+          <p className="mt-1.5 text-xs text-gray-500 sm:text-sm">
+            Welcome back to SuryaDesk. Sign in with your work email to access your workspace.
+          </p>
 
-        {/* Staff Sign-in Form Card */}
-        <section
-          className="login-entry flex flex-col justify-center rounded-[20px] sm:rounded-[22px] border border-white/60 bg-white/75 p-4 sm:p-8 backdrop-blur-md shadow-2xs box-border"
-          aria-labelledby="login-title"
-        >
-          <div className="login-content w-full">
-            <div className="mb-4 lg:hidden">
-              <Brand />
+          <form className="form login-form mt-6 grid gap-4" onSubmit={submit}>
+            <div className="login-field grid gap-1.5">
+              <label htmlFor="login-email" className="text-xs font-semibold text-gray-700">
+                Work email
+              </label>
+              <div className="login-input relative flex items-center">
+                <EnvelopeIcon className="pointer-events-none absolute left-3.5 size-4 text-gray-400" aria-hidden="true" />
+                <input
+                  id="login-email"
+                  name="email"
+                  type="email"
+                  autoComplete="username"
+                  placeholder="Enter your work email"
+                  required
+                  className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-xs text-gray-900 placeholder-gray-400 shadow-2xs focus:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-black/10 sm:text-sm"
+                />
+              </div>
             </div>
-            <h1 id="login-title" className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
-              Staff sign in
-            </h1>
-            <p className="mt-1 text-xs text-gray-500">
-              Welcome back to SuryaDesk. Sign in with your work email to access your workspace.
-            </p>
 
-            <form className="form login-form mt-4 sm:mt-6 grid gap-3 sm:gap-4" onSubmit={submit}>
-              <div className="login-field grid gap-1">
-                <label htmlFor="login-email" className="text-xs font-semibold text-gray-700">
-                  Work email
-                </label>
-                <div className="login-input relative flex items-center">
-                  <EnvelopeIcon className="pointer-events-none absolute left-3 size-4 text-gray-400" aria-hidden="true" />
-                  <input
-                    id="login-email"
-                    name="email"
-                    type="email"
-                    autoComplete="username"
-                    placeholder="Enter your work email"
-                    required
-                    className="w-full rounded-xl border border-gray-200 bg-white/90 py-2 sm:py-2.5 pl-9 pr-3 text-xs text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-black/10 focus:border-gray-400"
-                  />
-                </div>
+            <div className="login-field grid gap-1.5">
+              <label htmlFor="login-password" className="text-xs font-semibold text-gray-700">
+                Password
+              </label>
+              <div className="login-input login-password relative flex items-center">
+                <LockClosedIcon className="pointer-events-none absolute left-3.5 size-4 text-gray-400" aria-hidden="true" />
+                <input
+                  id="login-password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  required
+                  className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-10 text-xs text-gray-900 placeholder-gray-400 shadow-2xs focus:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-black/10 sm:text-sm"
+                />
+                <button
+                  type="button"
+                  className="login-reveal absolute right-2.5 p-1 text-gray-400 hover:text-gray-700"
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  <span className="sr-only">{showPassword ? 'Hide password' : 'Show password'}</span>
+                  {showPassword ? (
+                    <EyeSlashIcon className="size-4" aria-hidden="true" />
+                  ) : (
+                    <EyeIcon className="size-4" aria-hidden="true" />
+                  )}
+                </button>
               </div>
+            </div>
 
-              <div className="login-field grid gap-1">
-                <label htmlFor="login-password" className="text-xs font-semibold text-gray-700">
-                  Password
-                </label>
-                <div className="login-input login-password relative flex items-center">
-                  <LockClosedIcon className="pointer-events-none absolute left-3 size-4 text-gray-400" aria-hidden="true" />
-                  <input
-                    id="login-password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    placeholder="Enter your password"
-                    required
-                    className="w-full rounded-xl border border-gray-200 bg-white/90 py-2 sm:py-2.5 pl-9 pr-10 text-xs text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-black/10 focus:border-gray-400"
-                  />
-                  <button
-                    type="button"
-                    className="login-reveal absolute right-2.5 p-1 text-gray-400 hover:text-gray-700"
-                    onClick={() => setShowPassword((v) => !v)}
-                  >
-                    <span className="sr-only">{showPassword ? 'Hide password' : 'Show password'}</span>
-                    {showPassword ? (
-                      <EyeSlashIcon className="size-4" aria-hidden="true" />
-                    ) : (
-                      <EyeIcon className="size-4" aria-hidden="true" />
-                    )}
-                  </button>
-                </div>
-              </div>
+            <Notice>{error}</Notice>
 
-              <Notice>{error}</Notice>
+            <button
+              type="submit"
+              className="primary login-submit w-full rounded-full py-2.5 text-xs font-semibold shadow-xs sm:text-sm cursor-pointer"
+              disabled={busy}
+            >
+              {busy ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
 
-              <button
-                type="submit"
-                className="primary login-submit w-full rounded-full py-2.5 text-xs font-semibold shadow-xs"
-                disabled={busy}
-              >
-                {busy ? 'Signing in…' : 'Sign in'}
-              </button>
-            </form>
-
-            <div className="mt-4 sm:mt-6 text-center">
+          <div className="mt-8 border-t border-gray-200 pt-6 text-center">
+            <p className="text-xs text-gray-500">
+              Looking for a rooftop solar quote for your home or business?{' '}
               <Link
-                className="login-enquiry text-xs font-semibold text-[#E62E6B] transition hover:underline"
+                className="login-enquiry font-semibold text-[#E62E6B] transition hover:underline"
                 to="/enquiry"
               >
                 Request a solar quote
               </Link>
-            </div>
+            </p>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </main>
   )
 }
@@ -517,13 +505,12 @@ function Enquiry() {
   }
 
   return (
-    <main className="public-screen flex min-h-screen items-center justify-center bg-[#E5E3E0] p-3 text-[#2D2D2E] antialiased sm:p-6">
-      <div className="w-full max-w-2xl rounded-[24px] border border-white/40 bg-[#EFECE6] p-4 shadow-2xl sm:rounded-shell sm:p-6">
-        <section className="rounded-[22px] border border-white/60 bg-white/70 p-6 backdrop-blur-md sm:rounded-panel sm:p-8 shadow-2xs">
-          <Brand />
-          <h1 className="mt-6 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
-            Request a solar quote
-          </h1>
+    <main className="public-screen flex min-h-screen items-center justify-center bg-[#FAF9F6] p-3 text-[#2D2D2E] antialiased sm:p-6">
+      <div className="w-full max-w-2xl rounded-[22px] border border-gray-200/80 bg-white p-6 shadow-xl sm:p-8">
+        <Brand />
+        <h1 className="mt-6 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+          Request a solar quote
+        </h1>
           <p className="mt-1 text-xs text-gray-500">
             Tell us about your rooftop and power requirements. Our engineers will prepare an exact proposal.
           </p>
@@ -657,8 +644,7 @@ function Enquiry() {
               ← Return to staff sign in
             </Link>
           </div>
-        </section>
-      </div>
+        </div>
     </main>
   )
 }
@@ -826,6 +812,7 @@ function Records({ section, token, capabilities }) {
     hasDetail(section.path) ||
     canEditLead ||
     canSign ||
+    managePackages ||
     state.result?.data.some((row) => recordActions(section.path, row, capabilities).length)
   const Editor = canEditLead ? LeadEditor : InstallationSignoff
 
@@ -1073,18 +1060,18 @@ function Records({ section, token, capabilities }) {
                                 row.status !== 'COMPLETED' &&
                                 ['DELIVERED', 'INSTALLATION_IN_PROGRESS'].includes(row.order?.status) &&
                                 row.installationAssignmentsByInstallation?.length > 0)) && (
-                              <button
-                                type="button"
-                                className="secondary mb-1"
-                                onClick={() => {
-                                  setDetail(null)
-                                  setAction(null)
-                                  setSelected(row)
-                                }}
-                              >
-                                {canEditLead ? 'Edit' : 'Sign off'}
-                              </button>
-                            )}
+                                <button
+                                  type="button"
+                                  className="secondary mb-1"
+                                  onClick={() => {
+                                    setDetail(null)
+                                    setAction(null)
+                                    setSelected(row)
+                                  }}
+                                >
+                                  {canEditLead ? 'Edit' : 'Sign off'}
+                                </button>
+                              )}
                             {recordActions(section.path, row, capabilities).map((candidate) => (
                               <button
                                 type="button"
