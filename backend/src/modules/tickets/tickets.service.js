@@ -128,12 +128,67 @@ export function ticketsService(db) {
         return part
       })
     },
+    async replace(id, { serialNumber, chargePerUnit }, user) {
+      return db.$transaction(async tx => {
+        const ticket = await locked(tx, id, user)
+        if (!open.includes(ticket.status) || !ticket.asset || !ticket.orderId) throw invalid('Select an open ticket with delivered equipment.')
+        if (ticket.ticketPartsByTicket.some(part => part.replacementAssetId)) throw invalid('This ticket already has a replacement.')
+        const original = ticket.asset
+        if (!['DELIVERED', 'INSTALLED', 'UNDER_REPAIR'].includes(original.status)) {
+          throw invalid('Only active delivered equipment can be replaced.')
+        }
+        const replacement = await tx.serializedAsset.findUnique({ where: { serialNumber }, include: { product: true } })
+        if (!replacement || replacement.productId !== original.productId || replacement.status !== 'IN_STOCK' || replacement.orderId) {
+          throw invalid('Select an available replacement serial of the same equipment.')
+        }
+        const stock = await tx.$executeRaw`
+          UPDATE "StockBalance" SET "onHand" = "onHand" - 1, "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "productId" = ${original.productId} AND "onHand" > reserved
+        `
+        if (!stock) throw new ApiError(409, 'INSUFFICIENT_STOCK', 'No unreserved replacement is available.')
+        const now = new Date()
+        const changed = await tx.serializedAsset.updateMany({
+          where: { id: replacement.id, status: 'IN_STOCK', orderId: null },
+          data: { orderId: ticket.orderId, customerId: ticket.customerId, replacedAssetId: original.id,
+            status: 'INSTALLED', dispatchedAt: now, deliveredAt: now },
+        })
+        const retired = await tx.serializedAsset.updateMany({
+          where: { id: original.id, status: original.status },
+          data: { status: 'REPLACED' },
+        })
+        if (!changed.count || !retired.count) throw invalid('A serial changed during replacement.')
+        const originalWarranty = original.warrantyByAsset
+        const covered = isCovered(originalWarranty, ticket.incidentAt)
+        if (originalWarranty) {
+          await tx.warranty.update({ where: { id: originalWarranty.id }, data: { status: 'REPLACED' } })
+          if (covered && originalWarranty.endAt > now) {
+            await tx.warranty.create({ data: {
+              assetId: replacement.id, orderId: ticket.orderId, customerId: ticket.customerId,
+              originalWarrantyId: originalWarranty.id, startAt: now, endAt: originalWarranty.endAt,
+              months: originalWarranty.months, status: 'ACTIVE',
+            } })
+          }
+        }
+        const part = await tx.ticketPart.create({ data: {
+          ticketId: id, productId: replacement.productId, quantity: 1, costSnapshot: replacement.product.cost,
+          chargeSnapshot: covered ? 0 : chargePerUnit, replacementAssetId: replacement.id,
+        } })
+        await tx.stockMovement.create({ data: {
+          productId: replacement.productId, orderId: ticket.orderId, type: 'ADJUSTMENT', quantity: -1,
+          unitCost: replacement.product.cost, actorId: user.id, referenceId: part.id, reason: 'Serialized warranty/service replacement',
+        } })
+        await tx.serviceTicket.update({ where: { id }, data: { coverageDecision: covered ? 'COVERED' : 'NOT_COVERED' } })
+        await audit(tx, id, 'ASSET_REPLACED', user.id, { previousAssetId: original.id, replacementAssetId: replacement.id, covered })
+        return part
+      })
+    },
     async resolve(id, { resolutionNotes, coverageDecision, coverageReason }, user) {
       return db.$transaction(async tx => {
         const ticket = await locked(tx, id, user)
         if (ticket.status === 'RESOLVED_PENDING_CONFIRMATION') return ticket
         if (!open.includes(ticket.status)) throw invalid('Only an open ticket can be resolved.')
-        const covered = isCovered(ticket.asset?.warrantyByAsset, ticket.incidentAt)
+        const replaced = ticket.ticketPartsByTicket.some(part => part.replacementAssetId)
+        const covered = replaced ? ticket.coverageDecision === 'COVERED' : isCovered(ticket.asset?.warrantyByAsset, ticket.incidentAt)
         if ((coverageDecision === 'COVERED') !== covered) throw invalid('Coverage must match the serial warranty at the incident date.')
         const now = new Date()
         if (covered) {

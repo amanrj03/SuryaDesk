@@ -28,3 +28,5 @@ export const resolve = z.strictObject({
 export const confirm = z.strictObject({
   customerConfirmationName: z.string().trim().min(1).max(120), confirmedAt: date.optional(),
 })
+
+export const replacement = z.strictObject({ serialNumber: z.string().trim().min(1).max(120).toUpperCase(), chargePerUnit: amount })

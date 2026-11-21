@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import test from 'node:test'
 import { createDatabase } from '../src/lib/prisma.js'
 import { installationsService } from '../src/modules/installations/installations.service.js'
+import { ticketsService } from '../src/modules/tickets/tickets.service.js'
 import { dispatchService } from '../src/modules/dispatch/dispatch.service.js'
 import { warrantiesService } from '../src/modules/warranties/warranties.service.js'
 import { isCovered, warrantyEnd } from '../src/modules/warranties/coverage.js'
@@ -98,6 +99,25 @@ test('serialized dispatch, warranty activation, and assigned installation sign-o
       assert.equal(complete.customerSignerName, 'Customer')
       await jobs.complete(job.id, proof, technician)
       assert.equal(await tx.workLog.count({ where: { installationId: job.id } }), 1)
+
+      const spare = await tx.serializedAsset.create({ data: {
+        productId: product.id, serialNumber: key + '-SPARE', status: 'IN_STOCK', receivedAt: new Date(),
+      } })
+      await tx.stockBalance.update({ where: { productId: product.id }, data: { onHand: { increment: 1 } } })
+      const tickets = ticketsService({ $transaction: callback => callback(tx) })
+      const support = { ...user, capabilities: ['tickets:manage', 'tickets:resolve'] }
+      const ticket = await tickets.create({
+        customerId: order.customerId, assetId: warranties[0].assetId, description: 'Fault on supplied equipment',
+        priority: 'MEDIUM', incidentAt: delivery.deliveredAt,
+      }, support)
+      const replacement = await tickets.replace(ticket.id, { serialNumber: spare.serialNumber, chargePerUnit: '200.00' }, support)
+      assert.equal(replacement.replacementAssetId, spare.id)
+      assert.ok(replacement.chargeSnapshot.isZero())
+      const inherited = await tx.warranty.findUnique({ where: { assetId: spare.id } })
+      assert.equal(inherited.originalWarrantyId, warranties[0].id)
+      assert.deepEqual(inherited.endAt, warranties[0].endAt)
+      const resolved = await tickets.resolve(ticket.id, { coverageDecision: 'COVERED', resolutionNotes: 'Replaced faulty equipment.' }, support)
+      assert.equal(resolved.invoiceByTicket, null)
       throw new Error('Rollback dispatch fixture')
     }), { message: 'Rollback dispatch fixture' })
   } finally {
