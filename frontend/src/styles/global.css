@@ -257,7 +257,7 @@ tbody tr:hover {
   font-weight: 600;
   color: #374151;
 }
-.form :is(input:not([type='checkbox']):not([type='radio']), textarea, select) {
+:where(.form) :is(input:not([type='checkbox']):not([type='radio']), textarea, select) {
   width: 100%;
   min-width: 0;
   border: 1px solid #e5e7eb;
@@ -269,10 +269,16 @@ tbody tr:hover {
   line-height: 1.25rem;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
 }
-.form :is(input:not([type='checkbox']):not([type='radio']), textarea, select):focus {
+:where(.form) :is(input:not([type='checkbox']):not([type='radio']), textarea, select):focus {
   border-color: #9ca3af;
   outline: 2px solid rgba(0, 0, 0, 0.08);
   outline-offset: 1px;
+}
+.login-input input {
+  padding-left: 2.5rem !important;
+}
+.login-input.login-password input {
+  padding-right: 2.5rem !important;
 }
 .form-grid {
   display: grid;

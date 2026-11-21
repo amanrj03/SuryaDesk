@@ -99,7 +99,7 @@ export default function Login({ onLogin }) {
                   autoComplete="username"
                   placeholder="Enter your work email"
                   required
-                  className="w-full rounded-xl border border-gray-200 bg-white py-2 sm:py-2.5 pl-10 pr-3 text-xs text-gray-900 placeholder-gray-400 shadow-2xs focus:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-black/10 sm:text-sm"
+                  className="w-full rounded-xl border border-gray-200 bg-white py-2 sm:py-2.5 !pl-10 pr-3 text-xs text-gray-900 placeholder-gray-400 shadow-2xs focus:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-black/10 sm:text-sm"
                 />
               </div>
             </div>
@@ -119,7 +119,7 @@ export default function Login({ onLogin }) {
                   autoComplete="current-password"
                   placeholder="Enter your password"
                   required
-                  className="w-full rounded-xl border border-gray-200 bg-white py-2 sm:py-2.5 pl-10 pr-10 text-xs text-gray-900 placeholder-gray-400 shadow-2xs focus:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-black/10 sm:text-sm"
+                  className="w-full rounded-xl border border-gray-200 bg-white py-2 sm:py-2.5 !pl-10 !pr-10 text-xs text-gray-900 placeholder-gray-400 shadow-2xs focus:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-black/10 sm:text-sm"
                 />
                 <button
                   type="button"
