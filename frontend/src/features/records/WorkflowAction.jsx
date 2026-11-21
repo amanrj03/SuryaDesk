@@ -1,8 +1,9 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api.js'
 import { displayReference, displaySupplierName } from '../../lib/format.js'
 import { useNavigate } from 'react-router-dom'
 import { RecordDialog } from '../../components/ui/RecordDialog.jsx'
+import { Signature } from '../../components/ui/Signature.jsx'
 
 const input = (name, label, type = 'text', attributes = {}) => ({ name, label, type, attributes })
 const choice = (name, label, options) => ({ name, label, type: 'select', options })
@@ -214,9 +215,17 @@ function baseRecordActions(section, row, capabilities, detail) {
     }
     if (row.status !== 'IN_PROGRESS') return actions
     if (!row.repairReportedAt && row.canReportRepair) {
-      actions.push(post('reportRepair', 'Report work done', url + '/report-repair', [
-        input('repairNotes', 'Work completed', 'textarea', { maxLength: 2000 }),
-      ]))
+      if (row.repairStartedAt) {
+        actions.push({
+          ...post('reportRepair', 'Report work done', url + '/report-repair', [
+            input('repairNotes', 'Work completed', 'textarea', { maxLength: 2000 }),
+            input('customerSignerName', 'Customer signer name', 'text', { maxLength: 120, defaultValue: row.customer.name }),
+          ]),
+          signServiceVisit: { ownerType: 'TICKET', ownerId: id },
+        })
+      } else {
+        actions.push(patch('startTicket', 'Start visit timer', url, [], () => ({ status: 'IN_PROGRESS' })))
+      }
     }
     if (row.repairReportedAt && canResolve) {
       actions.push(post('resolve', 'Resolve ticket', url + '/resolve', [
@@ -228,11 +237,6 @@ function baseRecordActions(section, row, capabilities, detail) {
       const canSetCharges = canResolve && row.coverageDecision !== 'COVERED'
       const chargeField = label => canSetCharges
         ? [number('chargePerUnit', label, { min: 0, defaultValue: 0 })] : []
-      if (canSetCharges) {
-        actions.push(patch('laborCharge', 'Set labour charge', url, [
-          number('laborCharge', 'Labour charge (INR)', { min: 0, defaultValue: row.laborCharge }),
-        ], values => values))
-      }
       if (row.orderId && ['DELIVERED', 'INSTALLED', 'UNDER_REPAIR'].includes(row.asset?.status) &&
         !row.ticketPartsByTicket.some(part => part.replacementAssetId)) {
         actions.push(post('replacement', 'Replace serialized equipment', url + '/replace', [
@@ -364,6 +368,9 @@ export function quotationAfterApproval(action, survey, capabilities) {
 
 export default function WorkflowAction({ action, token, onClose, onSaved }) {
   const navigate = useNavigate()
+  const canvas = useRef(null)
+  const signature = useRef(null)
+  const [signed, setSigned] = useState(false)
   const [paymentRequestId] = useState(() => action.key === 'payment' ? crypto.randomUUID() : undefined)
   const [choices, setChoices] = useState({})
   const [loading, setLoading] = useState(action.fields.some(field => field.source))
@@ -386,6 +393,10 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
 
   async function submit(event) {
     event.preventDefault()
+    if (action.signServiceVisit && !signed) {
+      setError('Capture the customer signature to finish this visit.')
+      return
+    }
     const fileInput = event.currentTarget.elements.namedItem('evidenceFile')
     const evidenceFile = fileInput?.files?.[0]
     const approve = event.nativeEvent.submitter?.value === 'approve'
@@ -407,6 +418,17 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
         setUploaded(evidenceFile.name)
         fileInput.value = ''
       }
+      if (action.signServiceVisit) {
+        if (!signature.current) {
+          const png = await new Promise(resolve => canvas.current.toBlob(resolve, 'image/png'))
+          if (!png) throw new Error('The customer signature could not be saved.')
+          const proof = new File([png], 'service-customer-signature.png', { type: 'image/png' })
+          const { data } = await api('/attachments', { token, method: 'POST',
+            body: evidenceBody(action.signServiceVisit, proof) })
+          signature.current = data.id
+        }
+        body.signatureAttachmentId = signature.current
+      }
       const result = await api(action.path, { token, method: action.method, body })
       if (action.successPath) navigate(action.successPath(result.data))
       else onSaved(result.data)
@@ -427,6 +449,10 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
         <input name="evidenceFile" type="file" accept=".png,.jpg,.jpeg,.webp" disabled={busy} />
       </label>}
       {uploaded && <p role="status" className="text-sm text-gray-600">Evidence uploaded: {uploaded}</p>}
+      {action.signServiceVisit && <fieldset disabled={busy}>
+        <legend className="mb-2 text-sm text-gray-600">Ask the customer to sign. Submitting the signed report ends the visit timer.</legend>
+        <Signature canvas={canvas} disabled={busy} onChange={value => { signature.current = null; setSigned(value) }} />
+      </fieldset>}
       {error && <p className="notice" role="alert">{error}</p>}
       <div className="flex flex-wrap gap-2">
         <button type="submit" className={action.approveOnSubmit ? 'secondary' : 'primary'} disabled={busy || loading}>

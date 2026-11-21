@@ -450,6 +450,14 @@ test('seeded customer can browse records and download an issued invoice on mobil
   await expect(page.getByRole('heading', { name: 'Customer sign in' })).toBeVisible()
 })
 
+test('administrator can open the global service labour rate settings', async ({ page }) => {
+  await login(page, 'admin')
+  await page.getByRole('link', { name: 'Service tickets', exact: true }).click()
+  await page.getByRole('button', { name: 'Service labour rate', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: 'Save labour rate' })
+  await expect(settings.getByLabel('Customer labour rate (INR per hour)')).toBeVisible()
+})
+
 test('customer service request reaches the assigned technician and closes after confirmation', async ({ page, browser, baseURL }) => {
   const db = createDatabase(process.env.DATABASE_URL)
   const description = 'Intermittent generation alarm after rain ' + randomUUID()
@@ -502,6 +510,7 @@ test('customer service request reaches the assigned technician and closes after 
 
     await login(support, 'support')
     const supportRow = await findTicket(support, ticket.ticketNumber)
+    await expect(support.getByRole('button', { name: 'Service labour rate', exact: true })).toHaveCount(0)
     await expect(supportRow).toContainText('Open')
     await expect(supportRow.getByRole('button')).toHaveText(['Assign technician'])
     await supportRow.getByRole('link', { name: 'View', exact: true }).click()
@@ -560,8 +569,21 @@ test('customer service request reaches the assigned technician and closes after 
       buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Yv1cAAAAASUVORK5CYII=', 'base64'),
     })
     await report.getByRole('button', { name: 'Report work done' }).click()
+    await expect(report.getByRole('alert')).toHaveText('Capture the customer signature to finish this visit.')
+    const canvas = report.locator('canvas')
+    await canvas.scrollIntoViewIfNeeded()
+    const pad = await canvas.boundingBox()
+    await field.mouse.move(pad.x + 20, pad.y + 30)
+    await field.mouse.down()
+    await field.mouse.move(pad.x + 90, pad.y + 45, { steps: 5 })
+    await field.mouse.up()
+    await report.getByRole('button', { name: 'Report work done' }).click()
     await expect(field.getByText(repairNotes, { exact: true })).toBeVisible()
     await expect(field.getByRole('button', { name: 'completed-repair.png' })).toBeVisible()
+    await expect(field.getByRole('button', { name: 'service-customer-signature.png' })).toBeVisible()
+    const signed = await db.serviceTicket.findUniqueOrThrow({ where: { id: ticket.id } })
+    expect(signed.repairReportedAt.getTime()).toBeGreaterThan(signed.repairStartedAt.getTime())
+    expect(signed.laborCharge.isZero()).toBe(true)
     await expect(field.getByRole('button', { name: 'Report work done' })).toHaveCount(0)
     await expect(field.getByText('Parts and replacements used', { exact: true })).toHaveCount(0)
 

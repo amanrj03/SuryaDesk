@@ -52,8 +52,25 @@ function billingLines(ticket) {
   return lines
 }
 
-export function ticketsService(db) {
+const labourRateId = 'default'
+
+export function ticketsService(db, clock = () => new Date()) {
   return {
+    async labourRate() {
+      return db.serviceLabourRate.findUnique({ where: { id: labourRateId } })
+    },
+    async updateLabourRate(hourlyRate, user) {
+      return db.$transaction(async tx => {
+        const rate = await tx.serviceLabourRate.upsert({
+          where: { id: labourRateId }, create: { id: labourRateId, hourlyRate }, update: { hourlyRate },
+        })
+        await tx.auditLog.create({ data: {
+          actorId: user.id, entityType: 'ServiceLabourRate', entityId: labourRateId, action: 'UPDATED',
+          summary: { hourlyRate: rate.hourlyRate.toFixed(2) },
+        } })
+        return rate
+      })
+    },
     async create({ customerId, orderId, assetId, incidentAt = new Date(), ...data }, user) {
       return db.$transaction(async tx => {
         if (incidentAt > new Date()) throw validation('The incident date cannot be in the future.')
@@ -128,8 +145,14 @@ export function ticketsService(db) {
           (['ASSIGNED', 'IN_PROGRESS'].includes(status) && !data.assignedToId && !ticket.assignedToId)) {
           throw invalid('Assign the ticket before starting work.')
         }
+        if (data.laborCharge !== undefined && (ticket.repairStartedAt || status === 'IN_PROGRESS')) {
+          throw invalid('Labour is calculated from the signed service visit.')
+        }
+        const starting = data.status === 'IN_PROGRESS' && !ticket.repairStartedAt && !ticket.repairReportedAt
         await audit(tx, id, 'UPDATED', user.id, { to: status })
-        return tx.serviceTicket.update({ where: { id }, data: { ...data, status }, include })
+        return tx.serviceTicket.update({
+          where: { id }, data: { ...data, status, ...(starting && { repairStartedAt: clock() }) }, include,
+        })
       })
     },
     async partOptions(id, user) {
@@ -227,19 +250,36 @@ export function ticketsService(db) {
         return part
       })
     },
-    async reportRepair(id, { repairNotes }, user) {
+    async reportRepair(id, { repairNotes, customerSignerName, signatureAttachmentId }, user) {
       return db.$transaction(async tx => {
         const ticket = await locked(tx, id, user)
         if (!canReportRepair(ticket, user)) throw notFound()
         if (ticket.status !== 'IN_PROGRESS') throw invalid('Start work on the ticket before reporting a repair.')
         if (ticket.repairReportedAt) {
-          if (ticket.repairNotes === repairNotes) return ticket
+          if (ticket.repairNotes === repairNotes && ticket.repairSignerName === customerSignerName &&
+            ticket.repairSignatureId === signatureAttachmentId) return ticket
           throw invalid('A repair report has already been submitted.')
         }
-        const updated = await tx.serviceTicket.update({
-          where: { id }, data: { repairNotes, repairReportedAt: new Date() }, include,
-        })
-        await audit(tx, id, 'REPAIR_REPORTED', user.id, {})
+        if (!ticket.repairStartedAt) throw invalid('Start the visit timer before reporting work done.')
+        const proof = await tx.attachment.findFirst({ where: {
+          id: signatureAttachmentId, ownerId: id, ownerType: 'TICKET', uploadedById: user.id,
+          mimeType: 'image/png', originalName: 'service-customer-signature.png',
+          createdAt: { gte: ticket.repairStartedAt },
+        } })
+        if (!proof || !customerSignerName?.trim()) throw validation('Capture the customer signature for this visit.')
+        const repairReportedAt = proof.createdAt
+        const elapsed = repairReportedAt.getTime() - ticket.repairStartedAt.getTime()
+        const rate = await tx.serviceLabourRate.findUnique({ where: { id: labourRateId } })
+        const covered = ticketCovered(ticket)
+        if (!covered && !rate) throw invalid('Ask an administrator to set the hourly service labour rate before submitting.')
+        const laborCharge = covered ? new Prisma.Decimal(0)
+          : rate.hourlyRate.mul(elapsed).div(3_600_000).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+        if (laborCharge.gte(10_000_000_000)) throw invalid('The calculated labour charge exceeds the supported amount.')
+        const updated = await tx.serviceTicket.update({ where: { id }, include, data: {
+          repairNotes, repairReportedAt, repairSignerName: customerSignerName, repairSignatureId: proof.id,
+          laborRateSnapshot: rate?.hourlyRate, laborCharge,
+        } })
+        await audit(tx, id, 'REPAIR_REPORTED', user.id, { customerSignerName, signatureAttachmentId: proof.id })
         return updated
       })
     },
@@ -248,6 +288,7 @@ export function ticketsService(db) {
         const ticket = await locked(tx, id, user)
         if (ticket.status === 'RESOLVED_PENDING_CONFIRMATION') return ticket
         if (!open.includes(ticket.status)) throw invalid('Only an open ticket can be resolved.')
+        if (ticket.repairStartedAt && !ticket.repairSignatureId) throw invalid('Record the signed service visit before resolving the ticket.')
         const covered = ticketCovered(ticket)
         if ((coverageDecision === 'COVERED') !== covered) throw invalid('Coverage must match the serial warranty at the incident date.')
         const now = new Date()

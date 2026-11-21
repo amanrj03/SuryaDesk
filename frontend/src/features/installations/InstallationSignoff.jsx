@@ -1,50 +1,12 @@
 ﻿import { useRef, useState } from 'react'
 import { api } from '../../lib/api.js'
 import { RecordDialog } from '../../components/ui/RecordDialog.jsx'
+import { Signature } from '../../components/ui/Signature.jsx'
 
 const checks = [
   ['mounting', 'Mounting and panels secured'], ['electrical', 'Electrical connections checked'],
   ['earthing', 'Earthing and protection verified'], ['generation', 'Generation test completed'],
 ]
-
-function Signature({ canvas, onChange }) {
-  const drawing = useRef(false)
-  function point(event) {
-    const rect = canvas.current.getBoundingClientRect()
-    return [(event.clientX - rect.left) * canvas.current.width / rect.width,
-      (event.clientY - rect.top) * canvas.current.height / rect.height]
-  }
-  function start(event) {
-    event.preventDefault()
-    const element = canvas.current
-    element.setPointerCapture(event.pointerId)
-    const context = element.getContext('2d')
-    context.strokeStyle = '#142b43'
-    context.lineWidth = 3
-    context.lineCap = 'round'
-    context.lineJoin = 'round'
-    context.beginPath()
-    context.moveTo(...point(event))
-    drawing.current = true
-  }
-  function move(event) {
-    if (!drawing.current) return
-    const context = canvas.current.getContext('2d')
-    context.lineTo(...point(event))
-    context.stroke()
-    onChange(true)
-  }
-  return <div className="grid gap-2">
-    <p id="sign-label" className="text-sm font-semibold">Customer signature</p>
-    <canvas ref={canvas} width={720} height={240} aria-labelledby="sign-label" className="signature"
-      onPointerDown={start} onPointerMove={move} onPointerUp={() => { drawing.current = false }}
-      onPointerCancel={() => { drawing.current = false }} />
-    <button className="secondary w-fit" type="button" onClick={() => {
-      canvas.current.getContext('2d').clearRect(0, 0, canvas.current.width, canvas.current.height)
-      onChange(false)
-    }}>Clear signature</button>
-  </div>
-}
 
 function localInput(value) {
   if (!value) return ''

@@ -21,11 +21,12 @@ test('uncovered repair bills parts and labour and requires customer confirmation
         serialized: false, warrantyMonths: 0, reorderLevel: 0,
         stockBalanceByProduct: { create: { onHand: 2, reserved: 0 } },
       } })
-      const tickets = ticketsService({ $transaction: callback => callback(tx) })
+      let now = new Date()
+      const tickets = ticketsService({ $transaction: callback => callback(tx) }, () => now)
       const ticket = await tickets.create({ customerId: customer.id, description: 'Loose connectors', priority: 'MEDIUM' }, support)
       await assert.rejects(tickets.confirm(ticket.id, { customerConfirmationName: 'Customer' }, support), { code: 'INVALID_TRANSITION' })
       await assert.rejects(tickets.part(ticket.id, { productId: part.id, quantity: 3, chargePerUnit: '75.25' }, support), { code: 'INSUFFICIENT_STOCK' })
-      await tickets.update(ticket.id, { laborCharge: '450.00' }, support)
+      await tickets.updateLabourRate('600.00', support)
       const worker = await tx.user.create({ data: {
         name: 'Technician fixture', email: 'tech-' + key + '@example.invalid', role: 'TECHNICIAN', passwordHash: 'fixture',
       } })
@@ -36,16 +37,32 @@ test('uncovered repair bills parts and labour and requires customer confirmation
       await tickets.update(ticket.id, { assignedToId: worker.id }, support)
       await assert.rejects(tickets.part(ticket.id, used, technician), { code: 'INVALID_TRANSITION' })
       await assert.rejects(tickets.reportRepair(ticket.id, report, technician), { code: 'INVALID_TRANSITION' })
-      await tickets.update(ticket.id, { status: 'IN_PROGRESS' }, technician)
+      const started = await tickets.update(ticket.id, { status: 'IN_PROGRESS' }, technician)
       await assert.rejects(tickets.reportRepair(ticket.id, report, { ...technician, id: user.id }), { code: 'NOT_FOUND' })
       await assert.rejects(tickets.part(ticket.id, { ...used, chargePerUnit: '1.00' }, technician), { code: 'FORBIDDEN' })
       const recordedPart = await tickets.part(ticket.id, used, technician)
       assert.equal(recordedPart.chargeSnapshot.toFixed(2), '75.25')
       assert.equal((await tx.stockBalance.findUniqueOrThrow({ where: { productId: part.id } })).onHand, 0)
-      const reported = await tickets.reportRepair(ticket.id, report, technician)
+      await assert.rejects(tickets.update(ticket.id, { laborCharge: '1.00' }, support), { code: 'INVALID_TRANSITION' })
+      await assert.rejects(tickets.resolve(ticket.id, { coverageDecision: 'NOT_COVERED', resolutionNotes: 'Repaired' }, support),
+        { code: 'INVALID_TRANSITION' })
+      await assert.rejects(tickets.reportRepair(ticket.id, report, technician), { code: 'VALIDATION_ERROR' })
+      const proof = await tx.attachment.create({ data: {
+        ownerType: 'TICKET', ownerId: ticket.id, uploadedById: worker.id, storageKey: randomUUID(),
+        originalName: 'service-customer-signature.png', mimeType: 'image/png', sizeBytes: 100,
+        createdAt: new Date(started.repairStartedAt.getTime() + 45 * 60_000),
+      } })
+      now = proof.createdAt
+      const signedReport = { ...report, customerSignerName: 'Customer', signatureAttachmentId: proof.id }
+      const reported = await tickets.reportRepair(ticket.id, signedReport, technician)
       assert.equal(reported.repairNotes, report.repairNotes)
       assert.equal(reported.status, 'IN_PROGRESS')
-      assert.deepEqual((await tickets.reportRepair(ticket.id, report, technician)).repairReportedAt, reported.repairReportedAt)
+      assert.deepEqual(reported.repairReportedAt, now)
+      assert.equal(reported.repairSignatureId, proof.id)
+      assert.equal(reported.laborRateSnapshot.toFixed(2), '600.00')
+      assert.equal(reported.laborCharge.toFixed(2), '450.00')
+      await tickets.updateLabourRate('800.00', support)
+      assert.deepEqual((await tickets.reportRepair(ticket.id, signedReport, technician)).repairReportedAt, reported.repairReportedAt)
       await assert.rejects(tickets.part(ticket.id, used, technician), { code: 'INVALID_TRANSITION' })
       await assert.rejects(tickets.resolve(ticket.id, { coverageDecision: 'COVERED', resolutionNotes: 'Repaired' }, support), { code: 'INVALID_TRANSITION' })
       const resolution = { coverageDecision: 'NOT_COVERED', resolutionNotes: 'Replaced both connectors.' }

@@ -14,7 +14,7 @@ function expand(specification) {
   })
 }
 
-const operations = expand('surveys:approve catalog:manage installations:manage audit:read')
+const operations = expand('surveys:approve catalog:manage installations:manage audit:read service_labour:manage')
 const staffGrants = Object.fromEntries(Object.entries(grants).map(([role, spec]) => [role, expand(spec)]))
 const capabilities = [...new Set([...Object.values(staffGrants).flat(), ...operations, 'users:manage'])]
 export const roleCapabilities = Object.freeze({

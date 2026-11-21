@@ -774,6 +774,10 @@ model ServiceTicket {
   incidentAt               DateTime
   repairReportedAt         DateTime?
   repairNotes              String?
+  repairStartedAt          DateTime?
+  repairSignerName         String?
+  repairSignatureId        String?
+  laborRateSnapshot        Decimal?         @db.Decimal(8, 2)
   resolvedAt               DateTime?
   confirmedAt              DateTime?
   customerConfirmationName String?
@@ -794,6 +798,12 @@ model ServiceTicket {
   @@index([assetId])
   @@index([orderId])
   @@index([assignedToId])
+}
+
+model ServiceLabourRate {
+  id         String   @id
+  hourlyRate Decimal  @db.Decimal(8, 2)
+  updatedAt  DateTime @updatedAt
 }
 
 model TicketPart {

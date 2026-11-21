@@ -130,13 +130,22 @@ test('serialized dispatch, warranty activation, and assigned installation sign-o
         priority: 'MEDIUM', incidentAt: complete.signedAt,
       }, support)
       await tickets.update(ticket.id, { assignedToId: installer.id }, support)
-      await tickets.update(ticket.id, { status: 'IN_PROGRESS' }, technician)
+      const started = await tickets.update(ticket.id, { status: 'IN_PROGRESS' }, technician)
       const replacement = await tickets.replace(ticket.id, { serialNumber: spare.serialNumber }, technician)
       assert.equal(replacement.replacementAssetId, spare.id)
       assert.ok(replacement.chargeSnapshot.isZero())
       const inherited = await tx.warranty.findUnique({ where: { assetId: spare.id } })
       assert.equal(inherited.originalWarrantyId, warranties[0].id)
       assert.deepEqual(inherited.endAt, warranties[0].endAt)
+      const repairProof = await tx.attachment.create({ data: {
+        ownerType: 'TICKET', ownerId: ticket.id, uploadedById: installer.id, storageKey: randomUUID(),
+        originalName: 'service-customer-signature.png', mimeType: 'image/png', sizeBytes: 100,
+        createdAt: started.repairStartedAt,
+      } })
+      const report = await tickets.reportRepair(ticket.id, {
+        repairNotes: 'Replaced faulty equipment.', customerSignerName: 'Customer', signatureAttachmentId: repairProof.id,
+      }, technician)
+      assert.ok(report.laborCharge.isZero())
       const resolved = await tickets.resolve(ticket.id, { coverageDecision: 'COVERED', resolutionNotes: 'Replaced faulty equipment.' }, support)
       assert.equal(resolved.invoiceByTicket, null)
       throw new Error('Rollback dispatch fixture')

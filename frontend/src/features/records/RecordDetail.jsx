@@ -131,7 +131,11 @@ const definition = {
     fields: [['Reference', displayReference(row.ticketNumber)], ['Status', state(row.status)], ['Serial', row.asset?.serialNumber],
       ['Coverage', state(row.coverageDecision)], ['Assigned to', row.assignedTo?.name], ['Reported', localDate(row.incidentAt)],
       ['Description', row.description], ['Labour charge', money(row.laborCharge)], ['Invoice', displayReference(row.invoiceByTicket?.invoiceNumber)],
-      ['Work reported', localDate(row.repairReportedAt)], ['Technician repair notes', row.repairNotes],
+      ['Visit started', localDate(row.repairStartedAt)],
+      [row.repairSignatureId ? 'Visit ended at sign-off' : 'Work reported', localDate(row.repairReportedAt)],
+      ['Customer signer', row.repairSignerName],
+      ['Hourly labour rate used', money(row.laborRateSnapshot)],
+      ['Technician repair notes', row.repairNotes],
       ['Confirmation', row.customerConfirmationName]],
     groups: [['Parts', ['Product', 'Quantity', 'Unit charge'], row.ticketPartsByTicket.map(part => [part.product.name, part.quantity, money(part.chargeSnapshot)])],
       ['History', ['At', 'Action'], activity(row.timeline)]], attachments: row.attachments,
@@ -211,7 +215,7 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
   const orderAdminActions = orderActions.filter(action => action.key !== 'payment')
   const subsidy = capabilities.includes('subsidies:read') ? order?.subsidyApplicationByOrder : undefined
   const ticketActions = state.ticket ? recordActions('tickets', state.ticket, capabilities, { detail: true }) : []
-  const repairRecords = ticketActions.filter(action => ['laborCharge', 'replacement', 'addPart'].includes(action.key))
+  const repairRecords = ticketActions.filter(action => ['replacement', 'addPart'].includes(action.key))
   const reassignTicket = ticketActions.find(action => action.key === 'ticketReassignment')
   const detailActions = state.quote ? recordActions('quotes', state.quote, capabilities)
     : [

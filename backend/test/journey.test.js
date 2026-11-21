@@ -92,6 +92,9 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.ok(received.timeline[0].at)
         assert.ok(received.timeline.slice(1).every(event => event.at === null))
         token = (await post('/auth/login', { email, password })).accessToken
+        const rate = await patch('/service-labour-rate', { hourlyRate: '600.50' })
+        assert.equal(rate.hourlyRate, '600.5')
+        assert.equal((await request('GET', '/service-labour-rate')).hourlyRate, '600.5')
         const approval = '/customer-portal/staff/customers/' + legacyLead.customerId + '/access'
         assert.equal((await portal('/staff/customers/' + legacyLead.customerId + '/access', {
           method: 'PATCH', body: { email, approved: true },
@@ -204,6 +207,11 @@ test('Express connects public intake to paid delivery, signed completion, and co
         const salesEmail = 'sales-' + email
         await tx.user.create({ data: { name: 'Sales fixture', email: salesEmail, role: 'SALES', passwordHash: admin.passwordHash } })
         token = (await post('/auth/login', { email: salesEmail, password })).accessToken
+        const deniedRate = await fetch(url + '/service-labour-rate', {
+          method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hourlyRate: '1.00' }),
+        })
+        assert.equal(deniedRate.status, 403)
         assert.deepEqual((await related('orders', order.id)).map(link => link.section), ['leads', 'surveys', 'quotes'])
         assert.equal((await fetch(url + '/workflow/invoices/' + invoice.id + '/related', {
           headers: { Authorization: 'Bearer ' + token },

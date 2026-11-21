@@ -12,6 +12,7 @@ import { hasDetail } from './RecordDetail.jsx'
 import WorkflowAction, { collectionActions, quotationAfterApproval, recordActions } from './WorkflowAction.jsx'
 import { Notice } from '../../components/ui/Notice.jsx'
 import { api } from '../../lib/api.js'
+import { ServiceLabourRate } from './ServiceLabourRate.jsx'
 
 const statuses = {
   leads: 'NEW CONTACTED QUALIFIED SURVEY_SCHEDULED SURVEY_PENDING_APPROVAL SURVEY_APPROVED QUOTED WON LOST',
@@ -116,6 +117,7 @@ export default function Records({ section, token, capabilities }) {
       />
 
       <div className="records">
+        {section.path === 'tickets' && capabilities.includes('service_labour:manage') && <ServiceLabourRate token={token} />}
         {managePackages && (
           <div className="toolbar mb-2">
             <button
