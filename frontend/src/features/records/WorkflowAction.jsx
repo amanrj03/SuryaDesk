@@ -197,9 +197,15 @@ function baseRecordActions(section, row, capabilities, detail) {
     const start = row.status === 'ASSIGNED' && can('tickets:manage')
       ? [patch('startTicket', 'Mark in progress', url, [], () => ({ status: 'IN_PROGRESS' }))]
       : []
+    const report = row.status === 'IN_PROGRESS' && row.canReportRepair && !row.repairReportedAt
+      ? [post('reportRepair', 'Report work done', url + '/report-repair', [
+        input('repairNotes', 'Work completed', 'textarea', { maxLength: 2000 }),
+      ])]
+      : []
     if (!['RESOLVED_PENDING_CONFIRMATION', 'CLOSED'].includes(row.status) && can('tickets:resolve')) {
       return [
         ...start,
+        ...report,
         patch('ticketAssignment', 'Assign technician', url, [
           { ...choice('assignedToId', 'Technician', []), source: '/users/options?kind=technician' },
         ], values => values),
@@ -218,11 +224,11 @@ function baseRecordActions(section, row, capabilities, detail) {
           number('chargePerUnit', 'Customer charge per unit (INR)', { min: 0, defaultValue: 0 }),
         ], values => ({ ...values, quantity: Number(values.quantity) }))] : []),
         post('resolve', 'Resolve ticket', url + '/resolve', [
-          input('resolutionNotes', 'Repair details', 'textarea', { maxLength: 2000 }),
+          input('resolutionNotes', 'Repair details', 'textarea', { maxLength: 2000, defaultValue: row.repairNotes ?? '' }),
         ], values => ({ ...values, coverageDecision: row.coverageDecision === 'COVERED' ? 'COVERED' : 'NOT_COVERED' })),
       ]
     }
-    return start
+    return [...start, ...report]
   }
   if (section === 'subsidies' && row.status !== 'PAID' && can('subsidies:manage')) {
     const statuses = {

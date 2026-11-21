@@ -16,6 +16,7 @@ const validation = message => new ApiError(400, 'VALIDATION_ERROR', message)
 const limited = user => user.capabilities.includes('installations:complete_assigned') && !user.capabilities.includes('tickets:resolve')
 const scope = user => limited(user) ? { assignedToId: user.id } : {}
 const open = ['OPEN', 'TRIAGED', 'ASSIGNED', 'IN_PROGRESS']
+const canReportRepair = (ticket, user) => ticket.assignedToId === user.id && user.capabilities.includes('tickets:report_repair')
 
 async function locked(tx, id, user) {
   await tx.$queryRaw`SELECT id FROM "ServiceTicket" WHERE id = ${id} FOR UPDATE`
@@ -77,7 +78,8 @@ export function ticketsService(db) {
           where, include, skip: (page - 1) * limit, take: limit, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         })
         const total = await tx.serviceTicket.count({ where })
-        return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } }
+        return { data: data.map(ticket => ({ ...ticket, canReportRepair: canReportRepair(ticket, user) })),
+          meta: { page, limit, total, totalPages: Math.ceil(total / limit) } }
       }, { isolationLevel: 'RepeatableRead' })
     },
     async detail(id, user) {
@@ -93,7 +95,7 @@ export function ticketsService(db) {
       })
       const invoice = ticket.invoiceByTicket
       return {
-        ...ticket, timeline, attachments,
+        ...ticket, timeline, attachments, canReportRepair: canReportRepair(ticket, user),
         invoiceByTicket: invoice && { ...invoice, downloadable: canDownloadInvoice(invoice, null) },
       }
     },
@@ -192,6 +194,22 @@ export function ticketsService(db) {
         await tx.serviceTicket.update({ where: { id }, data: { coverageDecision: covered ? 'COVERED' : 'NOT_COVERED' } })
         await audit(tx, id, 'ASSET_REPLACED', user.id, { previousAssetId: original.id, replacementAssetId: replacement.id, covered })
         return part
+      })
+    },
+    async reportRepair(id, { repairNotes }, user) {
+      return db.$transaction(async tx => {
+        const ticket = await locked(tx, id, user)
+        if (!canReportRepair(ticket, user)) throw notFound()
+        if (ticket.status !== 'IN_PROGRESS') throw invalid('Start work on the ticket before reporting a repair.')
+        if (ticket.repairReportedAt) {
+          if (ticket.repairNotes === repairNotes) return ticket
+          throw invalid('A repair report has already been submitted.')
+        }
+        const updated = await tx.serviceTicket.update({
+          where: { id }, data: { repairNotes, repairReportedAt: new Date() }, include,
+        })
+        await audit(tx, id, 'REPAIR_REPORTED', user.id, {})
+        return updated
       })
     },
     async resolve(id, { resolutionNotes, coverageDecision, coverageReason }, user) {

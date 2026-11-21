@@ -2,7 +2,7 @@ const grants = {
   SALES: 'leads:read/write surveys:read/schedule catalog:read quotes:read/create/send/accept orders:read/create/share_tracking payments:read',
   SURVEYOR: 'surveys:read/record attachments:upload leads:read',
   WAREHOUSE: 'inventory:read/write catalog:read orders:read dispatch:prepare/allocate/complete/deliver warranties:read',
-  TECHNICIAN: 'installations:read/complete_assigned attachments:upload tickets:read/manage warranties:read',
+  TECHNICIAN: 'installations:read/complete_assigned attachments:upload tickets:read/manage/report_repair warranties:read',
   SUPPORT: 'attachments:upload tickets:create/read/manage/resolve/confirm warranties:read orders:read inventory:read',
   FINANCE: 'attachments:upload orders:read/share_tracking payments:read/record invoices:read/manage subsidies:read/manage reports:view/financial/export',
 }

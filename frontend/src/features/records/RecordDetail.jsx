@@ -130,6 +130,7 @@ const definition = {
     fields: [['Reference', displayReference(row.ticketNumber)], ['Status', state(row.status)], ['Serial', row.asset?.serialNumber],
       ['Coverage', state(row.coverageDecision)], ['Assigned to', row.assignedTo?.name], ['Reported', localDate(row.incidentAt)],
       ['Description', row.description], ['Labour charge', money(row.laborCharge)], ['Invoice', displayReference(row.invoiceByTicket?.invoiceNumber)],
+      ['Work reported', localDate(row.repairReportedAt)], ['Technician repair notes', row.repairNotes],
       ['Confirmation', row.customerConfirmationName]],
     groups: [['Parts', ['Product', 'Quantity', 'Unit charge'], row.ticketPartsByTicket.map(part => [part.product.name, part.quantity, money(part.chargeSnapshot)])],
       ['History', ['At', 'Action'], activity(row.timeline)]], attachments: row.attachments,
@@ -155,7 +156,7 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
   const [state, setState] = useState({})
   const [retry, setRetry] = useState(0)
   const [mediaError, setMediaError] = useState('')
-  const [quoteAction, setQuoteAction] = useState(null)
+  const [detailAction, setDetailAction] = useState(null)
   const [surveyAction, setSurveyAction] = useState(null)
   const backButton = useRef(null)
 
@@ -174,6 +175,7 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
             data: definition[section](data),
             quote: section === 'quotes' ? data : undefined,
             survey: section === 'surveys' ? data : undefined,
+            ticket: section === 'tickets' ? data : undefined,
           })
         }
       })
@@ -202,7 +204,8 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
   }
 
   const data = state.data
-  const quoteActions = state.quote ? recordActions('quotes', state.quote, capabilities) : []
+  const detailActions = state.quote ? recordActions('quotes', state.quote, capabilities)
+    : state.ticket ? recordActions('tickets', state.ticket, capabilities).filter(action => ['startTicket', 'reportRepair', 'resolve'].includes(action.key)) : []
   const surveyActions = state.survey
     ? recordActions('surveys', state.survey, capabilities, { detail: true })
       .filter(action => ['approve', 'rejectSurvey', 'quote'].includes(action.key))
@@ -216,11 +219,11 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
         {data?.title ?? 'Record details'}
       </h1>
       {data && hasRelatedRecords(section) && <RelatedRecords section={section} id={id} token={token} />}
-      {quoteActions.length > 0 && <div className="flex flex-wrap gap-2">
-        {quoteActions.map(action => (
+      {detailActions.length > 0 && <div className="flex flex-wrap gap-2">
+        {detailActions.map(action => (
           <button key={action.key} type="button"
             className={['accept', 'order'].includes(action.key) ? 'primary' : 'secondary'}
-            onClick={() => setQuoteAction(action)}>
+            onClick={() => setDetailAction(action)}>
             {action.label}
           </button>
         ))}
@@ -277,9 +280,9 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
           retryDetails()
         }} />
     )}
-    {quoteAction && (
-      <WorkflowAction key={quoteAction.key} action={quoteAction} token={token} onClose={() => setQuoteAction(null)}
-        onSaved={() => { setQuoteAction(null); retryDetails() }} />
+    {detailAction && (
+      <WorkflowAction key={detailAction.key} action={detailAction} token={token} onClose={() => setDetailAction(null)}
+        onSaved={() => { setDetailAction(null); retryDetails() }} />
     )}
   </section>
 }

@@ -22,6 +22,7 @@ export const update = z.strictObject({
   notes: text.optional(), laborCharge: amount.optional(),
 }).refine(value => Object.keys(value).length > 0)
 export const part = z.strictObject({ productId: id, quantity: z.number().int().min(1).max(10000), chargePerUnit: amount })
+export const repairReport = z.strictObject({ repairNotes: text })
 export const resolve = z.strictObject({
   resolutionNotes: text, coverageDecision: z.enum(['COVERED', 'NOT_COVERED']), coverageReason: text.optional(),
 })

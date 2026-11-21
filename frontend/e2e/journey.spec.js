@@ -473,13 +473,21 @@ test('customer service request reaches the assigned technician and closes after 
     await field.getByRole('dialog', { name: 'Mark in progress' }).getByRole('button', { name: 'Mark in progress' }).click()
     await expect(fieldRow).toContainText('In progress')
     await expect(fieldRow.getByRole('button', { name: 'Resolve ticket' })).toHaveCount(0)
+    await fieldRow.getByRole('link', { name: 'View', exact: true }).click()
+    await field.getByRole('button', { name: 'Report work done' }).click()
+    const report = field.getByRole('dialog', { name: 'Report work done' })
+    const repairNotes = 'Re-seated the string connector and verified stable generation.'
+    await report.getByLabel('Work completed').fill(repairNotes)
+    await report.getByRole('button', { name: 'Report work done' }).click()
+    await expect(field.getByText(repairNotes, { exact: true })).toBeVisible()
+    await expect(field.getByRole('button', { name: 'Report work done' })).toHaveCount(0)
 
     await support.getByLabel('Filter by status').selectOption('IN_PROGRESS')
     const active = supportRow
-    await expect(active).toContainText('In progress')
+    await expect(active).toContainText('Repair reported')
     await active.getByRole('button', { name: 'Resolve ticket' }).click()
     const resolveTicket = support.getByRole('dialog', { name: 'Resolve ticket' })
-    await resolveTicket.getByLabel('Repair details').fill('Re-seated the string connector and verified stable generation.')
+    await expect(resolveTicket.getByLabel('Repair details')).toHaveValue(repairNotes)
     await resolveTicket.getByRole('button', { name: 'Resolve ticket' }).click()
     await expect(resolveTicket).toHaveCount(0)
     await support.getByLabel('Filter by status').selectOption('RESOLVED_PENDING_CONFIRMATION')

@@ -214,7 +214,7 @@ export const sections = [
       ['Customer', (row) => row.customer.name],
       ['Fault', (row) => row.faultCode || '—'],
       ['Priority', (row) => words(row.priority)],
-      ['Status', (row) => <StatusBadge status={row.status} />],
+      ['Status', (row) => <StatusBadge status={row.status === 'IN_PROGRESS' && row.repairReportedAt ? 'REPAIR_REPORTED' : row.status} />],
     ],
   },
   {

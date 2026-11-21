@@ -16,6 +16,7 @@ export function ticketsController(tickets) {
     update: action('update'),
     part: action('part', 201),
     replace: action('replace', 201),
+    reportRepair: action('reportRepair'),
     resolve: action('resolve'),
     confirm: action('confirm'),
   }

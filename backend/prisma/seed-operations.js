@@ -84,7 +84,7 @@ export async function seedOperations(db) {
       if (await tx.serviceTicket.findUnique({ where: { ticketNumber } })) return
       const ticket = await tx.serviceTicket.create({ data: {
         ticketNumber, customerId: customer.id, assetId: asset?.id, orderId: asset?.orderId,
-        assignedToId: index % 6 >= 2 ? workers[index % workers.length].id : null,
+        assignedToId: index % 6 >= 2 ? workers[(Math.floor(index / 6) + index % 6 - 2) % workers.length].id : null,
         faultCode: asset ? faultCode : null, description: asset ? description : visits[index % visits.length],
         incidentAt, createdAt: incidentAt, status: state,
         priority: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'MEDIUM'][index % 5],

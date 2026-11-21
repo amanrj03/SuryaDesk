@@ -772,6 +772,8 @@ model ServiceTicket {
   coverageDecision         CoverageDecision
   coverageReason           String?
   incidentAt               DateTime
+  repairReportedAt         DateTime?
+  repairNotes              String?
   resolvedAt               DateTime?
   confirmedAt              DateTime?
   customerConfirmationName String?
