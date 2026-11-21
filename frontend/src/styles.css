@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+:root {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #162d42;
+  background: #f4f8fc;
+  font-synthesis: none;
+}
+h1 { @apply text-3xl font-bold tracking-tight; }
+h2 { @apply text-xl font-semibold; }
+button { @apply cursor-pointer disabled:cursor-not-allowed disabled:opacity-50; }
+a, button, input, select, textarea { @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600; }
+input:not([type=checkbox]), textarea, select {
+  @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-800;
+}
+textarea { @apply min-h-20 resize-y; }
+.primary, .secondary { @apply rounded-xl px-4 py-2.5 font-semibold transition-colors; }
+.primary { @apply bg-blue-700 text-white hover:bg-blue-800; }
+.secondary { @apply border border-slate-300 bg-white text-slate-700 hover:bg-blue-50; }
+.brand { @apply flex items-center gap-3 text-xl font-bold tracking-tight; }
+.brand > span {
+  @apply grid size-10 place-items-center rounded-xl bg-gradient-to-tr from-blue-700 to-sky-400 text-white shadow-sm;
+}
+.brand svg { @apply size-6; }
+.public-screen {
+  @apply grid min-h-screen place-items-center px-4 py-12;
+  background: radial-gradient(ellipse at top right, #badcf7, #edf5fc 62%, #f4f8fc);
+}
+.public-panel {
+  @apply grid w-full max-w-md gap-6 rounded-3xl border border-white bg-white/90 p-7 shadow-xl shadow-blue-950/5 sm:p-9;
+}
+.public-panel.enquiry { @apply max-w-3xl; }
+.public-panel > a { @apply w-fit text-sm font-semibold text-blue-700 hover:underline; }
+.form { @apply grid gap-4; }
+.form label { @apply grid gap-1.5 text-sm font-semibold; }
+.form-grid { @apply grid gap-4 sm:grid-cols-2; }
+.form .check { @apply flex items-center gap-2; }
+.form .check input { @apply size-4 accent-blue-700; }
+.notice { @apply rounded-xl border border-rose-200 bg-rose-50 p-3 text-rose-800; }
+.success { @apply grid gap-2 rounded-2xl bg-emerald-50 p-4 break-all text-emerald-900; }
+.workspace { @apply min-h-screen lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]; }
+.sidebar {
+  @apply flex flex-col gap-6 border-b border-white bg-gradient-to-b from-[#eaf3fa] to-[#dfedf9] p-5 lg:sticky lg:top-0 lg:h-screen lg:border-r lg:border-b-0;
+}
+.sidebar nav { @apply flex flex-wrap gap-2 lg:grid; }
+.sidebar nav a {
+  @apply flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-white/65;
+}
+.sidebar nav a.active { @apply bg-white/90 text-blue-800 shadow-sm; }
+.sidebar nav svg, .account svg { @apply size-5 shrink-0; }
+.account {
+  @apply flex items-center justify-between gap-2 rounded-xl border border-white bg-white/65 px-3 py-2 lg:mt-auto;
+}
+.account span { @apply block text-sm text-slate-600; }
+.account button { @apply rounded-lg p-2 hover:bg-white; }
+.workspace-body { @apply min-w-0; }
+.page-header {
+  @apply flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-[#d3e8f9] to-[#a5cef0] px-5 py-7 sm:px-8;
+}
+.page-header p { @apply font-medium text-blue-950; }
+.records { @apply m-4 overflow-hidden rounded-2xl border border-white bg-white shadow-sm sm:m-7; }
+.toolbar { @apply flex flex-wrap gap-2 border-b border-slate-200 p-4; }
+.toolbar input { @apply max-w-sm; }
+.feedback { @apply space-y-3 p-6 text-slate-700; }
+table { @apply w-full text-left text-sm; }
+thead { @apply bg-slate-50 text-slate-600; }
+th, td { @apply border-b border-slate-100 px-4 py-3; }
+th { @apply font-semibold; }
+td:first-child { @apply max-w-56 truncate; }
+tbody tr { @apply hover:bg-sky-50/55; }
+.status { @apply inline-flex whitespace-nowrap rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-900; }
+.pager { @apply flex flex-wrap items-center justify-between gap-2 p-4 text-sm; }
