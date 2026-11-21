@@ -20,7 +20,7 @@ export function AppShell({ session, sections, onLogout, children }) {
       <div className="flex flex-1 flex-col items-start gap-3 p-2.5 sm:p-4 lg:flex-row lg:gap-4 lg:p-5">
         <div
           id="workspace-navigation"
-          className={`w-full shrink-0 self-stretch lg:block lg:w-56 ${navigationOpen ? '' : 'hidden'}`}
+          className={`w-full shrink-0 self-stretch lg:self-auto lg:block lg:w-56 lg:sticky lg:top-[68px] lg:h-[calc(100vh-88px)] lg:max-h-[calc(100vh-88px)] ${navigationOpen ? '' : 'hidden'}`}
         >
           <Sidebar user={user} sections={sections} onLogout={onLogout} />
         </div>

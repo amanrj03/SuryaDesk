@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../components/layout/AppShell.jsx'
 import { Notice } from '../components/ui/Notice.jsx'
 import { PageHeader } from '../components/ui/PageHeader.jsx'
@@ -22,14 +22,23 @@ const workspaceAliases = [
 
 function DetailPage({ section, token }) {
   const { id } = useParams()
+  const { state } = useLocation()
   const navigate = useNavigate()
+
+  function goBack() {
+    if (state?.fromRecordList) navigate(-1)
+    else navigate('/' + section.path, { replace: true })
+  }
+
   return (
     <div className="records">
       <RecordDetail
+        key={section.path + '/' + id}
         id={id}
         section={section.path}
         token={token}
-        onClose={() => navigate('/' + section.path)}
+        backLabel={'Back to ' + section.title}
+        onBack={goBack}
       />
     </div>
   )

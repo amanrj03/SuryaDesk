@@ -11,6 +11,7 @@ async function signIn(page) {
 test('all administrator navigation destinations load live records', async ({ page }, info) => {
   test.setTimeout(90000)
   let opened = 0
+  let viewed = 0
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
   await signIn(page)
@@ -30,6 +31,19 @@ test('all administrator navigation destinations load live records', async ({ pag
     await expect(page.locator('.page-header p')).toHaveText(meta.total + (meta.total === 1 ? ' record' : ' records'))
     await expect(link).toHaveAttribute('aria-current', 'page')
     await expect(page.getByRole('alert')).toHaveCount(0)
+    const view = page.locator('tbody').getByRole('link', { name: 'View', exact: true }).first()
+    if (await view.count()) {
+      const detailPath = await view.getAttribute('href')
+      await view.click()
+      await expect(page).toHaveURL(url => url.pathname === detailPath)
+      await expect(page.locator('main h1')).not.toHaveText('Record details')
+      await expect(page.locator('main .pager')).toHaveCount(0)
+      await expect(page.getByRole('alert')).toHaveCount(0)
+      await page.getByRole('button', { name: 'Back to ' + title, exact: true }).click()
+      await expect(page).toHaveURL(url => url.pathname === path)
+      await expect(view).toBeVisible()
+      viewed++
+    }
     const entryPoints = page.locator('.records > .toolbar > button.primary, .records tbody button')
     const actions = [...new Set(await entryPoints.allTextContents())]
     for (const action of actions) {
@@ -43,12 +57,19 @@ test('all administrator navigation destinations load live records', async ({ pag
       opened++
     }
   }
-  expect(opened).toBeGreaterThan(25)
-  console.log('Verified action or record panels:', opened)
+  expect(viewed).toBe(12)
+  expect(opened + viewed).toBeGreaterThan(25)
+  console.log('Verified action panels:', opened, 'and detail pages:', viewed)
   await nav.getByRole('link', { name: 'Enquiries', exact: true }).click()
   await page.getByRole('combobox', { name: 'Filter by status' }).selectOption('WON')
   await expect(page.getByRole('row').nth(1)).toContainText('Won')
   await page.getByRole('button', { name: 'Next', exact: true }).click()
+  await expect(page.getByText(/^Page 2 of/)).toBeVisible()
+  const filteredUrl = page.url()
+  await page.getByRole('link', { name: 'View', exact: true }).first().click()
+  await page.getByRole('button', { name: 'Back to Enquiries' }).click()
+  await expect(page).toHaveURL(filteredUrl)
+  await expect(page.getByRole('combobox', { name: 'Filter by status' })).toHaveValue('WON')
   await expect(page.getByText(/^Page 2 of/)).toBeVisible()
   await page.getByRole('button', { name: 'Previous', exact: true }).click()
   await expect(page.getByText(/^Page 1 of/)).toBeVisible()
@@ -62,6 +83,12 @@ test('all administrator navigation destinations load live records', async ({ pag
   }))
   expect(mobileLayout.page).toBeLessThanOrEqual(mobileLayout.viewport)
   expect(mobileLayout.heading).toBeLessThan(300)
+  await page.getByRole('link', { name: 'View', exact: true }).first().click()
+  await expect(page.locator('main h1')).not.toHaveText('Record details')
+  const mobileBack = page.getByRole('button', { name: 'Back to Enquiries' })
+  await expect(mobileBack).toBeInViewport()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await mobileBack.click()
   await nav.getByRole('link', { name: 'Staff', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Staff', exact: true })).toBeVisible()
   await expect(page.getByRole('table')).toBeVisible()

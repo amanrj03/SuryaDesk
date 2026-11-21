@@ -47,12 +47,12 @@ export function Sidebar({ user, sections = [], onLogout }) {
   ]
 
   return (
-    <aside className="sidebar flex w-full flex-col justify-between py-1 px-1 lg:min-h-full lg:py-2 lg:px-2">
-      <div className="flex w-full items-center justify-between gap-2 lg:items-stretch lg:gap-3">
+    <aside className="sidebar flex w-full flex-col justify-between py-1 px-1 lg:h-full lg:max-h-full lg:py-1 lg:px-1">
+      <div className="flex w-full min-w-0 flex-1 items-center justify-between gap-2 lg:flex-col lg:items-stretch lg:min-h-0">
         {/* Primary Workspace Navigation */}
         <nav
           aria-label="Workspace"
-          className="flex min-w-0 flex-1 flex-row items-center gap-1.5 overflow-x-auto scrollbar-thin py-1 text-xs font-medium text-gray-600 lg:flex-col lg:items-stretch lg:space-y-3.5 lg:overflow-x-hidden"
+          className="flex min-w-0 flex-1 flex-row items-center gap-1.5 overflow-x-auto scrollbar-thin py-1 text-xs font-medium text-gray-600 lg:flex-col lg:items-stretch lg:space-y-3 lg:overflow-y-auto lg:overflow-x-hidden lg:pr-1"
         >
           {/* Quick link: Overview */}
           {hasReports && (
@@ -160,7 +160,7 @@ export function Sidebar({ user, sections = [], onLogout }) {
       </div>
 
       {/* On Desktop (>= 1024px): Account Profile strip at bottom of sidebar */}
-      <div className="hidden mt-auto pt-4 border-t border-gray-200/60 lg:block">
+      <div className="hidden shrink-0 pt-3 mt-2 border-t border-gray-200/60 lg:block">
         <div className="flex items-center justify-between gap-2 rounded-xl border border-white/60 bg-white/60 p-2 shadow-2xs backdrop-blur-xs">
           <div className="flex min-w-0 items-center gap-2">
             <Avatar name={user?.name ?? 'User'} size="sm" tone="soft" />
@@ -174,7 +174,7 @@ export function Sidebar({ user, sections = [], onLogout }) {
             onClick={onLogout}
             aria-label="Sign out"
             title="Sign out"
-            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-white hover:text-gray-900"
+            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-white hover:text-gray-900 cursor-pointer"
           >
             <ArrowRightStartOnRectangleIcon className="size-4" />
           </button>

@@ -84,9 +84,17 @@ test('director can switch periods and see seeded profitability', async ({ page }
   await page.getByRole('button', { name: 'Download CSV' }).click()
   expect((await download).suggestedFilename()).toBe('profitability.csv')
   await page.getByRole('link', { name: 'Packages' }).click()
+  const packageSearch = page.getByRole('textbox', { name: 'Search packages' })
+  await packageSearch.fill('DEMO-ON-GRID-3')
+  await packageSearch.press('Enter')
+  await expect(page).toHaveURL(/q=DEMO-ON-GRID-3/)
   const packageRow = page.getByRole('row').filter({ hasText: 'DEMO-ON-GRID-3' })
-  await packageRow.getByRole('button', { name: 'View' }).click()
+  await packageRow.getByRole('link', { name: 'View', exact: true }).click()
+  await expect(packageRow).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Bill of materials' })).toBeVisible()
+  await page.goBack()
+  await expect(packageSearch).toHaveValue('DEMO-ON-GRID-3')
+  await expect(packageRow).toBeVisible()
 })
 
 test('assigned technician completes a delivered job with a photo and drawn signature', async ({ page }) => {

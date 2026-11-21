@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../components/ui/PageHeader.jsx'
 import { TableSkeleton } from '../../components/ui/States.jsx'
 import { words } from '../../lib/format.js'
 import LeadEditor from '../enquiries/LeadEditor.jsx'
 import InstallationSignoff from '../installations/InstallationSignoff.jsx'
 import PackageEditor from '../catalog/PackageEditor.jsx'
-import RecordDetail, { hasDetail } from './RecordDetail.jsx'
+import { hasDetail } from './RecordDetail.jsx'
 import WorkflowAction, { collectionActions, recordActions } from './WorkflowAction.jsx'
 import { Notice } from '../../components/ui/Notice.jsx'
 import { api } from '../../lib/api.js'
@@ -27,12 +27,16 @@ const statuses = {
 }
 
 export default function Records({ section, token, capabilities }) {
-  const [page, setPage] = useState(1)
   const [searchParams, setSearchParams] = useSearchParams()
+  const requestedPage = Number(searchParams.get('page'))
+  const page = Number.isInteger(requestedPage) && requestedPage >= 1 && requestedPage <= 100000
+    ? requestedPage
+    : 1
   const search = section.search ? (searchParams.get('q') ?? '').slice(0, 120) : ''
   const [query, setQuery] = useState(search)
-  const [status, setStatus] = useState('')
   const choices = statuses[section.path]?.split(' ')
+  const requestedStatus = searchParams.get('status')
+  const status = choices?.includes(requestedStatus) ? requestedStatus : ''
   const [retry, setRetry] = useState(0)
   const [state, setState] = useState({ busy: true })
   const [selected, setSelected] = useState(null)
@@ -40,11 +44,11 @@ export default function Records({ section, token, capabilities }) {
   const canSign =
     section.path === 'installations' && capabilities.includes('installations:complete_assigned')
   const [action, setAction] = useState(null)
-  const [detail, setDetail] = useState(null)
   const [packageEdit, setPackageEdit] = useState(null)
   const managePackages = section.path === 'packages' && capabilities.includes('catalog:manage')
+  const canView = hasDetail(section.path)
   const hasActions =
-    hasDetail(section.path) ||
+    canView ||
     canEditLead ||
     canSign ||
     managePackages ||
@@ -53,17 +57,18 @@ export default function Records({ section, token, capabilities }) {
 
   useEffect(() => {
     setQuery(search)
-    setPage(1)
-    setState({ busy: true })
   }, [search])
 
   useEffect(() => {
     const controller = new AbortController()
+    setState({ busy: true })
     const params = new URLSearchParams({ page: String(page), limit: '20' })
     if (search) params.set('q', search)
     if (status) params.set('status', status)
     api('/' + section.path + '?' + params, { token, signal: controller.signal })
-      .then((result) => setState({ result }))
+      .then((result) => {
+        if (!controller.signal.aborted) setState({ result })
+      })
       .catch((error) => {
         if (!controller.signal.aborted) setState({ error: error.message })
       })
@@ -73,15 +78,23 @@ export default function Records({ section, token, capabilities }) {
   function refresh() {
     setSelected(null)
     setAction(null)
-    setDetail(null)
     setPackageEdit(null)
     setState({ busy: true })
     setRetry((value) => value + 1)
   }
 
   function go(nextPage) {
-    setState({ busy: true })
-    setPage(nextPage)
+    updateListParams('page', nextPage === 1 ? '' : String(nextPage))
+  }
+
+  function updateListParams(name, value) {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      if (name !== 'page') next.delete('page')
+      if (value) next.set(name, value)
+      else next.delete(name)
+      return next
+    })
   }
 
   return (
@@ -101,10 +114,7 @@ export default function Records({ section, token, capabilities }) {
             <button
               type="button"
               className="primary"
-              onClick={() => {
-                setDetail(null)
-                setPackageEdit({})
-              }}
+              onClick={() => setPackageEdit({})}
             >
               Add package
             </button>
@@ -127,7 +137,6 @@ export default function Records({ section, token, capabilities }) {
               type="button"
               className="primary"
               onClick={() => {
-                setDetail(null)
                 setSelected(null)
                 setAction(candidate)
               }}
@@ -136,16 +145,6 @@ export default function Records({ section, token, capabilities }) {
             </button>
           </div>
         ))}
-
-        {detail && (
-          <RecordDetail
-            key={detail}
-            id={detail}
-            section={section.path}
-            token={token}
-            onClose={() => setDetail(null)}
-          />
-        )}
 
         {selected && (
           <Editor
@@ -174,15 +173,7 @@ export default function Records({ section, token, capabilities }) {
             className="toolbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-gray-100 bg-white/80 p-2 shadow-2xs backdrop-blur-xs"
             onSubmit={(event) => {
               event.preventDefault()
-              setState({ busy: true })
-              setSearchParams((current) => {
-                const next = new URLSearchParams(current)
-                const term = query.trim()
-                if (term) next.set('q', term)
-                else next.delete('q')
-                return next
-              })
-              setPage(1)
+              updateListParams('q', query.trim())
               setRetry((value) => value + 1)
             }}
           >
@@ -201,11 +192,7 @@ export default function Records({ section, token, capabilities }) {
                 aria-label="Filter by status"
                 className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-2xs focus:outline-hidden focus:ring-2 focus:ring-black/10"
                 value={status}
-                onChange={(event) => {
-                  setPage(1)
-                  setState({ busy: true })
-                  setStatus(event.target.value)
-                }}
+                onChange={(event) => updateListParams('status', event.target.value)}
               >
                 <option value="">All statuses</option>
                 {choices.map((value) => (
@@ -264,28 +251,20 @@ export default function Records({ section, token, capabilities }) {
                         ))}
                         {hasActions && (
                           <td>
-                            {hasDetail(section.path) && (
-                              <button
-                                type="button"
+                            {canView && (
+                              <Link
                                 className="secondary mb-1 mr-1"
-                                onClick={() => {
-                                  setPackageEdit(null)
-                                  setAction(null)
-                                  setSelected(null)
-                                  setDetail(section.path === 'assets' ? row.serialNumber : row.id)
-                                }}
+                                to={`/${section.path}/${encodeURIComponent(section.path === 'assets' ? row.serialNumber : row.id)}`}
+                                state={{ fromRecordList: true }}
                               >
                                 View
-                              </button>
+                              </Link>
                             )}
                             {managePackages && (
                               <button
                                 type="button"
                                 className="secondary mb-1 mr-1"
-                                onClick={() => {
-                                  setDetail(null)
-                                  setPackageEdit({ id: row.id })
-                                }}
+                                onClick={() => setPackageEdit({ id: row.id })}
                               >
                                 Edit package
                               </button>
@@ -299,7 +278,6 @@ export default function Records({ section, token, capabilities }) {
                                   type="button"
                                   className="secondary mb-1"
                                   onClick={() => {
-                                    setDetail(null)
                                     setAction(null)
                                     setSelected(row)
                                   }}

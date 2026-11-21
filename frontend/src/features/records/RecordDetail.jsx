@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api.js'
 
 const localDate = value => value ? new Intl.DateTimeFormat('en-IN', {
@@ -98,12 +98,19 @@ const definition = {
 
 export const hasDetail = section => Object.hasOwn(definition, section)
 
-export default function RecordDetail({ section, id, token, onClose }) {
+export default function RecordDetail({ section, id, token, backLabel, onBack }) {
   const [state, setState] = useState({})
   const [mediaError, setMediaError] = useState('')
+  const backButton = useRef(null)
+
+  useEffect(() => {
+    backButton.current.focus({ preventScroll: true })
+    backButton.current.scrollIntoView({ block: 'nearest' })
+  }, [])
+
   useEffect(() => {
     const controller = new AbortController()
-    const path = section === 'assets' ? '/assets/' + encodeURIComponent(id) + '/warranty' : '/' + section + '/' + id
+    const path = '/' + section + '/' + encodeURIComponent(id) + (section === 'assets' ? '/warranty' : '')
     api(path, { token, signal: controller.signal })
       .then(({ data }) => setState({ data: definition[section](data) }))
       .catch(error => { if (!controller.signal.aborted) setState({ error: error.message }) })
@@ -126,21 +133,27 @@ export default function RecordDetail({ section, id, token, onClose }) {
   }
 
   const data = state.data
-  return <section className="lead-editor">
-    <div className="toolbar items-center"><h2>{data?.title ?? 'Record details'}</h2>
-      <button className="secondary ml-auto" onClick={onClose}>Close</button></div>
+  return <section aria-labelledby="record-detail-heading" className="min-w-0 rounded-2xl border border-gray-100 bg-white shadow-2xs">
+    <header className="grid gap-3 border-b border-gray-100 p-4 sm:p-5">
+      <button type="button" ref={backButton} className="secondary justify-self-start" onClick={onBack}>
+        <span aria-hidden="true" className="mr-1.5">←</span>{backLabel}
+      </button>
+      <h1 id="record-detail-heading" className="break-words text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
+        {data?.title ?? 'Record details'}
+      </h1>
+    </header>
     {state.error && <p className="notice m-4" role="alert">{state.error}</p>}
     {!data && !state.error && <p className="feedback" role="status">Loading details…</p>}
     {data && <div className="grid gap-5 p-4">
       <dl className="form-grid">{data.fields.filter(([, value]) => value != null && value !== '').map(([label, value]) =>
         <div key={label} className="min-w-0"><dt className="text-sm font-semibold text-slate-600">{label}</dt><dd className="break-words">{value}</dd></div>)}</dl>
       {data.groups?.filter(([, , rows]) => rows?.length).map(([label, columns, rows]) => <section key={label} className="overflow-x-auto">
-        <h3 className="mb-2 font-semibold">{label}</h3>
+        <h2 className="mb-2 font-semibold">{label}</h2>
         <table><thead><tr>{columns.map(column => <th key={column}>{column}</th>)}</tr></thead>
           <tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </section>)}
-      {data.attachments?.length > 0 && <div><h3 className="mb-2 font-semibold">Evidence</h3>
+      {data.attachments?.length > 0 && <div><h2 className="mb-2 font-semibold">Evidence</h2>
         {data.attachments.map(item => <button className="secondary mb-1 mr-1" key={item.id} onClick={() => download(item)}>{item.originalName}</button>)}</div>}
       {mediaError && <p className="notice" role="alert">{mediaError}</p>}
     </div>}
