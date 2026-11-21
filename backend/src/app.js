@@ -1,6 +1,7 @@
 import express from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
+import { warrantiesRoutes } from './modules/warranties/warranties.routes.js'
 import { dispatchRoutes } from './modules/dispatch/dispatch.routes.js'
 import { inventoryRoutes } from './modules/inventory/inventory.routes.js'
 import { paymentsRoutes } from './modules/payments/payments.routes.js'
@@ -31,6 +32,7 @@ export function createApp({ CORS_ORIGIN, JWT_SECRET }, database) {
   if (database) {
     const auth = authService(database, JWT_SECRET)
     app.use('/api/v1/auth', authRoutes(auth))
+    app.use('/api/v1', warrantiesRoutes(database, auth))
     app.use('/api/v1', dispatchRoutes(database, auth))
     app.use('/api/v1', inventoryRoutes(database, auth))
     app.use('/api/v1', paymentsRoutes(database, auth))

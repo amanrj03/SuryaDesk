@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import test from 'node:test'
 import { createDatabase } from '../src/lib/prisma.js'
 import { dispatchService } from '../src/modules/dispatch/dispatch.service.js'
+import { warrantiesService } from '../src/modules/warranties/warranties.service.js'
 import { isCovered, warrantyEnd } from '../src/modules/warranties/coverage.js'
 
 test('warranty expiry clamps end-of-month dates in India and excludes the end instant', () => {
@@ -61,6 +62,11 @@ test('serialized dispatch posts stock once and activates warranty only after del
       assert.equal(warranties.length, 1)
       assert.deepEqual(warranties[0].startAt, delivery.deliveredAt)
       assert.equal(warranties[0].customerId, order.customerId)
+      const lookup = await warrantiesService(tx).lookup(key, { asOf: delivery.deliveredAt })
+      assert.equal(lookup.coveredAsOf, true)
+      assert.equal(lookup.asset.customer.id, order.customerId)
+      const expired = await warrantiesService(tx).lookup(key, { asOf: warranties[0].endAt })
+      assert.equal(expired.coveredAsOf, false)
       throw new Error('Rollback dispatch fixture')
     }), { message: 'Rollback dispatch fixture' })
   } finally {
