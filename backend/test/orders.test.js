@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import test from 'node:test'
 import { createDatabase } from '../src/lib/prisma.js'
+import { subsidiesService } from '../src/modules/subsidies/subsidies.service.js'
 import { ordersService } from '../src/modules/orders/orders.service.js'
 
 test('an accepted quotation converts once and creates both fulfillment queues', {
@@ -41,6 +42,19 @@ test('an accepted quotation converts once and creates both fulfillment queues', 
       assert.equal(first.order.orderLinesByOrder[0].descriptionSnapshot, 'Snapshot')
       assert.equal(first.order.dispatchesByOrder[0].status, 'DRAFT')
       assert.equal(first.order.installationByOrder.status, 'UNSCHEDULED')
+
+      const subsidies = subsidiesService({ $transaction: callback => callback(tx) })
+      const subsidy = await subsidies.create({ orderId: first.order.id }, user)
+      assert.equal(subsidy.data.status, 'NOT_STARTED')
+      assert.equal((await subsidies.create({ orderId: first.order.id }, user)).existing, true)
+      await assert.rejects(subsidies.update(subsidy.data.id, { status: 'PAID' }, user), { code: 'INVALID_TRANSITION' })
+      await subsidies.update(subsidy.data.id, { status: 'DOCUMENTS_PENDING', documentChecklist: { utilityBill: true } }, user)
+      await assert.rejects(subsidies.update(subsidy.data.id, { status: 'SUBMITTED' }, user), { code: 'INVALID_TRANSITION' })
+      const application = await subsidies.update(subsidy.data.id, {
+        status: 'SUBMITTED', reference: 'TEST-REF', submittedAt: new Date(),
+      }, user)
+      assert.equal(application.documentChecklist.utilityBill, true)
+      assert.equal(application.status, 'SUBMITTED')
       throw new Error('Rollback order fixture')
     }), { message: 'Rollback order fixture' })
   } finally {
