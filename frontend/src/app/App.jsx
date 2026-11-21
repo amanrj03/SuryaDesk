@@ -5,6 +5,7 @@ import Enquiry from '../features/enquiries/EnquiryPage.jsx'
 import Workspace from './Workspace.jsx'
 import LandingPage from '../features/public/LandingPage.jsx'
 import TrackingPage from '../features/public/TrackingPage.jsx'
+import WarrantyStatusPage from '../features/public/WarrantyStatusPage.jsx'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -19,6 +20,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<LandingPage signedIn={Boolean(session)} />} />
       <Route path="/track" element={<TrackingPage />} />
+      <Route path="/warranty" element={<WarrantyStatusPage />} />
       <Route path="/enquiry" element={<Enquiry />} />
       <Route path="/request-quote" element={<Navigate to="/enquiry" replace />} />
       <Route

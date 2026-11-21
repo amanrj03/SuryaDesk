@@ -65,10 +65,12 @@ export default function TrackingPage() {
 
   function submit(event) {
     event.preventDefault()
-    const link = new FormData(event.currentTarget).get('link').trim()
-    const nextToken = tokenFromHash(link.includes('#') ? link.slice(link.indexOf('#')) : '')
+    const value = new FormData(event.currentTarget).get('tracking').trim()
+    const nextToken = /^LEAD-/i.test(value)
+      ? value.toUpperCase()
+      : tokenFromHash(value.includes('#') ? value.slice(value.indexOf('#')) : '')
     if (!nextToken) {
-      setInputError('Paste the full tracking link your team shared.')
+      setInputError('Enter your tracking ID or paste the full tracking link.')
       return
     }
     setInputError('')
@@ -87,23 +89,21 @@ export default function TrackingPage() {
         <h1 className="text-3xl font-bold tracking-tight">Track your order</h1>
         {token && !order && !current.error && <p role="status">Loading order status…</p>}
         {current.error && <ErrorState message={current.error} onRetry={() => setRetry(value => value + 1)} />}
-        {(!token || current.error) && (
-          <form className="form rounded-2xl border border-gray-200 bg-white p-5" onSubmit={submit}>
-            <p className="text-sm text-gray-600">Paste the private link your SuryaDesk team shared. If you don’t have a link, ask the team handling your order.</p>
-            <label>
-              Tracking link
-              <input className="rounded-lg border border-gray-300 px-3 py-2" name="link" autoComplete="off" maxLength={2500} required />
-            </label>
-            {inputError && <p role="alert" className="text-sm text-red-700">{inputError}</p>}
-            <button className="primary w-fit">Check status</button>
-          </form>
-        )}
+        <form className="form rounded-2xl border border-gray-200 bg-white p-5" onSubmit={submit}>
+          <p className="text-sm text-gray-600">Use the tracking ID from your quote request or paste your private tracking link.</p>
+          <label>
+            Tracking ID or link
+            <input className="rounded-lg border border-gray-300 px-3 py-2" name="tracking" autoComplete="off" spellCheck={false} maxLength={2500} required />
+          </label>
+          {inputError && <p role="alert" className="text-sm text-red-700">{inputError}</p>}
+          <button className="primary w-fit">Check status</button>
+        </form>
         {order && (
           <>
             <section className="grid gap-4 rounded-2xl border border-gray-200 bg-white p-5" aria-labelledby="order-summary">
               <div className="flex flex-wrap items-center gap-3">
-                <h2 id="order-summary" className="break-all text-lg font-semibold">{displayReference(order.orderNumber)}</h2>
-                <StatusBadge status={order.status} />
+                <h2 id="order-summary" className="break-all text-lg font-semibold">{displayReference(order.orderNumber ?? order.trackingId)}</h2>
+                <StatusBadge status={order.status === 'NEW' && !order.orderNumber ? 'ENQUIRY_RECEIVED' : order.status} />
               </div>
               {order.installation && order.status !== 'CANCELLED' && (
                 <dl className="text-sm">
@@ -112,8 +112,8 @@ export default function TrackingPage() {
                 </dl>
               )}
             </section>
-            {order.timeline?.length > 0 && <OrderTimeline timeline={order.timeline} cancelled={order.status === 'CANCELLED'} />}
-            <section className="rounded-2xl border border-gray-200 bg-white p-5" aria-labelledby="tracking-warranties">
+            {order.timeline?.length > 0 && <OrderTimeline timeline={order.timeline} cancelled={['CANCELLED', 'LOST'].includes(order.status)} />}
+            {order.orderNumber && <section className="rounded-2xl border border-gray-200 bg-white p-5" aria-labelledby="tracking-warranties">
               <h2 id="tracking-warranties" className="text-lg font-semibold">Equipment warranties</h2>
               {order.warranties.length ? (
                 <ul className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -132,7 +132,8 @@ export default function TrackingPage() {
                     : 'Warranty details appear after delivery is confirmed for eligible equipment.'}
                 </p>
               )}
-            </section>
+              <Link className="secondary mt-4" to={'/warranty#' + new URLSearchParams({ order: displayReference(order.orderNumber) })}>Warranty status</Link>
+            </section>}
           </>
         )}
       </div>

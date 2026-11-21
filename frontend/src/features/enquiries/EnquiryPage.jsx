@@ -40,8 +40,10 @@ export default function Enquiry() {
           {result ? (
             <div className="mt-6 space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-5 text-emerald-950" role="status">
               <h2 className="text-base font-bold">Enquiry received</h2>
-              <p className="text-xs">Keep this reference number for your follow-up with our sales team.</p>
-              <strong className="block text-xl tracking-wider text-emerald-900">{result.leadNumber}</strong>
+              <p className="text-sm">Save your tracking ID or this private link to follow your request through installation.</p>
+              <p className="text-sm font-semibold">Tracking ID</p>
+              <strong className="block break-all text-lg text-emerald-900">{result.leadNumber}</strong>
+              <Link className="primary" to={'/track#' + new URLSearchParams({ token: result.leadNumber })}>Track your request</Link>
             </div>
           ) : (
             <form className="form mt-6 grid gap-4" onSubmit={submit}>

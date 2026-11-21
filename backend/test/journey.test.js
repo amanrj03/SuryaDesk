@@ -49,6 +49,11 @@ test('Express connects public intake to paid delivery, signed completion, and co
       const patch = (path, body) => request('PATCH', path, body)
       try {
         const enquiry = await post('/public/enquiries', { name: key, phone: '+910000000000', address: 'Test residence', desiredKw: '2.00' })
+        const received = await post('/public/tracking', { token: enquiry.leadNumber.toLowerCase() })
+        assert.equal(received.trackingId, enquiry.leadNumber)
+        assert.equal(received.status, 'NEW')
+        assert.ok(received.timeline[0].at)
+        assert.ok(received.timeline.slice(1).every(event => event.at === null))
         token = (await post('/auth/login', { email, password })).accessToken
         const [lead] = await request('GET', '/leads?q=' + enquiry.leadNumber)
         await patch('/leads/' + lead.id, { status: 'CONTACTED' })
@@ -78,6 +83,9 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.ok(accepted.orderByQuotation?.id)
         const order = await post('/quotes/' + quote.id + '/convert-to-order')
         assert.equal(order.id, accepted.orderByQuotation.id)
+        assert.equal((await post('/public/tracking', { token: enquiry.leadNumber })).orderNumber, order.orderNumber)
+        const pendingWarranties = await post('/public/warranties', { orderNumber: order.orderNumber })
+        assert.deepEqual(pendingWarranties.products, [{ name: product.name, quantity: 1, catalogMonths: 240, coverage: [] }])
         assert.equal(order.tax, '12.5')
         assert.equal(order.orderLinesByOrder.find(line => line.productId === product.id).taxRateSnapshot, '5')
         const payment = await post('/orders/' + order.id + '/payments', { amount: '262.50', method: 'UPI', reference: key })
@@ -121,6 +129,9 @@ test('Express connects public intake to paid delivery, signed completion, and co
         const delivered = await post(dispatch + '/deliver', { recipientName: key })
         const tracked = await post('/public/tracking', { token: tracking.token })
         assert.equal(tracked.timeline.find(event => event.stage === 'DELIVERED').at, delivered.deliveredAt)
+        const warrantyLookup = await post('/public/warranties', { orderNumber: order.orderNumber.toLowerCase() })
+        const [warranty] = warrantyLookup.products[0].coverage
+        assert.deepEqual(warranty, { startAt: delivered.deliveredAt, endAt: tracked.warranties[0].endAt, months: 240, status: 'ACTIVE' })
         const coverage = await request('GET', '/assets/' + key + '/warranty')
         assert.equal(coverage.coveredAsOf, true)
         assert.equal(coverage.warranty.startAt, delivered.deliveredAt)

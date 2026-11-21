@@ -23,11 +23,12 @@ export default function LandingPage({ signedIn }) {
         </div>
         <div className="rounded-3xl bg-gray-900 p-6 text-white sm:p-8">
           <TruckIcon aria-hidden="true" className="mb-5 size-8 text-pink-300" />
-          <h2 className="text-2xl font-semibold">Already have an order?</h2>
-          <p className="mt-2 text-sm leading-6 text-gray-300">Use the private tracking link from your SuryaDesk team to see delivery, installation, and warranty updates.</p>
-          <Link className="secondary mt-5" to="/track">
-            Track order <ArrowRightIcon aria-hidden="true" className="ml-2 size-4" />
-          </Link>
+          <h2 className="text-2xl font-semibold">Track your solar project</h2>
+          <p className="mt-2 text-sm leading-6 text-gray-300">Follow your request with a tracking ID or link. Use your order ID to check coverage for each product.</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link className="secondary" to="/track">Track order</Link>
+            <Link className="secondary" to="/warranty">Warranty status</Link>
+          </div>
         </div>
       </section>
     </main>

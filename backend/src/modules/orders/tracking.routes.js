@@ -7,6 +7,7 @@ import { params } from './orders.schema.js'
 import { trackingService } from './tracking.service.js'
 
 const lookup = z.strictObject({ token: z.string().trim().min(1).max(2048) })
+const warrantyLookup = z.strictObject({ orderNumber: z.string().trim().toUpperCase().regex(/^(DEMO-)?ORD-[A-Z0-9-]{1,64}$/) })
 
 export function trackingRoutes(db, auth, secret) {
   const router = Router()
@@ -23,6 +24,10 @@ export function trackingRoutes(db, auth, secret) {
   router.post('/public/tracking', limit, validate({ body: lookup }), async (request, response) => {
     response.set('Cache-Control', 'no-store')
     response.json({ success: true, data: await tracking.lookup(request.validated.body.token) })
+  })
+  router.post('/public/warranties', limit, validate({ body: warrantyLookup }), async (request, response) => {
+    response.set('Cache-Control', 'no-store')
+    response.json({ success: true, data: await tracking.warranties(request.validated.body.orderNumber) })
   })
   return router
 }

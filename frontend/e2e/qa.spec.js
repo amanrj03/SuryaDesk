@@ -27,7 +27,7 @@ async function verifyCustomerTracking(page, browser) {
     await customer.goto('/')
     await expect(customer.getByRole('link', { name: 'Request a quote' })).toHaveAttribute('href', '/enquiry')
     await customer.getByRole('link', { name: 'Track order' }).click()
-    await customer.getByRole('textbox', { name: 'Tracking link' }).fill(link)
+    await customer.getByRole('textbox', { name: 'Tracking ID or link' }).fill(link)
     const response = customer.waitForResponse(item => item.url().endsWith('/api/v1/public/tracking') && item.ok())
     await customer.getByRole('button', { name: 'Check status' }).click()
     await expect(customer.getByRole('heading', { name: 'ORD-0001', exact: true })).toBeVisible()
@@ -51,6 +51,13 @@ async function verifyCustomerTracking(page, browser) {
       headers: { Authorization: 'Bearer ' + token },
     })
     expect(staffRoute.status()).toBe(401)
+    await customer.goto('/')
+    await customer.getByRole('link', { name: 'Warranty status' }).click()
+    await customer.getByRole('textbox', { name: 'Order ID' }).fill('ORD-0001')
+    await customer.getByRole('button', { name: 'Check warranties' }).click()
+    const coverage = customer.getByRole('region', { name: 'ORD-0001' })
+    await expect(coverage.getByText('Active', { exact: true }).first()).toBeVisible()
+    expect(await coverage.getByRole('heading', { level: 3 }).count()).toBeGreaterThan(1)
   } finally {
     await customer.close()
   }

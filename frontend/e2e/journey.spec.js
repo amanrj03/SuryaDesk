@@ -19,6 +19,13 @@ test('public enquiry survives refresh and can be qualified and scheduled from th
     await page.getByLabel('Installation address').fill('Test property in Pune')
     await page.getByRole('button', { name: 'Submit enquiry' }).click()
     await expect(page.getByRole('heading', { name: 'Enquiry received' })).toBeVisible()
+    const trackingId = await page.getByText(/^LEAD-[\dA-F-]+$/).textContent()
+    await page.getByRole('link', { name: 'Track your request' }).click()
+    await expect(page.getByRole('heading', { name: trackingId })).toBeVisible()
+    await page.goto('/track')
+    await page.getByRole('textbox', { name: 'Tracking ID or link' }).fill(trackingId)
+    await page.getByRole('button', { name: 'Check status' }).click()
+    await expect(page.getByRole('heading', { name: trackingId })).toBeVisible()
 
     await login(page, 'sales')
     await expect(page.getByRole('heading', { name: 'Enquiries' })).toBeVisible()
