@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import test from 'node:test'
 import { createDatabase } from '../src/lib/prisma.js'
+import { installationsService } from '../src/modules/installations/installations.service.js'
 import { dispatchService } from '../src/modules/dispatch/dispatch.service.js'
 import { warrantiesService } from '../src/modules/warranties/warranties.service.js'
 import { isCovered, warrantyEnd } from '../src/modules/warranties/coverage.js'
@@ -15,7 +16,7 @@ test('warranty expiry clamps end-of-month dates in India and excludes the end in
   assert.equal(isCovered(warranty, endAt), false)
 })
 
-test('serialized dispatch posts stock once and activates warranty only after delivery', {
+test('serialized dispatch, warranty activation, and assigned installation sign-off', {
   skip: !process.env.DATABASE_URL,
 }, async () => {
   const db = createDatabase(process.env.DATABASE_URL)
@@ -67,6 +68,36 @@ test('serialized dispatch posts stock once and activates warranty only after del
       assert.equal(lookup.asset.customer.id, order.customerId)
       const expired = await warrantiesService(tx).lookup(key, { asOf: warranties[0].endAt })
       assert.equal(expired.coveredAsOf, false)
+
+      const installer = await tx.user.create({ data: {
+        name: 'Assigned technician', email: key + '-tech@example.invalid',
+        role: 'TECHNICIAN', passwordHash: 'fixture', hourlyCost: 450,
+      } })
+      const supervisor = { ...user, capabilities: ['installations:manage'] }
+      const technician = { ...installer, capabilities: ['installations:complete_assigned'] }
+      const job = await tx.installation.create({ data: {
+        orderId: order.id, capacityKw: 3, status: 'UNSCHEDULED', checklist: {},
+      } })
+      const jobs = installationsService({ $transaction: callback => callback(tx) })
+      await jobs.update(job.id, { scheduledAt: new Date(), technicianIds: [installer.id] }, supervisor)
+      await assert.rejects(jobs.update(job.id, { startedAt: new Date() }, { ...technician, id: user.id }), { code: 'FORBIDDEN' })
+      const now = Date.now()
+      await jobs.update(job.id, { startedAt: new Date(now - 60_000) }, technician)
+      const proof = {
+        finishedAt: new Date(now), capacityKw: 3, generationTestPassed: true,
+        checklist: { mounting: true, electrical: true, earthing: true, generation: true },
+        signatureAttachmentId: key + '-SIGNATURE', customerSignerName: 'Customer',
+      }
+      await assert.rejects(jobs.complete(job.id, proof, technician), { code: 'INVALID_TRANSITION' })
+      await tx.attachment.createMany({ data: [proof.signatureAttachmentId, key + '-PHOTO'].map(id => ({
+        id, ownerType: 'INSTALLATION', ownerId: job.id, originalName: id + '.png',
+        storageKey: randomUUID(), mimeType: 'image/png', sizeBytes: 100, uploadedById: installer.id,
+      })) })
+      const complete = await jobs.complete(job.id, proof, technician)
+      assert.equal(complete.order.status, 'COMPLETED')
+      assert.equal(complete.customerSignerName, 'Customer')
+      await jobs.complete(job.id, proof, technician)
+      assert.equal(await tx.workLog.count({ where: { installationId: job.id } }), 1)
       throw new Error('Rollback dispatch fixture')
     }), { message: 'Rollback dispatch fixture' })
   } finally {
