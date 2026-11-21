@@ -213,7 +213,7 @@ export default function Records({ section, token, capabilities }) {
                       {section.columns.map(([label]) => (
                         <th key={label}>{label}</th>
                       ))}
-                      {hasActions && <th scope="col">Action</th>}
+                      {hasActions && <th scope="col" className="text-right">Action</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -223,68 +223,67 @@ export default function Records({ section, token, capabilities }) {
                           <td key={label}>{value(row)}</td>
                         ))}
                         {hasActions && (
-                          <td>
-                            {canView && (
-                              <Link
-                                className="secondary mb-1 mr-1"
-                                to={`/${section.path}/${encodeURIComponent(section.path === 'assets' ? row.serialNumber : row.id)}`}
-                                state={{ fromRecordList: true }}
-                              >
-                                View
-                              </Link>
-                            )}
-                            {section.path === 'quotes' && row.orderByQuotation && capabilities.includes('orders:read') && (
-                              <Link className="secondary mb-1 mr-1" to={'/orders/' + encodeURIComponent(row.orderByQuotation.id)}>
-                                View order
-                              </Link>
-                            )}
-                            {section.path === 'dispatches' && row.status !== 'DRAFT' && (
-                              <InvoiceDocument order={row.order} token={token} capabilities={capabilities} />
-                            )}
-                            {managePackages && (
-                              <button
-                                type="button"
-                                className="secondary mb-1 mr-1"
-                                onClick={() => setPanel({ type: 'package', id: row.id })}
-                              >
-                                Edit package
-                              </button>
-                            )}
-                            {canEditLead && row.status === 'NEW' && (
-                              <button type="button" className="secondary mb-1 mr-1"
-                                onClick={() => setPanel({ type: 'lead', row, target: 'CONTACTED' })}>
-                                Mark contacted
-                              </button>
-                            )}
-                            {canEditLead && ['NEW', 'CONTACTED'].includes(row.status) && (
-                              <button type="button" className="secondary mb-1 mr-1"
-                                onClick={() => setPanel({ type: 'lead', row, target: 'QUALIFIED' })}>
-                                Qualify enquiry
-                              </button>
-                            )}
-                            {(canEditLead ||
-                              (canSign &&
-                                row.status !== 'COMPLETED' &&
-                                ['DELIVERED', 'INSTALLATION_IN_PROGRESS'].includes(row.order?.status) &&
-                                row.installationAssignmentsByInstallation?.length > 0)) && (
+                          <td className="text-right">
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              {canView && (
+                                <Link
+                                  className="secondary"
+                                  to={`/${section.path}/${encodeURIComponent(section.path === 'assets' ? row.serialNumber : row.id)}`}
+                                  state={{ fromRecordList: true }}
+                                >
+                                  View
+                                </Link>
+                              )}
+                              {section.path === 'quotes' && row.orderByQuotation && capabilities.includes('orders:read') && (
+                                <Link className="secondary" to={'/orders/' + encodeURIComponent(row.orderByQuotation.id)}>
+                                  View order
+                                </Link>
+                              )}
+                              {managePackages && (
                                 <button
                                   type="button"
-                                  className="secondary mb-1"
-                                  onClick={() => setPanel({ type: canEditLead ? 'lead' : 'signoff', row })}
+                                  className="secondary"
+                                  onClick={() => setPanel({ type: 'package', id: row.id })}
                                 >
-                                  {canEditLead ? 'Edit' : 'Sign off'}
+                                  Edit package
                                 </button>
                               )}
-                            {recordActions(section.path, row, capabilities).map((candidate) => (
-                              <button
-                                type="button"
-                                className="secondary mb-1 ml-1"
-                                key={candidate.key}
-                                onClick={() => setPanel({ type: 'action', action: candidate })}
-                              >
-                                {candidate.label}
-                              </button>
-                            ))}
+                              {canEditLead && row.status === 'NEW' && (
+                                <button type="button" className="secondary"
+                                  onClick={() => setPanel({ type: 'lead', row, target: 'CONTACTED' })}>
+                                  Mark contacted
+                                </button>
+                              )}
+                              {canEditLead && ['NEW', 'CONTACTED'].includes(row.status) && (
+                                <button type="button" className="secondary"
+                                  onClick={() => setPanel({ type: 'lead', row, target: 'QUALIFIED' })}>
+                                  Qualify enquiry
+                                </button>
+                              )}
+                              {(canEditLead ||
+                                (canSign &&
+                                  row.status !== 'COMPLETED' &&
+                                  ['DELIVERED', 'INSTALLATION_IN_PROGRESS'].includes(row.order?.status) &&
+                                  row.installationAssignmentsByInstallation?.length > 0)) && (
+                                  <button
+                                    type="button"
+                                    className="secondary"
+                                    onClick={() => setPanel({ type: canEditLead ? 'lead' : 'signoff', row })}
+                                  >
+                                    {canEditLead ? 'Edit' : 'Sign off'}
+                                  </button>
+                                )}
+                              {recordActions(section.path, row, capabilities).map((candidate) => (
+                                <button
+                                  type="button"
+                                  className="primary"
+                                  key={candidate.key}
+                                  onClick={() => setPanel({ type: 'action', action: candidate })}
+                                >
+                                  {candidate.label}
+                                </button>
+                              ))}
+                            </div>
                           </td>
                         )}
                       </tr>

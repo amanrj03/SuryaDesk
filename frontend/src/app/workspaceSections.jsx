@@ -159,10 +159,17 @@ export const sections = [
     capability: 'dispatch:prepare',
     icon: TruckIcon,
     columns: [
-      ['Reference', (row) => displayReference(row.dispatchNumber)],
-      ['Customer', (row) => row.order.customer.name],
+      ['Reference', (row) => (
+        <span
+          title={displayReference(row.dispatchNumber)}
+          className="inline-block max-w-[200px] truncate font-mono text-[11px] font-semibold text-gray-800 bg-gray-50 border border-gray-200/80 px-2 py-0.5 rounded-md align-middle"
+        >
+          {displayReference(row.dispatchNumber)}
+        </span>
+      )],
+      ['Customer', (row) => <span className="font-medium text-gray-900">{row.order.customer.name}</span>],
       ['Status', (row) => <StatusBadge status={row.status} />],
-      ['Delivered', (row) => date(row.deliveredAt)],
+      ['Delivered', (row) => <span className="text-gray-500">{date(row.deliveredAt)}</span>],
     ],
   },
   {

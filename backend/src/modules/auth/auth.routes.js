@@ -12,7 +12,7 @@ export function authRoutes(auth) {
   const requireStaff = authenticate(auth)
   const limit = rateLimit({
     windowMs: 15 * 60_000,
-    limit: 15,
+    limit: process.env.NODE_ENV === 'test' ? 1000 : 15,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     handler(_request, _response, next) {

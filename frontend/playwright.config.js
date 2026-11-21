@@ -12,7 +12,7 @@ export default defineConfig({
     {
       command: 'node --env-file=../backend/.env e2e/api-server.js',
       cwd: fileURLToPath(new URL('.', import.meta.url)),
-      env: { PORT: '55300', CORS_ORIGIN: 'http://127.0.0.1:55173', UPLOAD_DIR: fileURLToPath(new URL('../backend/uploads', import.meta.url)) },
+      env: { PORT: '55300', CORS_ORIGIN: 'http://127.0.0.1:55173', UPLOAD_DIR: fileURLToPath(new URL('../backend/uploads', import.meta.url)), NODE_ENV: 'test' },
       url: 'http://127.0.0.1:55300/api/v1/health',
       reuseExistingServer: false,
     },

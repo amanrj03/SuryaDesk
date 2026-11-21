@@ -350,7 +350,7 @@ test('lists and details recover from non-JSON failures and expired sessions retu
   await page.unroute(detailUrl)
   await page.getByRole('button', { name: 'Try again' }).click()
   await expect(page.getByRole('heading', { name: /^Order for / })).toBeVisible()
-  await expect(page.getByText('ORD-0111', { exact: true })).toBeVisible()
+  await expect(page.getByText('ORD-0111', { exact: true }).first()).toBeVisible()
 
   const url = '**/api/v1/leads?*'
   await page.route(url, route => route.fulfill({ status: 502, contentType: 'text/plain', body: 'Unavailable' }))
