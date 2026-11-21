@@ -42,6 +42,29 @@ async function audit(tx, row, action, actorId) {
   } })
 }
 
+// The caller holds the order lock so the final payment and invoice commit together.
+export async function issuePaidOrderInvoice(tx, orderId, paidAt, actorId) {
+  const existing = await tx.invoice.findUnique({ where: { orderId } })
+  if (existing?.status === 'PAID' || existing?.status === 'VOID') return
+  const issuedAt = new Date()
+  if (existing) {
+    const draft = existing.status === 'DRAFT'
+    const invoice = await tx.invoice.update({ where: { id: existing.id }, data: {
+      status: 'PAID', paidAt, ...(draft && { issuedAt, dueAt: null }),
+    } })
+    if (draft) await audit(tx, invoice, 'ISSUED', actorId)
+    return
+  }
+  const order = await tx.order.findUniqueOrThrow({ where: { id: orderId }, include: { orderLinesByOrder: true } })
+  const invoice = await tx.invoice.create({ data: {
+    invoiceNumber: 'INV-' + randomUUID().toUpperCase(), orderId, customerId: order.customerId,
+    subtotal: order.subtotal, tax: order.tax, total: order.total,
+    status: 'PAID', issuedAt, paidAt,
+    invoiceLinesByInvoice: { createMany: { data: orderLines(order.orderLinesByOrder) } },
+  } })
+  await audit(tx, invoice, 'ISSUED', actorId)
+}
+
 export function invoiceService(db) {
   return {
     async create({ orderId, ticketId, customerId, dueAt, taxRate, lines: supplied }, user, { forAllocatedOrder = false } = {}) {
@@ -53,23 +76,8 @@ export function invoiceService(db) {
           if (!order || (!forAllocatedOrder && order.customerId !== customerId) || order.status === 'CANCELLED') {
             throw invalid('Choose a confirmed order for this customer.')
           }
-          if (forAllocatedOrder) {
-            if (!['READY_TO_DISPATCH', 'DISPATCHED', 'DELIVERED', 'INSTALLATION_IN_PROGRESS', 'COMPLETED'].includes(order.status)) {
-              throw invalid('Allocate stock before preparing the invoice from dispatch.')
-            }
-            if (order.invoiceByOrder) return order.invoiceByOrder
-            customerId = order.customerId
-          }
-          if (order.invoiceByOrder) throw invalid('This order already has an invoice.')
-          if (supplied && order.orderLinesByOrder.some(line => line.taxAmount != null)) {
-            throw invalid('Use the order’s saved amounts and taxes for this invoice.')
-          }
-          lines = supplied ? suppliedLines(supplied) : orderLines(order.orderLinesByOrder)
-          subtotal = order.subtotal
-          tax = order.tax
-          if (!subtotal.equals(lines.reduce((sum, line) => sum.plus(line.lineTotal), new Prisma.Decimal(0)))) {
-            throw invalid('Invoice lines must match the order subtotal.')
-          }
+          if (forAllocatedOrder && order.invoiceByOrder && order.invoiceByOrder.status !== 'DRAFT') return order.invoiceByOrder
+          throw invalid('Order invoices are issued automatically when full payment is recorded.')
         } else {
           await tx.$queryRaw`SELECT id FROM "ServiceTicket" WHERE id = ${ticketId} FOR UPDATE`
           const ticket = await tx.serviceTicket.findUnique({ where: { id: ticketId }, include: { invoiceByTicket: true } })
@@ -115,15 +123,11 @@ export function invoiceService(db) {
         const invoice = await tx.invoice.findUnique({ where: { id } })
         if (!invoice) throw missing()
         if (invoice.status !== 'DRAFT') throw invalid('Only draft invoices can be issued.')
-        if (invoice.orderId) await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${invoice.orderId} FOR UPDATE`
+        if (invoice.orderId) throw invalid('Order invoices are issued automatically when full payment is recorded.')
         const now = new Date()
         const due = dueAt ?? invoice.dueAt
         if (due && due < now) throw invalid('Choose a due date on or after issue.')
-        const payments = invoice.orderId && await tx.payment.aggregate({
-          where: { orderId: invoice.orderId, voidedAt: null }, _sum: { amount: true },
-        })
-        const paid = payments?._sum.amount ?? new Prisma.Decimal(0)
-        const status = paid.gte(invoice.total) ? 'PAID' : paid.gt(0) ? 'PARTIALLY_PAID' : 'ISSUED'
+        const status = invoice.total.isZero() ? 'PAID' : 'ISSUED'
         const updated = await tx.invoice.updateMany({
           where: { id, status: 'DRAFT' },
           data: { status, issuedAt: now, dueAt: due, paidAt: status === 'PAID' ? now : null },

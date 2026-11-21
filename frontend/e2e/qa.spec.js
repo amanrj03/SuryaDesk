@@ -311,7 +311,7 @@ test('dispatch pick lists show quantities and serials while orders show package 
   await expect(quotation.locator('tfoot').getByRole('cell').last()).toHaveText('₹1,35,870.00')
 })
 
-test('draft invoices are issued from their related orders rather than the invoice register', async ({ page }) => {
+test('legacy draft order invoices cannot be issued manually', async ({ page }) => {
   await signIn(page)
   await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Invoices', exact: true }).click()
   const search = page.getByRole('textbox', { name: 'Search invoices' })
@@ -324,8 +324,9 @@ test('draft invoices are issued from their related orders rather than the invoic
   await expect(page.getByRole('button', { name: 'Download invoice PDF' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Issue invoice' })).toHaveCount(0)
   await page.getByRole('link', { name: 'View related order' }).click()
-  await page.getByRole('button', { name: 'Issue invoice' }).click()
-  await expect(page.getByRole('dialog', { name: 'Issue invoice' }).getByLabel('Due date')).toBeVisible()
+  await expect(page.getByRole('heading', { name: /^Order for / })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Issue invoice' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Prepare invoice PDF' })).toHaveCount(0)
 })
 
 test('lists and details recover from non-JSON failures and expired sessions return to sign in', async ({ page }) => {

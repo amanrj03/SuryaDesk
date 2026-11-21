@@ -104,6 +104,7 @@ export function invoicePdf(invoice, seller) {
   const invoiceEnd = block('Invoice details', [
     'Invoice number: ' + reference(invoice.invoiceNumber),
     (draft ? 'Prepared: ' : 'Invoice date: ') + date.format(invoice.issuedAt),
+    invoice.status === 'PAID' && invoice.paidAt && 'Paid on: ' + date.format(invoice.paidAt),
     invoice.dueAt && 'Due date: ' + date.format(invoice.dueAt),
   ], right, details, 'right')
 

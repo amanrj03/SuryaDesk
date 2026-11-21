@@ -31,10 +31,12 @@ test('concurrent payments cannot overpay an order and references make retries sa
     })
     try {
       const invoices = invoiceService(db)
-      const invoice = await invoices.create({ orderId: order.id, customerId: order.customerId, lines: [
-        { description: 'Installation', quantity: 1, unitPrice: '100.00' },
-      ] }, user)
-      assert.equal((await invoices.issue(invoice.id, {}, user)).status, 'ISSUED')
+      const invoice = await db.invoice.create({ data: {
+        invoiceNumber: 'TEST-' + key, orderId: order.id, customerId: order.customerId,
+        subtotal: 100, tax: 0, total: 100, status: 'DRAFT', issuedAt: new Date(),
+        invoiceLinesByInvoice: { create: { description: 'Installation', quantity: 1, unitPrice: 100, lineTotal: 100 } },
+      } })
+      await assert.rejects(invoices.issue(invoice.id, {}, user), { code: 'INVALID_TRANSITION' })
       const payments = paymentsService(db)
       const data = { amount: '70.25', method: 'UPI' }
       const results = await Promise.allSettled(['a', 'b'].map(reference => payments.record(order.id, { ...data, reference }, user)))
@@ -57,7 +59,7 @@ test('concurrent payments cannot overpay an order and references make retries sa
       assert.equal(listed.paidTotal.toFixed(2), '70.25')
       assert.equal(listed.balance.toFixed(2), '29.75')
       assert.equal((await orders.detail(order.id)).balance.toFixed(2), '29.75')
-      assert.equal((await invoices.detail(invoice.id)).status, 'PARTIALLY_PAID')
+      assert.equal((await invoices.detail(invoice.id)).status, 'DRAFT')
       const automatic = await payments.record(order.id, { amount: '10.00', method: 'CASH' }, user)
       assert.match(automatic.payment.reference, /^PAY-[0-9A-F-]{36}$/)
       const finalPayment = { amount: '19.75', method: 'BANK_TRANSFER', requestId: randomUUID() }
@@ -69,6 +71,7 @@ test('concurrent payments cannot overpay an order and references make retries sa
       await assert.rejects(payments.record(order.id, { ...finalPayment, method: 'UPI' }, user), { code: 'CONFLICT' })
       assert.equal((await orders.detail(order.id)).balance.toFixed(2), '0.00')
       assert.equal((await invoices.detail(invoice.id)).status, 'PAID')
+      assert.equal(await db.invoice.count({ where: { orderId: order.id } }), 1)
     } finally {
       await db.$transaction(async tx => {
         const invoice = await tx.invoice.findUnique({ where: { orderId: order.id } })

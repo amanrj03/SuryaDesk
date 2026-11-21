@@ -102,10 +102,14 @@ export function portalService(db) {
     async payment(account, id) {
       const row = await db.payment.findFirst({
         where: { id, voidedAt: null, order: ownership(account).order },
-        select: { ...payment, order: { select: { orderNumber: true } } },
+        select: { ...payment, order: { select: {
+          orderNumber: true, total: true, paymentsByOrder: { where: { voidedAt: null }, select: { amount: true } },
+        } } },
       })
       if (!row) throw missing()
-      return row
+      const { paymentsByOrder, ...order } = row.order
+      const totalPaid = paymentsByOrder.reduce((sum, item) => sum.plus(item.amount), order.total.minus(order.total))
+      return { ...row, order, ...paymentTotals(order.total, totalPaid) }
     },
     async warranty(account, id) {
       const row = await db.serializedAsset.findFirst({

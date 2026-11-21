@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { ApiError } from '../../utils/ApiError.js'
+import { issuePaidOrderInvoice } from '../invoices/invoices.service.js'
 
 const zero = new Prisma.Decimal(0)
 const missing = () => new ApiError(404, 'NOT_FOUND', 'Order not found.')
@@ -51,9 +52,10 @@ export function paymentsService(db) {
           data: { ...data, amount, reference: paymentReference, receivedAt, orderId, recordedById: user.id },
         })
         const settled = after.equals(order.total)
-        await tx.invoice.updateMany({
+        if (settled) await issuePaidOrderInvoice(tx, orderId, receivedAt, user.id)
+        else await tx.invoice.updateMany({
           where: { orderId, status: { in: ['ISSUED', 'PARTIALLY_PAID'] } },
-          data: { status: settled ? 'PAID' : 'PARTIALLY_PAID', paidAt: settled ? receivedAt : null },
+          data: { status: 'PARTIALLY_PAID', paidAt: null },
         })
         await tx.auditLog.create({ data: {
           actorId: user.id, entityType: 'Order', entityId: orderId, action: 'PAYMENT_RECORDED',

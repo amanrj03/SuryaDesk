@@ -38,6 +38,8 @@ export function receiptPdf(row) {
     pdf.text('Order ' + row.order.orderNumber).text('Received ' + date(row.receivedAt))
     pdf.text('Payment method ' + row.method.replaceAll('_', ' ')).moveDown()
     pdf.fontSize(14).text('Amount received ' + money(row.amount))
+    pdf.moveDown(0.5).fontSize(11).text('Order total ' + money(row.total))
+    pdf.text('Total paid to date ' + money(row.paidTotal)).text('Current balance ' + money(row.balance))
   })
 }
 

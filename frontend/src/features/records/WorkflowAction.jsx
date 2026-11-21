@@ -117,7 +117,6 @@ function baseRecordActions(section, row, capabilities, detail) {
       number('amount', 'Amount (INR)', { min: '.01' }),
       input('incurredAt', 'Incurred at', 'datetime-local', { optional: true }),
     ], ({ incurredAt, ...values }) => ({ ...values, incurredAt: toDate(incurredAt) })))
-    if (can('invoices:manage')) actions.push(post('invoice', 'Draft invoice', '/invoices', [], () => ({ orderId: id, customerId: row.customerId })))
     if (can('subsidies:manage')) actions.push(post('subsidy', 'Start subsidy application', '/subsidies', [], () => ({ orderId: id })))
     return actions
   }
