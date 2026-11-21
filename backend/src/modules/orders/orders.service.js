@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { ApiError } from '../../utils/ApiError.js'
 import { paymentTotals } from '../payments/payments.service.js'
+import { pricingBreakdown } from '../../lib/line-pricing.js'
 
 const related = {
   customer: true,
@@ -9,7 +10,7 @@ const related = {
   dispatchesByOrder: true,
   installationByOrder: true,
 }
-const detail = { ...related, orderLinesByOrder: true }
+const detail = { ...related, orderLinesByOrder: { orderBy: { id: 'asc' } } }
 const notFound = () => new ApiError(404, 'NOT_FOUND', 'Order not found.')
 
 function snapshot({ productId, descriptionSnapshot, quantity, unitPriceSnapshot, unitCostSnapshot, lineTotal, lineKind, taxRateSnapshot, taxAmount }) {
@@ -95,7 +96,7 @@ export function ordersService(db) {
         const order = await tx.order.findUnique({ where: { id }, include: detail })
         if (!order) throw notFound()
         const [data] = await withPaymentTotals(tx, [order])
-        return data
+        return { ...data, pricing: pricingBreakdown(data.orderLinesByOrder) }
       }, { isolationLevel: 'RepeatableRead' })
     },
   }

@@ -35,9 +35,13 @@ export function invoicePdf(invoice, seller) {
   })
   const width = pdf.page.width - 2 * margin
   const bottom = pdf.page.height - margin - 25
+  const pricing = invoice.pricing
+  const invoiceLines = pricing
+    ? pricing.lines.map(line => ({ description: line.description, quantity: line.quantity, lineTotal: line.amount }))
+    : invoice.invoiceLinesByInvoice
   const detailedTax = invoice.invoiceLinesByInvoice.some(line => line.taxRateSnapshot != null)
   const columns = detailedTax ? [26, width - 26 - 32 - 71 - 44 - 74 - 82, 32, 71, 44, 74, 82]
-    : [26, width - 26 - 44 - 88 - 98, 44, 88, 98]
+    : pricing ? [26, width - 26 - 44 - 98, 44, 98] : [26, width - 26 - 44 - 88 - 98, 44, 88, 98]
   const draft = invoice.status === 'DRAFT'
   const title = draft ? 'Draft invoice' : invoice.status === 'VOID' ? 'Void invoice' : 'Invoice'
 
@@ -70,7 +74,8 @@ export function invoicePdf(invoice, seller) {
   const header = y => {
     tableRow(detailedTax
       ? ['No.', 'Description', 'Qty', 'Net (INR)', 'Rate %', 'Tax (INR)', 'Total (INR)']
-      : ['No.', 'Description', 'Qty', 'Unit price (INR)', 'Amount (INR)'], y, 24, true)
+      : pricing ? ['No.', 'Description', 'Qty', 'Amount (INR)']
+        : ['No.', 'Description', 'Qty', 'Unit price (INR)', 'Amount (INR)'], y, 24, true)
     return y + 24
   }
 
@@ -102,8 +107,13 @@ export function invoicePdf(invoice, seller) {
     invoice.dueAt && 'Due date: ' + date.format(invoice.dueAt),
   ], right, details, 'right')
 
-  let y = header(Math.max(orderEnd, invoiceEnd) + 20)
-  for (const [index, line] of invoice.invoiceLinesByInvoice.entries()) {
+  let y = Math.max(orderEnd, invoiceEnd) + 20
+  if (pricing) {
+    y = text('Package: ' + pricing.packageName, margin, y, { bold: true, width })
+    y = text('Product amounts are allocated shares of the original package price.', margin, y + 3, { width }) + 10
+  }
+  y = header(y)
+  for (const [index, line] of invoiceLines.entries()) {
     pdf.font('Helvetica').fontSize(9)
     const description = line.description
     const height = Math.max(26, pdf.heightOfString(description, { width: columns[1] - 10 }) + 12)
@@ -111,7 +121,8 @@ export function invoicePdf(invoice, seller) {
     const prices = detailedTax
       ? [currency.format(Number(line.lineTotal)), String(line.taxRateSnapshot), currency.format(Number(line.taxAmount)),
         currency.format(Number(line.lineTotal) + Number(line.taxAmount))]
-      : [currency.format(Number(line.unitPrice)), currency.format(Number(line.lineTotal))]
+      : pricing ? [currency.format(Number(line.lineTotal))]
+        : [currency.format(Number(line.unitPrice)), currency.format(Number(line.lineTotal))]
     tableRow([String(index + 1), description, String(line.quantity), ...prices], y, height)
     y += height
   }

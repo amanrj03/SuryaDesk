@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { ApiError } from '../../utils/ApiError.js'
+import { pricingBreakdown } from '../../lib/line-pricing.js'
 
 const include = {
   customer: true, invoiceLinesByInvoice: { orderBy: { id: 'asc' } },
@@ -20,6 +21,19 @@ function suppliedLines(rows) {
   return rows.map(({ description, quantity, unitPrice }) => ({
     description, quantity, unitPrice, lineTotal: new Prisma.Decimal(unitPrice).mul(quantity),
   }))
+}
+
+function legacyOrderPricing(invoice, lines) {
+  if (!lines?.length || lines.some(line => line.taxAmount != null) ||
+    invoice.invoiceLinesByInvoice.some(line => line.taxAmount != null)) return null
+  const fingerprint = ({ description, quantity, unitPrice, lineTotal }) =>
+    JSON.stringify([description, quantity, unitPrice.toFixed(2), lineTotal.toFixed(2)])
+  const saved = invoice.invoiceLinesByInvoice.map(fingerprint).sort()
+  const origin = orderLines(lines).map(fingerprint).sort()
+  if (saved.length !== origin.length || saved.some((line, index) => line !== origin[index])) return null
+  const pricing = pricingBreakdown(lines)
+  const subtotal = pricing.lines.reduce((sum, line) => sum.plus(line.amount), new Prisma.Decimal(0))
+  return pricing.packageName && subtotal.equals(invoice.subtotal) ? pricing : null
 }
 
 async function audit(tx, row, action, actorId) {
@@ -87,9 +101,14 @@ export function invoiceService(db) {
       }, { isolationLevel: 'RepeatableRead' })
     },
     async detail(id) {
-      const invoice = await db.invoice.findUnique({ where: { id }, include })
+      const invoice = await db.invoice.findUnique({ where: { id }, include: {
+        ...include,
+        order: { select: { ...include.order.select, orderLinesByOrder: { orderBy: { id: 'asc' } } } },
+      } })
       if (!invoice) throw missing()
-      return invoice
+      if (!invoice.order) return invoice
+      const { orderLinesByOrder, ...order } = invoice.order
+      return { ...invoice, order, pricing: legacyOrderPricing(invoice, orderLinesByOrder) }
     },
     async issue(id, { dueAt }, user) {
       return db.$transaction(async tx => {

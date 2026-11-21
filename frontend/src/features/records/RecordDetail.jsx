@@ -25,9 +25,16 @@ const taxRows = rows => rows.map(row => [
   row.description, row.quantity, money(row.amount), Number(row.taxRate) + '%', money(row.taxAmount),
   money(Number(row.amount) + Number(row.taxAmount)),
 ])
-function invoiceLineGroup(label, rows) {
+function invoiceLineGroup(label, rows, record) {
   const taxed = rows.filter(row => row.taxAmount != null)
-  if (!taxed.length) return [label, ['Description', 'Quantity', 'Total'], lines(rows)]
+  if (!taxed.length) {
+    if (!record.pricing?.packageName) return [label, ['Description', 'Quantity', 'Total'], lines(rows)]
+    return [label, ['Description', 'Quantity', 'Amount'],
+      record.pricing.lines.map(line => [line.description, line.quantity, money(line.amount)]), {
+        description: `Product amounts are shares of the original ${record.pricing.packageName} package price.`,
+        totals: [['Subtotal', money(record.subtotal)], ['Tax', money(record.tax)], ['Grand total', money(record.total)]],
+      }]
+  }
   return [label, taxColumns, taxRows(taxed.map(row => ({
     description: row.descriptionSnapshot ?? row.description, quantity: row.quantity,
     amount: row.lineTotal, taxRate: row.taxRateSnapshot, taxAmount: row.taxAmount,
@@ -89,7 +96,7 @@ const definition = {
     fields: [['Reference', displayReference(row.orderNumber)], ['Quotation', displayReference(row.quotation?.quoteNumber)], ['Status', state(row.status)], ['Total', money(row.total)],
       ['Paid', money(row.paidTotal)], ['Remaining', row.status === 'CANCELLED' ? '—' : money(row.balance)],
       ['Confirmed', localDate(row.confirmedAt)], ['Installation', state(row.installationByOrder?.status)]],
-    groups: [invoiceLineGroup('Order lines', row.orderLinesByOrder),
+    groups: [invoiceLineGroup('Order lines', row.orderLinesByOrder, row),
       ['Dispatches', ['Reference', 'Status', 'Delivered'], row.dispatchesByOrder.map(item =>
         [displayReference(item.dispatchNumber), state(item.status), localDate(item.deliveredAt)])]],
   }),
@@ -131,7 +138,7 @@ const definition = {
     invoice: row,
     fields: [['Reference', displayReference(row.invoiceNumber)], ['Status', state(row.status)], ['Subtotal', money(row.subtotal)], ['Tax', money(row.tax)],
       ['Total', money(row.total)], ['Due', localDate(row.dueAt)]],
-    groups: [invoiceLineGroup('Invoice lines', row.invoiceLinesByInvoice)],
+    groups: [invoiceLineGroup('Invoice lines', row.invoiceLinesByInvoice, row)],
   }),
 }
 
