@@ -194,8 +194,12 @@ function baseRecordActions(section, row, capabilities, detail) {
         input('customerConfirmationName', 'Customer confirmation name', 'text', { defaultValue: row.customer.name }),
       ])]
     }
+    const start = row.status === 'ASSIGNED' && can('tickets:manage')
+      ? [patch('startTicket', 'Mark in progress', url, [], () => ({ status: 'IN_PROGRESS' }))]
+      : []
     if (!['RESOLVED_PENDING_CONFIRMATION', 'CLOSED'].includes(row.status) && can('tickets:resolve')) {
       return [
+        ...start,
         patch('ticketAssignment', 'Assign technician', url, [
           { ...choice('assignedToId', 'Technician', []), source: '/users/options?kind=technician' },
         ], values => values),
@@ -218,6 +222,7 @@ function baseRecordActions(section, row, capabilities, detail) {
         ], values => ({ ...values, coverageDecision: row.coverageDecision === 'COVERED' ? 'COVERED' : 'NOT_COVERED' })),
       ]
     }
+    return start
   }
   if (section === 'subsidies' && row.status !== 'PAID' && can('subsidies:manage')) {
     const statuses = {

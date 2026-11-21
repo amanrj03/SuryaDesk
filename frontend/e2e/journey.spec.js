@@ -411,3 +411,103 @@ test('seeded customer can browse records and download an issued invoice on mobil
   await page.getByRole('button', { name: 'Sign out', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Customer sign in' })).toBeVisible()
 })
+
+test('customer service request reaches the assigned technician and closes after confirmation', async ({ page, browser, baseURL }) => {
+  const db = createDatabase(process.env.DATABASE_URL)
+  const description = 'Intermittent generation alarm after rain ' + randomUUID()
+  const email = 'customer0001@demo.suryadesk.test'
+  const support = await browser.newPage({ baseURL })
+  const field = await browser.newPage({ baseURL })
+  const { unlink } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const { fileURLToPath } = await import('node:url')
+
+  async function findTicket(staff, number) {
+    await staff.getByRole('link', { name: 'Service tickets', exact: true }).click()
+    const search = staff.getByRole('textbox', { name: 'Search service tickets' })
+    await search.fill(number)
+    await search.press('Enter')
+    return staff.getByRole('row').filter({ hasText: number })
+  }
+
+  try {
+    const account = await db.customerAccount.findUniqueOrThrow({ where: { email } })
+    const now = new Date()
+    const asset = await db.serializedAsset.findFirstOrThrow({
+      where: { customerId: account.customerId, status: 'INSTALLED', warrantyByAsset: {
+        status: 'ACTIVE', startAt: { lte: now }, endAt: { gt: now },
+      } },
+    })
+    const technician = await db.user.findUniqueOrThrow({ where: { email: 'technician@demo.suryadesk.test' } })
+    await page.goto('/customer/login')
+    await page.getByLabel('Email address').fill(email)
+    await page.getByLabel('Password', { exact: true }).fill(process.env.SEED_DEMO_PASSWORD)
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+    await page.getByRole('link', { name: 'Service requests', exact: true }).click()
+    await page.getByRole('combobox', { name: 'Equipment', exact: true }).selectOption(asset.id)
+    await page.getByLabel('Describe the issue').fill(description)
+    await page.getByLabel('Supporting photo (optional)').setInputFiles({
+      name: 'rain-alarm.png', mimeType: 'image/png',
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Yv1cAAAAASUVORK5CYII=', 'base64'),
+    })
+    await page.getByRole('button', { name: 'Submit service request' }).click()
+    const card = page.getByRole('article').filter({ hasText: description })
+    await expect(card.getByRole('button', { name: 'Download photo' })).toBeVisible()
+    const ticket = await db.serviceTicket.findFirstOrThrow({ where: { description } })
+    expect(ticket.coverageDecision).toBe('COVERED')
+
+    await login(support, 'support')
+    const supportRow = await findTicket(support, ticket.ticketNumber)
+    await supportRow.getByRole('link', { name: 'View', exact: true }).click()
+    await expect(support.getByRole('button', { name: 'rain-alarm.png' })).toBeVisible()
+    await support.getByRole('button', { name: 'Back to Service tickets' }).click()
+    await supportRow.getByRole('button', { name: 'Assign technician' }).click()
+    const assign = support.getByRole('dialog', { name: 'Assign technician' })
+    await assign.getByRole('combobox', { name: 'Technician', exact: true }).selectOption(technician.id)
+    await assign.getByRole('button', { name: 'Assign technician' }).click()
+    await expect(supportRow).toContainText('Assigned')
+
+    await login(field, 'technician')
+    const fieldRow = await findTicket(field, ticket.ticketNumber)
+    await fieldRow.getByRole('button', { name: 'Mark in progress' }).click()
+    await field.getByRole('dialog', { name: 'Mark in progress' }).getByRole('button', { name: 'Mark in progress' }).click()
+    await expect(fieldRow).toContainText('In progress')
+    await expect(fieldRow.getByRole('button', { name: 'Resolve ticket' })).toHaveCount(0)
+
+    await support.getByLabel('Filter by status').selectOption('IN_PROGRESS')
+    const active = supportRow
+    await expect(active).toContainText('In progress')
+    await active.getByRole('button', { name: 'Resolve ticket' }).click()
+    const resolveTicket = support.getByRole('dialog', { name: 'Resolve ticket' })
+    await resolveTicket.getByLabel('Repair details').fill('Re-seated the string connector and verified stable generation.')
+    await resolveTicket.getByRole('button', { name: 'Resolve ticket' }).click()
+    await expect(resolveTicket).toHaveCount(0)
+    await support.getByLabel('Filter by status').selectOption('RESOLVED_PENDING_CONFIRMATION')
+    await expect(active).toContainText('Resolved pending confirmation')
+
+    await page.reload()
+    await card.getByRole('button', { name: 'Confirm resolution' }).click()
+    await expect(card).toContainText('Closed')
+    expect((await db.serviceTicket.findUniqueOrThrow({ where: { id: ticket.id } })).status).toBe('CLOSED')
+    expect(await db.invoice.count({ where: { ticketId: ticket.id } })).toBe(0)
+  } finally {
+    try {
+      const ticket = await db.serviceTicket.findFirst({ where: { description } })
+      if (ticket) {
+        const where = { ownerType: 'TICKET', ownerId: ticket.id }
+        const media = await db.attachment.findMany({ where, select: { storageKey: true } })
+        await db.$transaction([
+          db.attachment.deleteMany({ where }),
+          db.auditLog.deleteMany({ where: { entityType: 'ServiceTicket', entityId: ticket.id } }),
+          db.serviceTicket.delete({ where: { id: ticket.id } }),
+        ])
+        const directory = resolve(fileURLToPath(new URL('../../backend/', import.meta.url)), process.env.UPLOAD_DIR ?? 'uploads')
+        for (const { storageKey } of media) await unlink(resolve(directory, storageKey)).catch(error => {
+          if (error.code !== 'ENOENT') throw error
+        })
+      }
+    } finally {
+      await Promise.all([support.close(), field.close(), db.$disconnect()])
+    }
+  }
+})
