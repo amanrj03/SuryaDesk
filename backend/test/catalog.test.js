@@ -19,7 +19,7 @@ test('catalog creates stock balances and validates and replaces package componen
       const panel = await catalog.createProduct({ ...data, sku: key + '-PANEL', category: 'PANEL' })
       const battery = await catalog.createProduct({ ...data, sku: key + '-BATTERY', category: 'BATTERY' })
       assert.equal((await tx.stockBalance.findUnique({ where: { productId: panel.id } })).onHand, 0)
-      const pack = { code: key, name: 'Off-grid fixture', type: 'OFF_GRID', capacityKw: 3, basePrice: '900' }
+      const pack = { code: key, name: 'Off-grid fixture', type: 'OFF_GRID', capacityKw: 3.17, basePrice: '900' }
       const panels = { productId: panel.id, quantity: 5 }
       const storage = { productId: battery.id, quantity: 1 }
       await assert.rejects(catalog.createPackage({ ...pack, components: [panels] }), { code: 'VALIDATION_ERROR' })

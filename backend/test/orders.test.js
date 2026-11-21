@@ -20,7 +20,7 @@ test('an accepted quotation converts once and creates both fulfillment queues', 
       } })
       const survey = await tx.siteSurvey.create({ data: { leadId: lead.id, scheduledAt: new Date(), status: 'APPROVED' } })
       const pack = await tx.solarPackage.create({ data: {
-        code: key, name: 'Panel set fixture', type: 'PANEL_SET', capacityKw: 3, basePrice: 100,
+        code: key, name: 'Panel set fixture', type: 'PANEL_SET', basePrice: 100,
       } })
       const quote = await tx.quotation.create({ data: {
         quoteNumber: key, leadId: lead.id, surveyId: survey.id, packageId: pack.id, createdById: user.id,
