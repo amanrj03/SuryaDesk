@@ -45,6 +45,8 @@ model User {
 
   staffSessions StaffSession[]
 
+  purchaseOrders PurchaseOrder[]
+
   @@index([role, isActive])
 }
 
@@ -352,6 +354,8 @@ model Product {
   serializedAssetsByProduct  SerializedAsset[]  @relation("SerializedAsset_product")
   dispatchItemsByProduct     DispatchItem[]     @relation("DispatchItem_product")
   ticketPartsByProduct       TicketPart[]       @relation("TicketPart_product")
+
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@index([category, isActive])
 }
@@ -850,4 +854,61 @@ model StaffSession {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+enum PurchaseStatus {
+  DRAFT
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+model Supplier {
+  id             String          @id @default(cuid())
+  code           String          @unique
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  purchaseOrders PurchaseOrder[]
+
+  @@index([isActive])
+}
+
+model PurchaseOrder {
+  id             String              @id @default(cuid())
+  purchaseNumber String              @unique
+  supplierId     String
+  createdById    String
+  status         PurchaseStatus      @default(DRAFT)
+  expectedAt     DateTime?
+  orderedAt      DateTime?
+  receivedAt     DateTime?
+  notes          String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  supplier       Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  createdBy      User                @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  lines          PurchaseOrderLine[]
+
+  @@index([supplierId, status])
+  @@index([createdById])
+}
+
+model PurchaseOrderLine {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  productId       String
+  quantity        Int
+  received        Int           @default(0)
+  unitCost        Decimal       @db.Decimal(12, 2)
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([purchaseOrderId, productId])
+  @@index([productId])
 }
