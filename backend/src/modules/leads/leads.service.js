@@ -4,7 +4,7 @@ import { ApiError } from '../../utils/ApiError.js'
 const missing = () => new ApiError(404, 'NOT_FOUND', 'Lead not found.')
 const invalidTransition = message => new ApiError(409, 'INVALID_TRANSITION', message)
 const transitions = {
-  NEW: ['CONTACTED', 'LOST'],
+  NEW: ['CONTACTED', 'QUALIFIED', 'LOST'],
   CONTACTED: ['QUALIFIED', 'LOST'],
   QUALIFIED: ['LOST'],
   SURVEY_SCHEDULED: ['LOST'],
@@ -40,7 +40,7 @@ export function leadsService(db) {
         db.lead.findMany({
           where, skip: (page - 1) * limit, take: limit,
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-          include: { customer: true, leadActivitiesByLead: { orderBy: { createdAt: 'desc' }, take: 1 } },
+          include: { customer: true, leadActivitiesByLead: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1 } },
         }),
         db.lead.count({ where }),
       ], { isolationLevel: 'RepeatableRead' })
@@ -51,14 +51,14 @@ export function leadsService(db) {
         where: { id, ...scope(user) },
         include: {
           customer: true, siteSurveysByLead: true,
-          leadActivitiesByLead: { orderBy: { createdAt: 'desc' } },
+          leadActivitiesByLead: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] },
           ...(user.capabilities.includes('quotes:read') && { quotationsByLead: true }),
         },
       })
       if (!lead) throw missing()
       return lead
     },
-    async update(id, data, user) {
+    async update(id, { contactNote, ...data }, user) {
       return db.$transaction(async tx => {
         const lead = await tx.lead.findUnique({ where: { id } })
         if (!lead) throw missing()
@@ -75,8 +75,16 @@ export function leadsService(db) {
         const changed = await tx.lead.updateMany({ where: { id, updatedAt: lead.updatedAt }, data })
         if (!changed.count) throw new ApiError(409, 'CONFLICT', 'Another user updated this lead.')
         if (status && status !== lead.status) {
+          const notes = lead.status === 'NEW' && status === 'QUALIFIED'
+            ? ['NEW to CONTACTED', 'CONTACTED to QUALIFIED']
+            : [lead.status + ' to ' + status]
+          await tx.leadActivity.createMany({
+            data: notes.map(note => ({ leadId: id, actorId: user.id, type: 'STATUS_CHANGE', notes: note })),
+          })
+        }
+        if (contactNote) {
           await tx.leadActivity.create({
-            data: { leadId: id, actorId: user.id, type: 'STATUS_CHANGE', notes: lead.status + ' to ' + status },
+            data: { leadId: id, actorId: user.id, type: 'NOTE', notes: contactNote },
           })
         }
         return tx.lead.findUnique({ where: { id }, include: { customer: true } })

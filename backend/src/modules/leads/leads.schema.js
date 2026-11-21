@@ -33,7 +33,9 @@ export const patch = z.strictObject({
   monthlyBill: amount.optional(),
   gridSuitable: z.boolean().optional(),
   notes: notes.optional(),
+  contactNote: notes.optional(),
 }).refine(value => Object.keys(value).length > 0)
+  .refine(value => !value.contactNote || value.status === 'CONTACTED', 'A contact note requires marking the enquiry contacted.')
 export const activity = z.strictObject({
   type: z.enum(ActivityType).exclude(['STATUS_CHANGE']),
   notes,

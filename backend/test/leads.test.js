@@ -57,7 +57,6 @@ test('public enquiry reaches the sales queue and requires qualification evidence
   assert.equal(customers.status, 200)
   assert.equal(customers.body.data[0].id, list.body.data[0].customerId)
   const { id } = list.body.data[0]
-  assert.equal((await request('/leads/' + id, 'PATCH', { status: 'CONTACTED' })).status, 200)
   assert.equal((await request('/leads/' + id, 'PATCH', { status: 'QUALIFIED' })).status, 409)
   const qualified = await request('/leads/' + id, 'PATCH', {
     status: 'QUALIFIED', roofArea: 50, monthlyBill: '4800.50', gridSuitable: true,
@@ -66,4 +65,6 @@ test('public enquiry reaches the sales queue and requires qualification evidence
   assert.equal(qualified.body.data.status, 'QUALIFIED')
   const detail = await request('/leads/' + id)
   assert.equal(detail.body.data.leadActivitiesByLead.length, 3)
+  assert.ok(detail.body.data.leadActivitiesByLead.some(event => event.notes === 'NEW to CONTACTED'))
+  assert.ok(detail.body.data.leadActivitiesByLead.some(event => event.notes === 'CONTACTED to QUALIFIED'))
 })

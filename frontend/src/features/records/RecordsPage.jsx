@@ -244,6 +244,18 @@ export default function Records({ section, token, capabilities }) {
                                 Edit package
                               </button>
                             )}
+                            {canEditLead && row.status === 'NEW' && (
+                              <button type="button" className="secondary mb-1 mr-1"
+                                onClick={() => setPanel({ type: 'lead', row, target: 'CONTACTED' })}>
+                                Mark contacted
+                              </button>
+                            )}
+                            {canEditLead && ['NEW', 'CONTACTED'].includes(row.status) && (
+                              <button type="button" className="secondary mb-1 mr-1"
+                                onClick={() => setPanel({ type: 'lead', row, target: 'QUALIFIED' })}>
+                                Qualify enquiry
+                              </button>
+                            )}
                             {(canEditLead ||
                               (canSign &&
                                 row.status !== 'COMPLETED' &&
@@ -303,7 +315,7 @@ export default function Records({ section, token, capabilities }) {
         <PackageEditor id={panel.id} token={token} onClose={closePanel} onSaved={refresh} />
       )}
       {panel?.type === 'lead' && (
-        <LeadEditor lead={panel.row} token={token} onClose={closePanel} onSaved={refresh} />
+        <LeadEditor lead={panel.row} target={panel.target} token={token} onClose={closePanel} onSaved={refresh} />
       )}
       {panel?.type === 'signoff' && (
         <InstallationSignoff job={panel.row} token={token} onClose={closePanel} onSaved={refresh} />

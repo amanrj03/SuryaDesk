@@ -1,29 +1,29 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { words } from '../../lib/format.js'
 import { Notice } from '../../components/ui/Notice.jsx'
 import { RecordDialog } from '../../components/ui/RecordDialog.jsx'
 import { api } from '../../lib/api.js'
 
-export default function LeadEditor({ lead, token, onClose, onSaved }) {
+export default function LeadEditor({ lead, target, token, onClose, onSaved }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const next = {
-    NEW: ['CONTACTED', 'LOST'],
-    CONTACTED: ['QUALIFIED', 'LOST'],
-    QUALIFIED: ['LOST'],
-  }
-  const allowed = next[lead.status] ?? []
+  const contact = target === 'CONTACTED'
+  const qualify = target === 'QUALIFIED'
+  const canMarkLost = !target && ['NEW', 'CONTACTED', 'QUALIFIED'].includes(lead.status)
+  const action = contact ? 'Mark contacted' : qualify ? 'Qualify enquiry' : 'Edit enquiry'
 
   async function save(event) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
+    const value = field => form.get(field)?.trim()
+    const status = target ?? value('status')
     const body = {}
-    for (const field of ['status', 'monthlyBill', 'notes']) {
-      const value = form.get(field).trim()
-      if (value) body[field] = value
-    }
-    if (form.get('roofArea')) body.roofArea = Number(form.get('roofArea'))
-    if (form.get('gridSuitable')) body.gridSuitable = form.get('gridSuitable') === 'yes'
+    if (status) body.status = status
+    if (value('contactNote')) body.contactNote = value('contactNote')
+    if (value('notes')) body.notes = value('notes')
+    if (value('monthlyBill')) body.monthlyBill = value('monthlyBill')
+    if (value('roofArea')) body.roofArea = Number(value('roofArea'))
+    if (value('gridSuitable')) body.gridSuitable = value('gridSuitable') === 'yes'
     if (!Object.keys(body).length) {
       setError('Enter an update before saving.')
       return
@@ -41,76 +41,48 @@ export default function LeadEditor({ lead, token, onClose, onSaved }) {
   }
 
   return (
-    <RecordDialog title={`Edit enquiry · ${lead.customer.name}`} busy={busy} onClose={onClose}>
+    <RecordDialog title={action + ' · ' + lead.customer.name} busy={busy} onClose={onClose}>
       <form className="form p-4" onSubmit={save}>
-        <div className="form-grid grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1 text-xs font-semibold text-gray-700">
-            Status
-            <select
-              name="status"
-              className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs focus:outline-hidden focus:ring-2 focus:ring-black/10"
-            >
-              <option value="">{words(lead.status)}</option>
-              {allowed.map((status) => (
-                <option key={status} value={status}>
-                  {words(status)}
-                </option>
-              ))}
-            </select>
+        {contact ? (
+          <label>Follow-up note (optional)
+            <textarea name="contactNote" maxLength={2000} rows={3} />
           </label>
-          <label className="grid gap-1 text-xs font-semibold text-gray-700">
-            Shadow-free roof area (m²)
-            <input
-              name="roofArea"
-              type="number"
-              min="0.01"
-              step="0.01"
-              defaultValue={lead.roofArea ?? ''}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs focus:outline-hidden focus:ring-2 focus:ring-black/10"
-            />
-          </label>
-          <label className="grid gap-1 text-xs font-semibold text-gray-700">
-            Monthly bill (INR)
-            <input
-              name="monthlyBill"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={lead.monthlyBill ?? ''}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs focus:outline-hidden focus:ring-2 focus:ring-black/10"
-            />
-          </label>
-          <label className="grid gap-1 text-xs font-semibold text-gray-700">
-            Grid suitable
-            <select
-              name="gridSuitable"
-              defaultValue={lead.gridSuitable == null ? '' : lead.gridSuitable ? 'yes' : 'no'}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs focus:outline-hidden focus:ring-2 focus:ring-black/10"
-            >
-              <option value="">Unknown</option>
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </select>
-          </label>
-        </div>
-        <label className="grid gap-1 text-xs font-semibold text-gray-700">
-          Notes
-          <textarea
-            name="notes"
-            maxLength={2000}
-            rows={2}
-            defaultValue={lead.notes ?? ''}
-            className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs focus:outline-hidden focus:ring-2 focus:ring-black/10 resize-y"
-          />
-        </label>
+        ) : (
+          <>
+            {qualify && <p className="text-sm text-gray-600">Enter the preliminary site and bill details. The surveyor will verify site suitability during the visit.</p>}
+            <div className="form-grid">
+              {canMarkLost && <label>Status
+                <select name="status">
+                  <option value="">{words(lead.status)}</option>
+                  <option value="LOST">Lost</option>
+                </select>
+              </label>}
+              <label>Shadow-free roof area estimate (m²)
+                <input name="roofArea" type="number" min=".01" max="99999999" step=".01"
+                  required={qualify} defaultValue={lead.roofArea ?? ''} />
+              </label>
+              <label>Monthly bill (INR)
+                <input name="monthlyBill" type="number" min="0" max="9999999999.99" step=".01"
+                  required={qualify} defaultValue={lead.monthlyBill ?? ''} />
+              </label>
+              <label>Grid suitable
+                <select name="gridSuitable" required={qualify}
+                  defaultValue={lead.gridSuitable == null ? '' : lead.gridSuitable ? 'yes' : 'no'}>
+                  <option value="">Unknown</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </label>
+            </div>
+            <label>Notes
+              <textarea name="notes" maxLength={2000} rows={2} defaultValue={lead.notes ?? ''} />
+            </label>
+          </>
+        )}
         <Notice>{error}</Notice>
-        <div className="flex justify-end pt-1">
-          <button
-            type="submit"
-            className="primary py-2 px-5 text-xs font-semibold"
-            disabled={busy}
-          >
-            {busy ? 'Saving…' : 'Save enquiry'}
+        <div className="flex justify-end">
+          <button type="submit" className="primary" disabled={busy}>
+            {busy ? 'Saving…' : target ? action : 'Save enquiry'}
           </button>
         </div>
       </form>
