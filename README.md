@@ -3,7 +3,8 @@
 ## Customer portal
 
 - **Request a quote** collects the customer's password and verifies their email before creating the account and enquiry. **Customer portal** opens the same account with a password or an email code. Existing customers can request another quote from their portal.
-- Set `CUSTOMER_EMAIL_FROM` to a verified sender and `RESEND_API_KEY` in the private backend `.env`. Use HTTPS in production and serve the frontend and API on the same site so the customer session cookie can be sent. Apply migrations and regenerate Prisma with `npm run db:migrate` and `npm run db:generate` from `backend`.
+- To send customer codes from Gmail, enable Google 2-Step Verification and generate an app password. Set `GMAIL_USER` to the sending address and `GMAIL_APP_PASSWORD` to that app password in the private backend `.env`, then restart the backend. If both Gmail settings are present, the backend uses Gmail over SMTP with TLS. If you use Resend, leave both Gmail settings unset and set `CUSTOMER_EMAIL_FROM` and `RESEND_API_KEY`.
+- Use HTTPS in production and serve the frontend and API on the same site so the customer session cookie can be sent. Apply migrations and regenerate Prisma with `npm run db:migrate` and `npm run db:generate` from `backend`.
 - Existing customer records matched by email are reused. An administrator can grant or revoke historical access from **Customers → View → Customer portal access** after verifying who owns the record.
 - For local demos, run `npm run db:seed -- --portal-accounts` from `backend` with `SEED_DEMO_PASSWORD` configured. The command lists the seeded email addresses. It adds portal logins to existing completed demo orders.
 

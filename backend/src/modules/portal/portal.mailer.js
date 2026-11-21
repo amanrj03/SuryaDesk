@@ -1,6 +1,20 @@
+import nodemailer from 'nodemailer'
 import { ApiError } from '../../utils/ApiError.js'
 
-export function customerMailer({ CUSTOMER_EMAIL_FROM, RESEND_API_KEY }, fetchEmail = fetch) {
+export function customerMailer(
+  { GMAIL_USER, GMAIL_APP_PASSWORD, CUSTOMER_EMAIL_FROM, RESEND_API_KEY },
+  { createTransport = nodemailer.createTransport, fetchEmail = fetch } = {},
+) {
+  if (GMAIL_USER && GMAIL_APP_PASSWORD) {
+    const transport = createTransport({
+      host: 'smtp.gmail.com', port: 465, secure: true,
+      auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
+      connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 15_000,
+    })
+    return async ({ email, subject, message }) => {
+      await transport.sendMail({ from: { name: 'SuryaDesk', address: GMAIL_USER }, to: email, subject, text: message })
+    }
+  }
   if (!CUSTOMER_EMAIL_FROM || !RESEND_API_KEY) return null
   return async ({ email, subject, message }) => {
     const response = await fetchEmail('https://api.resend.com/emails', {
