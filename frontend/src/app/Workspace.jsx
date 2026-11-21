@@ -20,7 +20,7 @@ const workspaceAliases = [
   ['admin/users', 'users'],
 ]
 
-function DetailPage({ section, token }) {
+function DetailPage({ section, token, capabilities }) {
   const { id } = useParams()
   const { state } = useLocation()
   const navigate = useNavigate()
@@ -37,6 +37,7 @@ function DetailPage({ section, token }) {
         id={id}
         section={section.path}
         token={token}
+        capabilities={capabilities}
         backLabel={'Back to ' + section.title}
         onBack={goBack}
       />
@@ -82,7 +83,9 @@ export default function Workspace({ session, onLogout }) {
             <Route
               key={section.path + '/:id'}
               path={section.path + '/:id'}
-              element={<DetailPage section={section} token={session.accessToken} />}
+              element={
+                <DetailPage section={section} token={session.accessToken} capabilities={session.user.capabilities} />
+              }
             />
           ))}
         {allowed.map((section) => (

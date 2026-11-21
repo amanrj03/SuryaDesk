@@ -1,5 +1,6 @@
 ﻿import { useRef, useState } from 'react'
 import { api } from '../../lib/api.js'
+import { RecordDialog } from '../../components/ui/RecordDialog.jsx'
 
 const checks = [
   ['mounting', 'Mounting and panels secured'], ['electrical', 'Electrical connections checked'],
@@ -104,10 +105,7 @@ export default function InstallationSignoff({ job, token, onClose, onSaved }) {
     }
   }
 
-  return <section className="lead-editor">
-    <div className="toolbar items-center"><h2>{job.order.customer.name}</h2>
-      <button className="secondary ml-auto" disabled={busy} onClick={onClose}>Close</button>
-    </div>
+  return <RecordDialog title={`Sign off installation · ${job.order.customer.name}`} busy={busy} onClose={onClose}>
     <form className="form p-4" onSubmit={save}>
       <div className="form-grid">
         <label>Started at<input type="datetime-local" name="startedAt" required defaultValue={localInput(job.startedAt)} /></label>
@@ -126,5 +124,5 @@ export default function InstallationSignoff({ job, token, onClose, onSaved }) {
       {error && <p className="notice" role="alert">{error}</p>}
       <button disabled={busy} className="primary w-fit">{busy ? 'Saving evidence…' : 'Complete installation'}</button>
     </form>
-  </section>
+  </RecordDialog>
 }

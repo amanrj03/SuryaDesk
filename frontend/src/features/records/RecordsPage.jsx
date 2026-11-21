@@ -39,12 +39,10 @@ export default function Records({ section, token, capabilities }) {
   const status = choices?.includes(requestedStatus) ? requestedStatus : ''
   const [retry, setRetry] = useState(0)
   const [state, setState] = useState({ busy: true })
-  const [selected, setSelected] = useState(null)
+  const [panel, setPanel] = useState(null)
   const canEditLead = section.path === 'leads' && capabilities.includes('leads:write')
   const canSign =
     section.path === 'installations' && capabilities.includes('installations:complete_assigned')
-  const [action, setAction] = useState(null)
-  const [packageEdit, setPackageEdit] = useState(null)
   const managePackages = section.path === 'packages' && capabilities.includes('catalog:manage')
   const canView = hasDetail(section.path)
   const hasActions =
@@ -53,7 +51,6 @@ export default function Records({ section, token, capabilities }) {
     canSign ||
     managePackages ||
     state.result?.data.some((row) => recordActions(section.path, row, capabilities).length)
-  const Editor = canEditLead ? LeadEditor : InstallationSignoff
 
   useEffect(() => {
     setQuery(search)
@@ -75,10 +72,12 @@ export default function Records({ section, token, capabilities }) {
     return () => controller.abort()
   }, [section.path, token, page, search, status, retry])
 
+  function closePanel() {
+    setPanel(null)
+  }
+
   function refresh() {
-    setSelected(null)
-    setAction(null)
-    setPackageEdit(null)
+    closePanel()
     setState({ busy: true })
     setRetry((value) => value + 1)
   }
@@ -114,21 +113,11 @@ export default function Records({ section, token, capabilities }) {
             <button
               type="button"
               className="primary"
-              onClick={() => setPackageEdit({})}
+              onClick={() => setPanel({ type: 'package' })}
             >
               Add package
             </button>
           </div>
-        )}
-
-        {packageEdit && (
-          <PackageEditor
-            key={packageEdit.id ?? 'new'}
-            id={packageEdit.id}
-            token={token}
-            onSaved={refresh}
-            onClose={() => setPackageEdit(null)}
-          />
         )}
 
         {collectionActions(section.path, capabilities).map((candidate) => (
@@ -136,36 +125,12 @@ export default function Records({ section, token, capabilities }) {
             <button
               type="button"
               className="primary"
-              onClick={() => {
-                setSelected(null)
-                setAction(candidate)
-              }}
+              onClick={() => setPanel({ type: 'action', action: candidate })}
             >
               {candidate.label}
             </button>
           </div>
         ))}
-
-        {selected && (
-          <Editor
-            key={selected.id}
-            lead={selected}
-            job={selected}
-            token={token}
-            onClose={() => setSelected(null)}
-            onSaved={refresh}
-          />
-        )}
-
-        {action && (
-          <WorkflowAction
-            key={action.path + action.key}
-            action={action}
-            token={token}
-            onSaved={refresh}
-            onClose={() => setAction(null)}
-          />
-        )}
 
         {/* Filter and Search Bar styled as Toolbar */}
         {(section.search || choices) && (
@@ -180,7 +145,7 @@ export default function Records({ section, token, capabilities }) {
             {section.search && (
               <input
                 aria-label={'Search ' + section.title.toLowerCase()}
-                placeholder="Search records…"
+                placeholder={section.searchPlaceholder ?? 'Search records…'}
                 maxLength={120}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -260,11 +225,16 @@ export default function Records({ section, token, capabilities }) {
                                 View
                               </Link>
                             )}
+                            {section.path === 'quotes' && row.orderByQuotation && capabilities.includes('orders:read') && (
+                              <Link className="secondary mb-1 mr-1" to={'/orders/' + encodeURIComponent(row.orderByQuotation.id)}>
+                                View order
+                              </Link>
+                            )}
                             {managePackages && (
                               <button
                                 type="button"
                                 className="secondary mb-1 mr-1"
-                                onClick={() => setPackageEdit({ id: row.id })}
+                                onClick={() => setPanel({ type: 'package', id: row.id })}
                               >
                                 Edit package
                               </button>
@@ -277,10 +247,7 @@ export default function Records({ section, token, capabilities }) {
                                 <button
                                   type="button"
                                   className="secondary mb-1"
-                                  onClick={() => {
-                                    setAction(null)
-                                    setSelected(row)
-                                  }}
+                                  onClick={() => setPanel({ type: canEditLead ? 'lead' : 'signoff', row })}
                                 >
                                   {canEditLead ? 'Edit' : 'Sign off'}
                                 </button>
@@ -290,10 +257,7 @@ export default function Records({ section, token, capabilities }) {
                                 type="button"
                                 className="secondary mb-1 ml-1"
                                 key={candidate.key}
-                                onClick={() => {
-                                  setSelected(null)
-                                  setAction(candidate)
-                                }}
+                                onClick={() => setPanel({ type: 'action', action: candidate })}
                               >
                                 {candidate.label}
                               </button>
@@ -329,6 +293,19 @@ export default function Records({ section, token, capabilities }) {
             </div>
           ))}
       </div>
+
+      {panel?.type === 'package' && (
+        <PackageEditor id={panel.id} token={token} onClose={closePanel} onSaved={refresh} />
+      )}
+      {panel?.type === 'lead' && (
+        <LeadEditor lead={panel.row} token={token} onClose={closePanel} onSaved={refresh} />
+      )}
+      {panel?.type === 'signoff' && (
+        <InstallationSignoff job={panel.row} token={token} onClose={closePanel} onSaved={refresh} />
+      )}
+      {panel?.type === 'action' && (
+        <WorkflowAction action={panel.action} token={token} onClose={closePanel} onSaved={refresh} />
+      )}
     </div>
   )
 }

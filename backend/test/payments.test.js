@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import test from 'node:test'
 import { createDatabase } from '../src/lib/prisma.js'
 import { invoiceService } from '../src/modules/invoices/invoices.service.js'
+import { ordersService } from '../src/modules/orders/orders.service.js'
 import { paymentsService } from '../src/modules/payments/payments.service.js'
 
 test('concurrent payments cannot overpay an order and references make retries safe', {
@@ -46,8 +47,27 @@ test('concurrent payments cannot overpay an order and references make retries sa
       const ledger = await payments.orderPayments(order.id)
       assert.equal(ledger.payments.length, 1)
       assert.equal(ledger.balance.toFixed(2), '29.75')
+      await db.payment.create({ data: {
+        orderId: order.id, amount: '10.00', method: 'CASH', receivedAt: new Date(),
+        recordedById: user.id, voidedAt: new Date(), voidReason: 'Integration fixture',
+      } })
+      const orders = ordersService(db)
+      const { data: [listed] } = await orders.list({ page: 1, limit: 20, q: key })
+      assert.equal(listed.total.toFixed(2), '100.00')
+      assert.equal(listed.paidTotal.toFixed(2), '70.25')
+      assert.equal(listed.balance.toFixed(2), '29.75')
+      assert.equal((await orders.detail(order.id)).balance.toFixed(2), '29.75')
       assert.equal((await invoices.detail(invoice.id)).status, 'PARTIALLY_PAID')
-      await payments.record(order.id, { amount: '29.75', method: 'BANK_TRANSFER' }, user)
+      const automatic = await payments.record(order.id, { amount: '10.00', method: 'CASH' }, user)
+      assert.match(automatic.payment.reference, /^PAY-[0-9A-F-]{36}$/)
+      const finalPayment = { amount: '19.75', method: 'BANK_TRANSFER', requestId: randomUUID() }
+      const saved = await payments.record(order.id, finalPayment, user)
+      assert.match(saved.payment.reference, /^PAY-[0-9A-F-]{36}$/)
+      const retried = await payments.record(order.id, finalPayment, user)
+      assert.equal(retried.created, false)
+      assert.equal(retried.payment.id, saved.payment.id)
+      await assert.rejects(payments.record(order.id, { ...finalPayment, method: 'UPI' }, user), { code: 'CONFLICT' })
+      assert.equal((await orders.detail(order.id)).balance.toFixed(2), '0.00')
       assert.equal((await invoices.detail(invoice.id)).status, 'PAID')
     } finally {
       await db.$transaction(async tx => {

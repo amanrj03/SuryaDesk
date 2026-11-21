@@ -8,7 +8,7 @@ async function signIn(page) {
   await expect(page.getByRole('heading', { name: 'Operations overview' })).toBeVisible()
 }
 
-test('all administrator navigation destinations load live records', async ({ page }, info) => {
+test('all administrator modules load live records and open actions in modal dialogs', async ({ page }, info) => {
   test.setTimeout(90000)
   let opened = 0
   let viewed = 0
@@ -29,6 +29,7 @@ test('all administrator navigation destinations load live records', async ({ pag
     const { meta } = await result.json()
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
     await expect(page.locator('.page-header p')).toHaveText(meta.total + (meta.total === 1 ? ' record' : ' records'))
+    await expect(page.locator('main')).not.toContainText(/\bDEMO-|\(Demo\)/)
     await expect(link).toHaveAttribute('aria-current', 'page')
     await expect(page.getByRole('alert')).toHaveCount(0)
     const view = page.locator('tbody').getByRole('link', { name: 'View', exact: true }).first()
@@ -47,9 +48,11 @@ test('all administrator navigation destinations load live records', async ({ pag
     const entryPoints = page.locator('.records > .toolbar > button.primary, .records tbody button')
     const actions = [...new Set(await entryPoints.allTextContents())]
     for (const action of actions) {
-      await entryPoints.filter({ hasText: action }).first().click()
-      const panel = page.locator('.lead-editor')
-      await expect(panel).toBeVisible()
+      const trigger = entryPoints.and(page.getByRole('button', { name: action, exact: true })).first()
+      await trigger.click()
+      const panel = page.getByRole('dialog')
+      await expect(panel.and(page.locator('dialog:modal'))).toBeVisible()
+      await expect(page.locator('.records dialog')).toHaveCount(0)
       await expect(panel.getByRole('status')).toHaveCount(0)
       await expect(panel.getByRole('alert')).toHaveCount(0)
       await panel.getByRole('button', { name: 'Close', exact: true }).click()
@@ -59,7 +62,13 @@ test('all administrator navigation destinations load live records', async ({ pag
   }
   expect(viewed).toBe(12)
   expect(opened + viewed).toBeGreaterThan(25)
-  console.log('Verified action panels:', opened, 'and detail pages:', viewed)
+  console.log('Verified action dialogs:', opened, 'and detail pages:', viewed)
+  await nav.getByRole('link', { name: 'Customers', exact: true }).click()
+  const customerSearch = page.getByRole('textbox', { name: 'Search customers' })
+  await customerSearch.fill('customer0001@suryadesk.test')
+  await customerSearch.press('Enter')
+  await expect(page.getByRole('cell', { name: 'customer0001@suryadesk.test', exact: true })).toBeVisible()
+
   await nav.getByRole('link', { name: 'Enquiries', exact: true }).click()
   await page.getByRole('combobox', { name: 'Filter by status' }).selectOption('WON')
   await expect(page.getByRole('row').nth(1)).toContainText('Won')
@@ -89,6 +98,18 @@ test('all administrator navigation destinations load live records', async ({ pag
   await expect(mobileBack).toBeInViewport()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await mobileBack.click()
+  await nav.getByRole('link', { name: 'Orders', exact: true }).click()
+  const paymentTrigger = page.getByRole('button', { name: 'Record payment', exact: true }).first()
+  await paymentTrigger.click()
+  const payment = page.getByRole('dialog', { name: 'Record payment' })
+  await expect(payment).toBeInViewport()
+  await expect(payment.getByLabel('Amount (INR)')).toBeVisible()
+  await expect(payment.getByRole('button', { name: 'Close' })).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(payment.getByLabel('Amount (INR)')).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(payment).toHaveCount(0)
+  await expect(paymentTrigger).toBeFocused()
   await nav.getByRole('link', { name: 'Staff', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Staff', exact: true })).toBeVisible()
   await expect(page.getByRole('table')).toBeVisible()
@@ -98,8 +119,53 @@ test('all administrator navigation destinations load live records', async ({ pag
   expect(errors).toEqual([])
 })
 
-test('lists recover from non-JSON failures and expired sessions return to sign in', async ({ page }) => {
+test('dispatch pick lists show quantities and serials while orders show package pricing', async ({ page }) => {
   await signIn(page)
+  const nav = page.getByRole('navigation', { name: 'Workspace' })
+  await nav.getByRole('link', { name: 'Dispatch', exact: true }).click()
+  await page.getByLabel('Filter by status').selectOption('ALLOCATED')
+  await page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'DSP-0081', exact: true }) })
+    .getByRole('link', { name: 'View', exact: true }).click()
+  const required = page.getByRole('table', { name: 'Required materials' })
+  const allocated = page.getByRole('table', { name: 'Allocated materials' })
+  await expect(required.getByRole('columnheader')).toHaveText(['Description', 'Quantity'])
+  await expect(required.getByRole('row').filter({ hasText: '550 W mono solar panel' }).getByRole('cell'))
+    .toHaveText(['550 W mono solar panel', '2'])
+  await expect(allocated.getByRole('row').filter({ hasText: '550 W mono solar panel' })).toHaveCount(2)
+  await expect(allocated.getByRole('cell', { name: 'SD-PANEL-00481', exact: true })).toBeVisible()
+  await expect(allocated.getByRole('row').filter({ hasText: 'Solar connector pair' }).getByRole('cell'))
+    .toHaveText(['Solar connector pair', '2', 'Not serialized'])
+
+  await nav.getByRole('link', { name: 'Orders', exact: true }).click()
+  const search = page.getByRole('textbox', { name: 'Search orders' })
+  await search.fill('ORD-0081')
+  await search.press('Enter')
+  await page.getByRole('row').filter({ hasText: 'ORD-0081' })
+    .getByRole('link', { name: 'View', exact: true }).click()
+  await expect(page.getByRole('row').filter({ hasText: '550 W mono solar panel' }).getByRole('cell'))
+    .toHaveText(['550 W mono solar panel', '2', 'Included in package'])
+  await expect(page.getByRole('cell', { name: '₹73,400.00', exact: true })).toBeVisible()
+})
+
+test('lists and details recover from non-JSON failures and expired sessions return to sign in', async ({ page }) => {
+  await signIn(page)
+  const nav = page.getByRole('navigation', { name: 'Workspace' })
+  await nav.getByRole('link', { name: 'Orders', exact: true }).click()
+  const orderSearch = page.getByRole('textbox', { name: 'Search orders' })
+  await orderSearch.fill('DEMO-ORD-0111')
+  await orderSearch.press('Enter')
+  const order = page.getByRole('row').filter({ hasText: 'ORD-0111' })
+  const detailUrl = '**/api/v1/orders/DEMO-ORDER-0111'
+  await page.route(detailUrl, route => route.fulfill({
+    status: 502, contentType: 'text/plain', body: 'Unavailable',
+  }))
+  await order.getByRole('link', { name: 'View', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('The service is unavailable')
+  await page.unroute(detailUrl)
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('heading', { name: /^Order for / })).toBeVisible()
+  await expect(page.getByText('ORD-0111', { exact: true })).toBeVisible()
+
   const url = '**/api/v1/leads?*'
   await page.route(url, route => route.fulfill({ status: 502, contentType: 'text/plain', body: 'Unavailable' }))
   await page.getByRole('link', { name: 'Enquiries', exact: true }).click()
@@ -121,7 +187,7 @@ test('staff administration persists edits and deactivation', async ({ page }) =>
     await signIn(page)
     await page.getByRole('link', { name: 'Staff', exact: true }).click()
     await page.getByRole('button', { name: 'Add staff account', exact: true }).click()
-    const panel = page.locator('.lead-editor')
+    const panel = page.getByRole('dialog')
     await panel.getByRole('textbox', { name: 'Name', exact: true }).fill('QA staff fixture')
     await panel.getByLabel('Work email').fill(email)
     await panel.getByLabel('Temporary password').fill(randomUUID())
@@ -169,10 +235,10 @@ test('staff sign-in keeps the form within a mobile viewport and can reveal a pas
 test('header enquiry search and mobile navigation work', async ({ page }) => {
   await signIn(page)
   const search = page.getByRole('searchbox', { name: 'Search enquiries from header' })
-  await search.fill('DEMO-LEAD-0001')
+  await search.fill('LEAD-0001')
   await search.press('Enter')
   await expect(page.getByRole('row')).toHaveCount(2)
-  await expect(page.getByRole('row').nth(1)).toContainText('DEMO-LEAD-0001')
+  await expect(page.getByRole('cell', { name: 'LEAD-0001', exact: true })).toBeVisible()
 
   await page.setViewportSize({ width: 360, height: 780 })
   const navigation = page.getByRole('navigation', { name: 'Workspace' })
@@ -184,7 +250,7 @@ test('header enquiry search and mobile navigation work', async ({ page }) => {
 
 test('the local demo picker fills the selected role and signs in using the seeded password', async ({ page }) => {
   await page.goto('/login')
-  const accounts = page.getByRole('region', { name: 'Demo accounts' })
+  const accounts = page.getByRole('region', { name: 'Quick sign-in' })
   await expect(accounts.getByRole('button')).toHaveCount(8)
   await accounts.getByRole('button', { name: 'Sales' }).click()
   await expect(page.getByLabel('Work email')).toHaveValue('sales@demo.suryadesk.test')

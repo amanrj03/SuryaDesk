@@ -12,7 +12,7 @@ import {
 import { Card, InkCard, Panel, ListRow, AccentCard } from '../../components/ui/Surface.jsx'
 import { Badge, Chip } from '../../components/ui/Badge.jsx'
 import { Avatar } from '../../components/ui/Avatar.jsx'
-import { splitCurrency, formatCompactCurrency } from '../../lib/format.js'
+import { splitCurrency, formatCompactCurrency, displayReference } from '../../lib/format.js'
 
 const groups = [
   {
@@ -360,7 +360,7 @@ export default function AdminOverview({ data, money }) {
                         <span className="block truncate text-xs font-semibold text-gray-900">
                           {row.name}
                         </span>
-                        <span className="block text-[10px] text-gray-400">{row.sku}</span>
+                        <span className="block text-[10px] text-gray-400">{displayReference(row.sku)}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-xs font-bold text-[#E62E6B]">

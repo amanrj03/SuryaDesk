@@ -4,9 +4,14 @@ import { ApiError } from '../../utils/ApiError.js'
 
 const missing = entity => new ApiError(404, 'NOT_FOUND', entity + ' not found.')
 const invalid = message => new ApiError(409, 'INVALID_TRANSITION', message)
+const context = {
+  lead: { include: { customer: true } },
+  orderByQuotation: { select: { id: true, orderNumber: true } },
+}
 const include = {
+  ...context,
   quotationLinesByQuotation: { orderBy: { id: 'asc' } },
-  lead: { include: { customer: true } }, survey: true,
+  survey: true,
 }
 
 function priceLine(title, price) {
@@ -79,7 +84,7 @@ export function quotesService(db) {
       const [data, total] = await db.$transaction([
         db.quotation.findMany({
           where, skip: (page - 1) * limit, take: limit,
-          include: { lead: { include: { customer: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          include: context, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         }),
         db.quotation.count({ where }),
       ], { isolationLevel: 'RepeatableRead' })

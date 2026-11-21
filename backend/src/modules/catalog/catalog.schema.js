@@ -17,7 +17,7 @@ export const packages = z.object({
   capacityKw: z.coerce.number().min(1).max(5).optional(),
 })
 export const product = z.strictObject({
-  sku: code, name: label, category: z.enum(ProductCategory), unit: label,
+  sku: code.optional(), name: label, category: z.enum(ProductCategory), unit: label,
   cost: amount, salePrice: amount, serialized: z.boolean(),
   warrantyMonths: z.number().int().min(0).max(600),
   reorderLevel: z.number().int().min(0).max(1000000), isActive: z.boolean().optional(),
@@ -26,7 +26,7 @@ const components = z.array(z.strictObject({
   productId: z.string().min(1).max(100), quantity: z.number().int().min(1).max(100000),
 })).max(100).refine(rows => rows.length === new Set(rows.map(row => row.productId)).size, 'Products must be distinct.')
 export const packageBody = z.strictObject({
-  code, name: label, type: z.enum(PackageType), capacityKw: z.number().min(1).max(5).nullable().optional(),
+  code: code.optional(), name: label, type: z.enum(PackageType), capacityKw: z.number().min(1).max(5).nullable().optional(),
   description: z.string().trim().max(2000).optional(), basePrice: amount,
   isActive: z.boolean().optional(), components,
 })

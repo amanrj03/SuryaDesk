@@ -8,8 +8,8 @@ const amount = z.union([z.string().trim(), z.number()]).transform(String)
 export const params = z.object({ id })
 export const payment = z.strictObject({
   amount, method: z.enum(PaymentMethod), reference: z.string().trim().min(1).max(120).optional(),
-  receivedAt: date.optional(),
-})
+  receivedAt: date.optional(), requestId: z.uuid().optional(),
+}).refine(value => !value.requestId || !value.reference, 'Provide a request ID or a payment reference.')
 export const query = z.object({
   page: z.coerce.number().int().min(1).max(100000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),

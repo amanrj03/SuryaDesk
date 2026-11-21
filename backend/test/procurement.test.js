@@ -4,6 +4,7 @@ import test from 'node:test'
 import { createDatabase } from '../src/lib/prisma.js'
 import { inventoryService } from '../src/modules/inventory/inventory.service.js'
 import { procurementService } from '../src/modules/procurement/procurement.service.js'
+import { supplier as supplierBody } from '../src/modules/procurement/procurement.schema.js'
 
 test('purchase receipts post stock at the agreed cost and cannot exceed an order', {
   skip: !process.env.DATABASE_URL,
@@ -20,7 +21,8 @@ test('purchase receipts post stock at the agreed cost and cannot exceed an order
         cost: 50, salePrice: 100, serialized: false, warrantyMonths: 0, reorderLevel: 0,
       } })
       const service = procurementService({ supplier: tx.supplier, $transaction: callback => callback(tx) })
-      const supplier = await service.createSupplier({ code: key, name: 'Supplier fixture' })
+      const supplier = await service.createSupplier(supplierBody.parse({ name: 'Supplier fixture' }))
+      assert.match(supplier.code, /^SUP-[0-9A-F-]{36}$/)
       const purchase = await service.create({
         supplierId: supplier.id, lines: [{ productId: item.id, quantity: 2, unitCost: '52.50' }],
       }, actor)

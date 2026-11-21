@@ -1,5 +1,5 @@
 import { StatusBadge } from '../components/ui/Badge.jsx'
-import { words } from '../lib/format.js'
+import { displayContactEmail, displayReference, displaySupplierName, words } from '../lib/format.js'
 import { ClipboardDocumentCheckIcon, CubeIcon, DocumentTextIcon, InboxStackIcon, ShoppingBagIcon, CreditCardIcon, TruckIcon, ShieldCheckIcon, Squares2X2Icon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline'
 
 const date = (value) =>
@@ -23,7 +23,7 @@ export const sections = [
     icon: InboxStackIcon,
     search: true,
     columns: [
-      ['Reference', (row) => row.leadNumber],
+      ['Reference', (row) => displayReference(row.leadNumber)],
       ['Customer', (row) => row.customer.name],
       ['Phone', (row) => row.customer.phone],
       ['Source', (row) => words(row.source)],
@@ -40,7 +40,7 @@ export const sections = [
     columns: [
       ['Customer', (row) => row.name],
       ['Phone', (row) => row.phone],
-      ['Email', (row) => row.email],
+      ['Email', (row) => displayContactEmail(row.email)],
       ['Address', (row) => row.address],
     ],
   },
@@ -62,7 +62,7 @@ export const sections = [
     icon: CubeIcon,
     search: true,
     columns: [
-      ['Code', (row) => row.code],
+      ['Code', (row) => displayReference(row.code)],
       ['Package', (row) => row.name],
       ['System', (row) => words(row.type)],
       ['Capacity', (row) => (row.capacityKw ? row.capacityKw + ' kW' : '—')],
@@ -76,7 +76,7 @@ export const sections = [
     icon: CubeIcon,
     search: true,
     columns: [
-      ['SKU', (row) => row.sku],
+      ['SKU', (row) => displayReference(row.sku)],
       ['Product', (row) => row.name],
       ['Category', (row) => words(row.category)],
       ['Sale price', (row) => currency(row.salePrice)],
@@ -90,7 +90,7 @@ export const sections = [
     icon: DocumentTextIcon,
     search: true,
     columns: [
-      ['Reference', (row) => row.quoteNumber],
+      ['Reference', (row) => displayReference(row.quoteNumber)],
       ['Customer', (row) => row.lead.customer.name],
       ['Total', (row) => currency(row.total)],
       ['Status', (row) => <StatusBadge status={row.status} />],
@@ -103,10 +103,18 @@ export const sections = [
     capability: 'orders:read',
     icon: ShoppingBagIcon,
     search: true,
+    searchPlaceholder: 'Order, quotation, or customer',
     columns: [
-      ['Reference', (row) => row.orderNumber],
+      ['Reference', (row) => (
+        <>
+          <span className="block break-all">{displayReference(row.orderNumber)}</span>
+          {row.quotation && <span className="block text-xs text-gray-500">Quote {displayReference(row.quotation.quoteNumber)}</span>}
+        </>
+      )],
       ['Customer', (row) => row.customer.name],
       ['Total', (row) => currency(row.total)],
+      ['Paid', (row) => currency(row.paidTotal)],
+      ['Remaining', (row) => currency(row.status === 'CANCELLED' ? null : row.balance)],
       ['Status', (row) => <StatusBadge status={row.status} />],
       ['Confirmed', (row) => date(row.confirmedAt)],
     ],
@@ -118,7 +126,7 @@ export const sections = [
     icon: Squares2X2Icon,
     search: true,
     columns: [
-      ['SKU', (row) => row.sku],
+      ['SKU', (row) => displayReference(row.sku)],
       ['Product', (row) => row.name],
       ['In stock', (row) => row.onHand],
       ['Reserved', (row) => row.reserved],
@@ -136,7 +144,7 @@ export const sections = [
       ['Serial', (row) => row.serialNumber],
       ['Product', (row) => row.product.name],
       ['Status', (row) => <StatusBadge status={row.status} />],
-      ['Order', (row) => row.order?.orderNumber],
+      ['Order', (row) => displayReference(row.order?.orderNumber)],
       ['Customer', (row) => row.customer?.name],
     ],
   },
@@ -146,7 +154,7 @@ export const sections = [
     capability: 'dispatch:prepare',
     icon: TruckIcon,
     columns: [
-      ['Reference', (row) => row.dispatchNumber],
+      ['Reference', (row) => displayReference(row.dispatchNumber)],
       ['Customer', (row) => row.order.customer.name],
       ['Status', (row) => <StatusBadge status={row.status} />],
       ['Delivered', (row) => date(row.deliveredAt)],
@@ -185,7 +193,7 @@ export const sections = [
     icon: ClipboardDocumentCheckIcon,
     search: true,
     columns: [
-      ['Reference', (row) => row.ticketNumber],
+      ['Reference', (row) => displayReference(row.ticketNumber)],
       ['Customer', (row) => row.customer.name],
       ['Fault', (row) => row.faultCode || '—'],
       ['Priority', (row) => words(row.priority)],
@@ -199,7 +207,7 @@ export const sections = [
     icon: DocumentTextIcon,
     search: true,
     columns: [
-      ['Reference', (row) => row.invoiceNumber],
+      ['Reference', (row) => displayReference(row.invoiceNumber)],
       ['Customer', (row) => row.customer.name],
       ['Total', (row) => currency(row.total)],
       ['Status', (row) => <StatusBadge status={row.status} />],
@@ -212,9 +220,9 @@ export const sections = [
     capability: 'subsidies:read',
     icon: ClipboardDocumentCheckIcon,
     columns: [
-      ['Order', (row) => row.order.orderNumber],
+      ['Order', (row) => displayReference(row.order.orderNumber)],
       ['Customer', (row) => row.order.customer.name],
-      ['Reference', (row) => row.reference || '—'],
+      ['Reference', (row) => displayReference(row.reference) || '—'],
       ['Status', (row) => <StatusBadge status={row.status} />],
     ],
   },
@@ -225,9 +233,9 @@ export const sections = [
     icon: CubeIcon,
     search: true,
     columns: [
-      ['Code', (row) => row.code],
-      ['Supplier', (row) => row.name],
-      ['Email', (row) => row.email],
+      ['Code', (row) => displayReference(row.code)],
+      ['Supplier', (row) => displaySupplierName(row)],
+      ['Email', (row) => displayContactEmail(row.email)],
       ['Phone', (row) => row.phone],
     ],
   },
@@ -238,8 +246,8 @@ export const sections = [
     icon: TruckIcon,
     search: true,
     columns: [
-      ['Reference', (row) => row.purchaseNumber],
-      ['Supplier', (row) => row.supplier.name],
+      ['Reference', (row) => displayReference(row.purchaseNumber)],
+      ['Supplier', (row) => displaySupplierName(row.supplier)],
       ['Expected', (row) => date(row.expectedAt)],
       ['Status', (row) => <StatusBadge status={row.status} />],
     ],
@@ -263,7 +271,7 @@ export const sections = [
     capability: 'payments:read',
     icon: CreditCardIcon,
     columns: [
-      ['Reference', (row) => row.reference || '—'],
+      ['Reference', (row) => displayReference(row.reference) || '—'],
       ['Amount', (row) => currency(row.amount)],
       ['Method', (row) => words(row.method)],
       ['Received', (row) => date(row.receivedAt)],

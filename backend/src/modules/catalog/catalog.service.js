@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { ApiError } from '../../utils/ApiError.js'
 
 const bom = { packageComponentsByPackage: { include: { product: true }, orderBy: { productId: 'asc' } } }
@@ -38,8 +39,8 @@ export function catalogService(db) {
       if (!row) throw missing()
       return row
     },
-    createProduct(data) {
-      return db.product.create({ data: { ...data, stockBalanceByProduct: { create: { onHand: 0, reserved: 0 } } } })
+    createProduct({ sku = 'SKU-' + randomUUID().toUpperCase(), ...data }) {
+      return db.product.create({ data: { ...data, sku, stockBalanceByProduct: { create: { onHand: 0, reserved: 0 } } } })
     },
     updateProduct(id, data) {
       return db.$transaction(async tx => {
@@ -56,11 +57,11 @@ export function catalogService(db) {
         return tx.product.update({ where: { id }, data })
       })
     },
-    createPackage({ components, ...data }) {
+    createPackage({ code = 'PKG-' + randomUUID().toUpperCase(), components, ...data }) {
       return db.$transaction(async tx => {
         await verifyPackage(tx, data, components)
         return tx.solarPackage.create({
-          data: { ...data, packageComponentsByPackage: { createMany: { data: components } } }, include: bom,
+          data: { ...data, code, packageComponentsByPackage: { createMany: { data: components } } }, include: bom,
         })
       })
     },

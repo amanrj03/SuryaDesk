@@ -12,7 +12,13 @@ export function customersService(db) {
     list({ page, limit, q }) {
       return db.$transaction(async tx => {
         const search = { contains: q, mode: 'insensitive' }
-        const where = q ? { OR: [{ name: search }, { phone: search }, { email: search }] } : {}
+        const seedEmail = /^customer\d+@suryadesk\.test$/i.test(q)
+          ? q.replace(/@suryadesk\.test$/i, '@demo.suryadesk.test')
+          : null
+        const where = q ? { OR: [
+          { name: search }, { phone: search }, { email: search },
+          ...(seedEmail ? [{ email: { equals: seedEmail, mode: 'insensitive' } }] : []),
+        ] } : {}
         const data = await tx.customer.findMany({
           where, skip: (page - 1) * limit, take: limit, orderBy: [{ name: 'asc' }, { id: 'asc' }],
         })

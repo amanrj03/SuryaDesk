@@ -63,15 +63,15 @@ function quoteLines(pack) {
   ]
 }
 
-async function project(tx, lead, surveyId, pack, i, salesId, financeId) {
+async function project(tx, lead, surveyId, pack, i, salesId, { financeId, pendingOrder = false }) {
   const id = key('QUOTATION', i)
   if (await tx.quotation.findUnique({ where: { id }, select: { id: true } })) return
-  const accepted = i < 120
-  const followUp = i >= 150
+  const accepted = i < 120 || pendingOrder
+  const followUp = i >= 150 && !pendingOrder
   const subtotal = pack.basePrice
   const tax = subtotal.mul(i % 8 === 0 ? '0.18' : '0.05').toDecimalPlaces(2)
   const total = subtotal.plus(tax)
-  const createdAt = at(lead.createdAt, followUp ? 10 : 6)
+  const createdAt = pendingOrder ? at(seedNow, -4) : at(lead.createdAt, followUp ? 10 : 6)
   const sentAt = at(createdAt, 1)
   const acceptedAt = accepted ? at(sentAt, 2) : null
   const lines = quoteLines(pack)
@@ -81,7 +81,7 @@ async function project(tx, lead, surveyId, pack, i, salesId, financeId) {
     subtotal, tax, total, createdAt, sentAt: followUp ? null : sentAt, acceptedAt,
     validUntil: at(sentAt, 30), createdById: salesId, quotationLinesByQuotation: { createMany: { data: lines } },
   } })
-  if (!accepted) return
+  if (!accepted || pendingOrder) return
   const orderId = key('ORDER', i)
   const advance = total.mul(['0.25', '0.35', '0.5', '0.6'][i % 4]).toDecimalPlaces(2)
   const confirmedAt = at(acceptedAt, 1)
@@ -98,6 +98,34 @@ async function project(tx, lead, surveyId, pack, i, salesId, financeId) {
     paymentsByOrder: { createMany: { data: i >= 100 ? [] : i % 7 === 0 ? [payment(total, 0, confirmedAt)] : [payment(advance, 0, confirmedAt),
       ...(i < 80 ? [payment(new Prisma.Decimal(total).minus(advance), 1, at(confirmedAt, 1))] : [])] } },
   } })
+}
+
+export async function seedPendingOrderQuotes(db) {
+  const sales = await db.user.findUniqueOrThrow({ where: { email: 'sales@demo.suryadesk.test' } })
+  return db.$transaction(async tx => {
+    let added = 0
+    for (const [offset, index] of [173, 178, 183].entries()) {
+      const survey = await tx.siteSurvey.findFirst({
+        where: { id: key('SURVEY', index), status: 'APPROVED', approvedAt: { lte: at(seedNow, -4) } },
+        include: { lead: true },
+      })
+      if (!survey) continue
+      const { lead } = survey
+      const pack = await tx.solarPackage.findFirst({
+        where: { code: `DEMO-${lead.systemType?.replaceAll('_', '-')}-${lead.desiredKw}`, isActive: true },
+        include: { packageComponentsByPackage: { include: { product: true } } },
+      })
+      if (!pack) continue
+      const claimed = await tx.lead.updateMany({
+        where: { id: lead.id, status: 'SURVEY_APPROVED', quotationsByLead: { none: {} } },
+        data: { status: 'WON' },
+      })
+      if (!claimed.count) continue
+      await project(tx, lead, survey.id, pack, 180 + offset, sales.id, { pendingOrder: true })
+      added++
+    }
+    return added
+  })
 }
 
 export async function seedSales(db) {
@@ -147,8 +175,9 @@ export async function seedSales(db) {
         const leadIndex = i < 150 ? i : i - 30
         const lead = enquiryData(leadIndex, sales.id)
         const pack = packages.get(lead.systemType + '-' + lead.desiredKw)
-        await project(tx, lead, key('SURVEY', leadIndex), pack, i, sales.id, finance.id)
+        await project(tx, lead, key('SURVEY', leadIndex), pack, i, sales.id, { financeId: finance.id })
       }
     }, { timeout: 20000 })
   }
+  await seedPendingOrderQuotes(db)
 }

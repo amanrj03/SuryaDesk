@@ -8,7 +8,7 @@ import { seedProcurement } from './seed-procurement.js'
 import { seedOperations, seedServiceAssetCases } from './seed-operations.js'
 import { seedFinance } from './seed-finance.js'
 import { seedWarehouse } from './seed-warehouse.js'
-import { seedSales } from './seed-sales.js'
+import { seedPendingOrderQuotes, seedSales } from './seed-sales.js'
 import { createDatabase } from '../src/lib/prisma.js'
 
 const roles = [
@@ -135,7 +135,10 @@ async function removeMedia(files) {
 const db = createDatabase(databaseUrl)
 const writtenMedia = []
 try {
-  if (process.argv.includes('--replace-demo')) {
+  if (process.argv.includes('--pending-order-quotes')) {
+    const added = await seedPendingOrderQuotes(db)
+    console.log('Accepted demo quotations added without orders:', added)
+  } else if (process.argv.includes('--replace-demo')) {
     let removedMedia
     try {
       removedMedia = await db.$transaction(async tx => {

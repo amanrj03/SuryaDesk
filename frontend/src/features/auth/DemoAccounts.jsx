@@ -16,7 +16,7 @@ function DemoAccounts({ onSelect, disabled }) {
 
   return (
     <section className="mt-5 rounded-2xl border border-gray-200 bg-white/60 p-3" aria-labelledby="demo-accounts-title">
-      <h2 id="demo-accounts-title" className="text-sm font-semibold text-gray-900">Demo accounts</h2>
+      <h2 id="demo-accounts-title" className="text-sm font-semibold text-gray-900">Quick sign-in</h2>
       <p className="mt-1 text-xs text-gray-600">Choose a role to fill in its email and password.</p>
       <div className="mt-2.5 grid grid-cols-2 gap-1.5 min-[410px]:grid-cols-4">
         {demo.accounts.map(({ role, email }) => (

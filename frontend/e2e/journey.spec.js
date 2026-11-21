@@ -68,6 +68,100 @@ test('public enquiry survives refresh and can be qualified and scheduled from th
   }
 })
 
+test('an accepted quote opens its converted order and a partial payment updates the balance', async ({ page }) => {
+  const db = createDatabase(process.env.DATABASE_URL)
+  const reference = 'E2E-' + randomUUID()
+  let fixture
+  try {
+    fixture = await db.$transaction(async tx => {
+      const user = await tx.user.findUniqueOrThrow({ where: { email: 'finance@demo.suryadesk.test' } })
+      const pack = await tx.solarPackage.findFirstOrThrow({ where: { isActive: true } })
+      const lead = await tx.lead.create({ data: {
+        leadNumber: reference, source: 'WEB', status: 'WON', subsidyInterest: false,
+        customer: { create: { name: 'Browser payment fixture', phone: '+910000000000', address: 'Pune' } },
+      } })
+      const survey = await tx.siteSurvey.create({
+        data: { leadId: lead.id, scheduledAt: new Date(), status: 'APPROVED' },
+      })
+      const amounts = { subtotal: 77000, tax: 0, total: 77000 }
+      const quote = await tx.quotation.create({ data: {
+        ...amounts, quoteNumber: reference, leadId: lead.id, surveyId: survey.id, packageId: pack.id,
+        createdById: user.id, status: 'ACCEPTED',
+      } })
+      return { lead, survey, quote }
+    })
+
+    await login(page, 'sales')
+    await page.getByRole('link', { name: 'Quotations', exact: true }).click()
+    const quoteSearch = page.getByRole('textbox', { name: 'Search quotations' })
+    await quoteSearch.fill(reference)
+    await quoteSearch.press('Enter')
+    const quoteRow = page.getByRole('row').filter({ hasText: reference })
+    await expect(quoteRow.getByRole('button', { name: 'Create order' })).toBeVisible()
+    await quoteRow.getByRole('link', { name: 'View', exact: true }).click()
+    await page.getByRole('button', { name: 'Create order', exact: true }).click()
+    const createDialog = page.getByRole('dialog', { name: 'Create order' })
+    await createDialog.getByRole('button', { name: 'Create order', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Order for Browser payment fixture', exact: true })).toBeVisible()
+    const order = await db.order.findUniqueOrThrow({ where: { quotationId: fixture.quote.id } })
+    await expect(page).toHaveURL('/orders/' + order.id)
+    await page.goBack()
+    await expect(page.getByRole('link', { name: 'View order ' + order.orderNumber })).toHaveAttribute('href', '/orders/' + order.id)
+    await page.getByRole('button', { name: 'Back to Quotations' }).click()
+    await expect(quoteRow.getByRole('link', { name: 'View order', exact: true })).toHaveAttribute('href', '/orders/' + order.id)
+    await expect(quoteRow.getByRole('button', { name: 'Create order' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Sign out' }).click()
+    await expect(page.getByRole('heading', { name: 'Staff sign in' })).toBeVisible()
+
+    await login(page, 'finance')
+    await page.getByRole('link', { name: 'Orders', exact: true }).click()
+    const search = page.getByRole('textbox', { name: 'Search orders' })
+    await search.fill(reference)
+    await search.press('Enter')
+    const row = page.getByRole('row').filter({ hasText: order.orderNumber })
+    await expect(row).toContainText('Quote ' + reference)
+    const cells = row.getByRole('cell')
+    await expect(cells.nth(4)).toHaveText('₹77,000.00')
+    await row.getByRole('button', { name: 'Record payment' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Record payment' })
+    await expect(dialog.getByLabel('Payment reference')).toHaveCount(0)
+    await dialog.getByLabel('Amount (INR)').fill('50000')
+    await dialog.getByLabel('Payment method').selectOption('UPI')
+    await dialog.getByRole('button', { name: 'Record payment' }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(cells.nth(2)).toHaveText('₹77,000.00')
+    await expect(cells.nth(3)).toHaveText('₹50,000.00')
+    await expect(cells.nth(4)).toHaveText('₹27,000.00')
+    const payment = await db.payment.findFirstOrThrow({ where: { orderId: order.id } })
+    expect(payment.reference).toMatch(/^PAY-[0-9A-F-]{36}$/)
+    await row.getByRole('link', { name: 'View', exact: true }).click()
+    const remaining = page.getByText('Remaining', { exact: true }).locator('..')
+    await expect(remaining).toContainText('₹27,000.00')
+  } finally {
+    try {
+      if (fixture) {
+        const { quote, survey, lead } = fixture
+        const order = await db.order.findUnique({ where: { quotationId: quote.id } })
+        await db.$transaction([
+          ...(order ? [
+            db.auditLog.deleteMany({ where: { entityType: 'Order', entityId: order.id } }),
+            db.payment.deleteMany({ where: { orderId: order.id } }),
+            db.dispatch.deleteMany({ where: { orderId: order.id } }),
+            db.installation.deleteMany({ where: { orderId: order.id } }),
+            db.order.delete({ where: { id: order.id } }),
+          ] : []),
+          db.quotation.delete({ where: { id: quote.id } }),
+          db.siteSurvey.delete({ where: { id: survey.id } }),
+          db.lead.delete({ where: { id: lead.id } }),
+          db.customer.delete({ where: { id: lead.customerId } }),
+        ])
+      }
+    } finally {
+      await db.$disconnect()
+    }
+  }
+})
+
 test('director can switch periods and see seeded profitability', async ({ page }) => {
   await login(page, 'director')
   await expect(page.getByRole('heading', { name: 'Operations overview' })).toBeVisible()
@@ -85,15 +179,15 @@ test('director can switch periods and see seeded profitability', async ({ page }
   expect((await download).suggestedFilename()).toBe('profitability.csv')
   await page.getByRole('link', { name: 'Packages' }).click()
   const packageSearch = page.getByRole('textbox', { name: 'Search packages' })
-  await packageSearch.fill('DEMO-ON-GRID-3')
+  await packageSearch.fill('ON-GRID-3')
   await packageSearch.press('Enter')
-  await expect(page).toHaveURL(/q=DEMO-ON-GRID-3/)
-  const packageRow = page.getByRole('row').filter({ hasText: 'DEMO-ON-GRID-3' })
+  await expect(page).toHaveURL(/q=ON-GRID-3/)
+  const packageRow = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'ON-GRID-3', exact: true }) })
   await packageRow.getByRole('link', { name: 'View', exact: true }).click()
   await expect(packageRow).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Bill of materials' })).toBeVisible()
   await page.goBack()
-  await expect(packageSearch).toHaveValue('DEMO-ON-GRID-3')
+  await expect(packageSearch).toHaveValue('ON-GRID-3')
   await expect(packageRow).toBeVisible()
 })
 
@@ -191,24 +285,27 @@ test('assigned technician completes a delivered job with a photo and drawn signa
 })
 
 test('catalog administrator can maintain a package bill of materials', async ({ page }) => {
-  const code = 'E2E-' + randomUUID().toUpperCase()
+  const name = 'Browser BOM fixture ' + randomUUID()
   const database = createDatabase(process.env.DATABASE_URL)
   try {
     await login(page, 'admin')
     await page.getByRole('link', { name: 'Packages', exact: true }).click()
     await page.getByRole('button', { name: 'Add package', exact: true }).click()
-    await page.getByLabel('Package code').fill(code)
-    await page.getByLabel('Package name').fill('Browser BOM fixture')
+    await expect(page.getByLabel('Package code')).toHaveCount(0)
+    await page.getByLabel('Package name').fill(name)
     await page.getByRole('combobox', { name: 'Type', exact: true }).selectOption('PANEL_SET')
     await page.getByLabel('Package price (INR)').fill('2500')
     await page.getByRole('button', { name: 'Add component' }).click()
     await page.getByRole('combobox', { name: 'Component 1' }).selectOption({ index: 1 })
     await page.getByLabel('Quantity').fill('2')
     await page.getByRole('button', { name: 'Save package' }).click()
+    await expect(page.getByRole('dialog', { name: 'Add solar package' })).toHaveCount(0)
+    const { code } = await database.solarPackage.findFirstOrThrow({ where: { name } })
+    expect(code).toMatch(/^PKG-[0-9A-F-]{36}$/)
     await page.getByRole('textbox', { name: 'Search packages' }).fill(code)
     await page.getByRole('button', { name: 'Search', exact: true }).click()
     const row = page.getByRole('row').filter({ hasText: code })
-    await expect(row).toContainText('Browser BOM fixture')
+    await expect(row).toContainText(name)
     await row.getByRole('button', { name: 'Edit package' }).click()
     await page.getByLabel('Quantity').fill('3')
     await page.getByRole('button', { name: 'Save package' }).click()
@@ -218,7 +315,7 @@ test('catalog administrator can maintain a package bill of materials', async ({ 
     })
     expect(saved.packageComponentsByPackage[0].quantity).toBe(3)
   } finally {
-    const saved = await database.solarPackage.findUnique({ where: { code } })
+    const saved = await database.solarPackage.findFirst({ where: { name } })
     if (saved) await database.$transaction([
       database.packageComponent.deleteMany({ where: { packageId: saved.id } }),
       database.solarPackage.delete({ where: { id: saved.id } }),

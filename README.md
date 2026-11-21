@@ -31,11 +31,12 @@ Open `http://localhost:5173` for the staff workspace or `http://localhost:5173/e
 
 Role accounts use `<role>@demo.suryadesk.test` for admin, director, sales, surveyor, warehouse, technician, support, and finance. Use the password configured for the first seed. If you omit it, the seed prints a generated password when it first creates the accounts. Reruns preserve existing users and records.
 
-The seed includes 25 staff, 200 customers, 300 enquiries, 195 surveys, 180 quotations, 120 orders, 20 package templates, 21 products, 991 serialized units, 20 suppliers, 60 purchase orders, 40 signed installations with 80 labeled synthetic evidence files, and 100 service tickets. Equipment sizing, financial amounts, customer details, and work logs are fictional. Choose **Last 365 days** on the overview to inspect historical collections and profitability.
+The seed includes 25 staff, 200 customers, 300 enquiries, 195 surveys, 183 quotations, 120 orders, 20 package templates, 21 products, 991 serialized units, 20 suppliers, 60 purchase orders, 40 signed installations with 80 labeled synthetic evidence files, and 100 service tickets. Equipment sizing, financial amounts, customer details, and work logs are fictional. Choose **Last 365 days** on the overview to inspect historical collections and profitability.
 
 The demo can be used to exercise the workflow:
 
 - Sales can qualify an enquiry, schedule a survey, create and issue a package quotation, record acceptance, and convert it into an order.
+- Search for `QUO-0181`, `QUO-0182`, or `QUO-0183` to try **Create order** on an accepted quotation. For an existing seeded database, run `npm.cmd --prefix backend run db:seed -- --pending-order-quotes` to add these examples without resetting the demo.
 - Warehouse can record stock receipts, allocate the order bill of materials by quantity and serial, record dispatch, and confirm delivery. Eligible warranties start at delivery.
 - Assigned technicians can record the installation checklist, upload a photo, obtain a drawn signature, and complete the job.
 - Support can look up covered equipment, track a ticket, record service charges, and close the ticket after customer confirmation.

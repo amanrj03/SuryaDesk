@@ -39,7 +39,8 @@ export function procurementService(db) {
       const where = query.q ? { OR: [{ code: search }, { name: search }] } : {}
       return page(db, 'supplier', where, [{ name: 'asc' }, { id: 'asc' }], query)
     },
-    createSupplier: fields => db.supplier.create({ data: fields }),
+    createSupplier: ({ code = 'SUP-' + randomUUID().toUpperCase(), ...fields }) =>
+      db.supplier.create({ data: { ...fields, code } }),
     purchases(query) {
       const search = { contains: query.q, mode: 'insensitive' }
       const where = { status: query.status, ...(query.q && { OR: [

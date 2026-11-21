@@ -1,10 +1,11 @@
+import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { ApiError } from '../../utils/ApiError.js'
 
 const zero = new Prisma.Decimal(0)
 const missing = () => new ApiError(404, 'NOT_FOUND', 'Order not found.')
 
-function totals(total, paidTotal) {
+export function paymentTotals(total, paidTotal = zero) {
   return { total, paidTotal, balance: Prisma.Decimal.max(total.minus(paidTotal), zero) }
 }
 
@@ -15,7 +16,7 @@ async function paid(db, where) {
 
 export function paymentsService(db) {
   return {
-    async record(orderId, data, user) {
+    async record(orderId, { requestId, reference, ...data }, user) {
       return db.$transaction(async tx => {
         await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${orderId} FOR UPDATE`
         const order = await tx.order.findUnique({ where: { id: orderId }, select: { total: true, status: true } })
@@ -24,13 +25,20 @@ export function paymentsService(db) {
 
         const amount = new Prisma.Decimal(data.amount)
         const before = await paid(tx, { orderId })
-        if (data.reference) {
+        const paymentReference = reference ?? 'PAY-' + (requestId ?? randomUUID()).toUpperCase()
+        if (requestId || reference) {
           const existing = await tx.payment.findFirst({
-            where: { orderId, reference: data.reference, method: data.method, voidedAt: null },
+            where: {
+              orderId,
+              reference: paymentReference,
+              ...(reference && { method: data.method, voidedAt: null }),
+            },
           })
           if (existing) {
-            if (!existing.amount.equals(amount)) throw new ApiError(409, 'CONFLICT', 'This payment reference already has a different amount.')
-            return { payment: existing, ...totals(order.total, before), created: false }
+            if (!existing.amount.equals(amount) || existing.method !== data.method) {
+              throw new ApiError(409, 'CONFLICT', 'This payment reference already belongs to a different payment.')
+            }
+            return { payment: existing, ...paymentTotals(order.total, before), created: false }
           }
         }
         const after = before.plus(amount)
@@ -39,7 +47,9 @@ export function paymentsService(db) {
         }
         const receivedAt = data.receivedAt ?? new Date()
         if (receivedAt > new Date()) throw new ApiError(400, 'VALIDATION_ERROR', 'Payment date cannot be in the future.')
-        const payment = await tx.payment.create({ data: { ...data, amount, receivedAt, orderId, recordedById: user.id } })
+        const payment = await tx.payment.create({
+          data: { ...data, amount, reference: paymentReference, receivedAt, orderId, recordedById: user.id },
+        })
         const settled = after.equals(order.total)
         await tx.invoice.updateMany({
           where: { orderId, status: { in: ['ISSUED', 'PARTIALLY_PAID'] } },
@@ -49,7 +59,7 @@ export function paymentsService(db) {
           actorId: user.id, entityType: 'Order', entityId: orderId, action: 'PAYMENT_RECORDED',
           summary: { paymentId: payment.id, amount: amount.toFixed(2) },
         } })
-        return { payment, ...totals(order.total, after), created: true }
+        return { payment, ...paymentTotals(order.total, after), created: true }
       })
     },
     async orderPayments(orderId) {
@@ -59,7 +69,7 @@ export function paymentsService(db) {
         const payments = await tx.payment.findMany({
           where: { orderId }, orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
         })
-        return { payments, ...totals(order.total, await paid(tx, { orderId })) }
+        return { payments, ...paymentTotals(order.total, await paid(tx, { orderId })) }
       }, { isolationLevel: 'RepeatableRead' })
     },
     async list({ page, limit, orderId, method, from, to }) {

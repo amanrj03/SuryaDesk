@@ -1,12 +1,29 @@
 import { randomUUID } from 'node:crypto'
 import { ApiError } from '../../utils/ApiError.js'
+import { paymentTotals } from '../payments/payments.service.js'
 
-const related = { customer: true, dispatchesByOrder: true, installationByOrder: true }
+const related = {
+  customer: true,
+  quotation: { select: { quoteNumber: true } },
+  dispatchesByOrder: true,
+  installationByOrder: true,
+}
 const detail = { ...related, orderLinesByOrder: true }
 const notFound = () => new ApiError(404, 'NOT_FOUND', 'Order not found.')
 
 function snapshot({ productId, descriptionSnapshot, quantity, unitPriceSnapshot, unitCostSnapshot, lineTotal, lineKind }) {
   return { productId, descriptionSnapshot, quantity, unitPriceSnapshot, unitCostSnapshot, lineTotal, lineKind }
+}
+
+async function withPaymentTotals(tx, orders) {
+  if (!orders.length) return orders
+  const payments = await tx.payment.groupBy({
+    by: ['orderId'],
+    where: { orderId: { in: orders.map(order => order.id) }, voidedAt: null },
+    _sum: { amount: true },
+  })
+  const totalsByOrder = new Map(payments.map(row => [row.orderId, row._sum.amount]))
+  return orders.map(order => ({ ...order, ...paymentTotals(order.total, totalsByOrder.get(order.id)) }))
 }
 
 export function ordersService(db) {
@@ -42,15 +59,19 @@ export function ordersService(db) {
     },
     async list({ page, limit, q, status }) {
       const search = { contains: q, mode: 'insensitive' }
-      const where = { status, ...(q && { OR: [{ orderNumber: search }, { customer: { name: search } }] }) }
-      const [data, total] = await db.$transaction([
-        db.order.findMany({
+      const where = {
+        status,
+        ...(q && { OR: [{ orderNumber: search }, { quotation: { quoteNumber: search } }, { customer: { name: search } }] }),
+      }
+      return db.$transaction(async tx => {
+        const orders = await tx.order.findMany({
           where, skip: (page - 1) * limit, take: limit, include: related,
           orderBy: [{ confirmedAt: 'desc' }, { id: 'desc' }],
-        }),
-        db.order.count({ where }),
-      ], { isolationLevel: 'RepeatableRead' })
-      return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } }
+        })
+        const total = await tx.order.count({ where })
+        const data = await withPaymentTotals(tx, orders)
+        return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } }
+      }, { isolationLevel: 'RepeatableRead' })
     },
     async cost(orderId, { incurredAt = new Date(), ...data }, user) {
       return db.$transaction(async tx => {
@@ -69,9 +90,12 @@ export function ordersService(db) {
       })
     },
     async detail(id) {
-      const order = await db.order.findUnique({ where: { id }, include: detail })
-      if (!order) throw notFound()
-      return order
+      return db.$transaction(async tx => {
+        const order = await tx.order.findUnique({ where: { id }, include: detail })
+        if (!order) throw notFound()
+        const [data] = await withPaymentTotals(tx, [order])
+        return data
+      }, { isolationLevel: 'RepeatableRead' })
     },
   }
 }

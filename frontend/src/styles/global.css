@@ -279,15 +279,52 @@ tbody tr:hover {
   accent-color: #000000;
 }
 
-/* Lead Editor / Action drawer / modal wrapper */
-.lead-editor {
-  border-radius: 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  background-color: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-  margin-bottom: 1rem;
+html:has(.record-dialog[open]) {
   overflow: hidden;
-  backdrop-filter: blur(8px);
+}
+
+.record-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(44rem, calc(100% - 1.5rem));
+  max-height: calc(100dvh - 1.5rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block-start: 4.5rem;
+  border-radius: 1.25rem;
+  border: 1px solid #e5e7eb;
+  background-color: #fff;
+  color: var(--color-ink);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
+}
+.record-dialog::backdrop {
+  background-color: rgba(17, 24, 39, 0.5);
+}
+.record-dialog-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #fff;
+  padding: 0.875rem 1rem;
+}
+.record-dialog .form :is(input:not([type='checkbox']), textarea, select) {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  background-color: #fff;
+  font-size: 0.875rem;
+}
+.record-dialog .form :is(input, textarea, select):focus-visible {
+  outline: 2px solid #4b5563;
+  outline-offset: 1px;
 }
 
 /* Signature canvas */

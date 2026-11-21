@@ -1,5 +1,8 @@
 ﻿import { useEffect, useState } from 'react'
 import { api } from '../../lib/api.js'
+import { displayReference, displaySupplierName } from '../../lib/format.js'
+import { useNavigate } from 'react-router-dom'
+import { RecordDialog } from '../../components/ui/RecordDialog.jsx'
 
 const input = (name, label, type = 'text', attributes = {}) => ({ name, label, type, attributes })
 const choice = (name, label, options) => ({ name, label, type: 'select', options })
@@ -11,7 +14,6 @@ const staffRoles = ['ADMIN', 'DIRECTOR', 'SALES', 'SURVEYOR', 'WAREHOUSE', 'TECH
 
 function productFields(product = {}) {
   return [
-    input('sku', 'SKU', 'text', { defaultValue: product.sku }),
     input('name', 'Product name', 'text', { defaultValue: product.name }),
     { ...choice('category', 'Category', ['PANEL', 'INVERTER', 'BATTERY', 'CONTROLLER', 'STAND', 'WIRING', 'SWITCH', 'SAFETY', 'OTHER']),
       attributes: { defaultValue: product.category } },
@@ -77,14 +79,18 @@ function baseRecordActions(section, row, capabilities) {
       return [...(withinValidity ? [post('accept', 'Record acceptance', url + '/accept')] : []), post('rejectQuote', 'Record rejection', url + '/reject',
         [input('reason', 'Reason', 'textarea', { optional: true })])]
     }
-    if (row.status === 'ACCEPTED' && can('orders:create')) return [post('order', 'Create order', url + '/convert-to-order')]
+    if (row.status === 'ACCEPTED' && !row.orderByQuotation && can('orders:create')) {
+      return [{
+        ...post('order', 'Create order', url + '/convert-to-order'),
+        successPath: order => '/orders/' + encodeURIComponent(order.id),
+      }]
+    }
   }
   if (section === 'orders' && row.status !== 'CANCELLED') {
     const actions = []
     if (can('payments:record')) actions.push(post('payment', 'Record payment', '/orders/' + id + '/payments', [
       number('amount', 'Amount (INR)', { min: '.01' }),
       choice('method', 'Payment method', ['CASH', 'BANK_TRANSFER', 'UPI', 'CARD', 'OTHER']),
-      input('reference', 'Payment reference', 'text', { optional: true, maxLength: 120 }),
     ]))
     if (can('reports:financial')) actions.push(post('jobCost', 'Record job cost', '/orders/' + id + '/costs', [
       choice('category', 'Cost category', ['TRANSPORT', 'LABOR', 'MATERIAL', 'OTHER']),
@@ -104,7 +110,7 @@ function baseRecordActions(section, row, capabilities) {
         const remaining = line.quantity - line.received
         return post('receive-' + line.id, 'Receive ' + line.product.name, url + '/receive', [
           number('quantity', 'Quantity received', { min: 1, max: remaining, step: 1, defaultValue: remaining }),
-          ...(line.product.serialized ? [input('serialNumbers', 'Serials (one per line)', 'textarea')] : []),
+          ...(line.product.serialized ? [input('serialNumbers', 'Equipment serials (one per line)', 'textarea')] : []),
         ], values => ({ productId: line.productId, quantity: Number(values.quantity),
           serialNumbers: values.serialNumbers?.split(/\r?\n/).map(value => value.trim()).filter(Boolean) ?? [] }))
       })
@@ -128,8 +134,8 @@ function baseRecordActions(section, row, capabilities) {
     const actions = [post('receipt', 'Receive stock', '/inventory/receipts', [
       number('quantity', 'Quantity received', { min: 1, max: 10000, step: 1 }),
       number('unitCost', 'Unit cost (INR)', { min: 0, defaultValue: row.cost }),
-      input('reference', 'Purchase reference', 'text', { optional: true }),
-      ...(row.serialized ? [input('serialNumbers', 'Serials (one per line)', 'textarea')] : []),
+      input('reference', 'Supplier invoice or delivery note reference (optional)', 'text', { optional: true, maxLength: 120 }),
+      ...(row.serialized ? [input('serialNumbers', 'Equipment serials (one per line)', 'textarea')] : []),
     ], values => ({
       ...values, productId: id, quantity: Number(values.quantity),
       serialNumbers: values.serialNumbers?.split(/\r?\n/).map(value => value.trim()).filter(Boolean) ?? [],
@@ -214,7 +220,7 @@ function baseRecordActions(section, row, capabilities) {
     }
     return [patch('subsidyUpdate', 'Update application', '/subsidies/' + id, [
       choice('status', 'Application status', [...new Set([row.status, ...statuses[row.status]])]),
-      input('reference', 'Application reference', 'text', { optional: true, defaultValue: row.reference ?? '' }),
+      input('reference', 'Government application reference', 'text', { optional: true, defaultValue: displayReference(row.reference) ?? '' }),
       time('submittedAt', 'Submitted at'), time('decisionAt', 'Decision date'),
       input('identity', 'Identity document', 'checkbox', { defaultChecked: row.documentChecklist?.identity }),
       input('utilityBill', 'Utility bill', 'checkbox', { defaultChecked: row.documentChecklist?.utilityBill }),
@@ -222,7 +228,8 @@ function baseRecordActions(section, row, capabilities) {
       input('bankDetails', 'Bank details', 'checkbox', { defaultChecked: row.documentChecklist?.bankDetails }),
       input('notes', 'Notes', 'textarea', { optional: true, defaultValue: row.notes ?? '' }),
     ], ({ status, reference, submittedAt, decisionAt, identity, utilityBill, installationCertificate, bankDetails, notes }) => ({
-      status, reference, submittedAt: toDate(submittedAt), decisionAt: toDate(decisionAt), notes,
+      status, reference: reference && reference === displayReference(row.reference) ? row.reference : reference,
+      submittedAt: toDate(submittedAt), decisionAt: toDate(decisionAt), notes,
       documentChecklist: { identity, utilityBill, installationCertificate, bankDetails },
     }))]
   }
@@ -278,7 +285,7 @@ export function collectionActions(section, capabilities) {
   ], ({ desiredKw, ...values }) => ({ ...values, ...(desiredKw && { desiredKw: Number(desiredKw) }) }))
   if (section === 'products' && can('catalog:manage')) return post('newProduct', 'Add product', '/products', productFields(), productData)
   if (section === 'suppliers' && can('inventory:write')) return post('supplier', 'Add supplier', '/suppliers', [
-    input('code', 'Supplier code'), input('name', 'Supplier name'),
+    input('name', 'Supplier name'),
     input('email', 'Email', 'email', { optional: true }), input('phone', 'Phone', 'tel', { optional: true }),
     input('address', 'Address', 'textarea', { optional: true }),
   ])
@@ -308,12 +315,14 @@ function Field({ field, options }) {
     {!multiple && <option value="">Choose {label.toLowerCase()}</option>}
     {options.map(option => typeof option === 'string'
       ? <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>
-      : <option key={option.id} value={option.id}>{option.name}</option>)}
+      : <option key={option.id} value={option.id}>{name === 'supplierId' ? displaySupplierName(option) : option.name}</option>)}
   </select></label>
   return <label>{label}<input type={type} {...common} /></label>
 }
 
 export default function WorkflowAction({ action, token, onClose, onSaved }) {
+  const navigate = useNavigate()
+  const [paymentRequestId] = useState(() => action.key === 'payment' ? crypto.randomUUID() : undefined)
   const [choices, setChoices] = useState({})
   const [loading, setLoading] = useState(action.fields.some(field => field.source))
   const [busy, setBusy] = useState(false)
@@ -344,8 +353,11 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
     setBusy(true)
     setError('')
     try {
-      await api(action.path, { token, method: action.method, body: action.convert(values) })
-      onSaved()
+      const body = action.convert(values)
+      if (paymentRequestId) body.requestId = paymentRequestId
+      const result = await api(action.path, { token, method: action.method, body })
+      if (action.successPath) navigate(action.successPath(result.data))
+      else onSaved()
     } catch (failure) {
       setError(failure.message)
     } finally {
@@ -353,10 +365,7 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
     }
   }
 
-  return <section className="lead-editor">
-    <div className="toolbar items-center"><h2>{action.label}</h2>
-      <button className="secondary ml-auto" disabled={busy} onClick={onClose}>Close</button>
-    </div>
+  return <RecordDialog title={action.label} busy={busy} onClose={onClose}>
     <form className="form p-4" onSubmit={submit}>
       {loading && <p role="status">Loading available options…</p>}
       {!loading && !!action.fields.length && <div className="form-grid">
@@ -365,5 +374,5 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
       {error && <p className="notice" role="alert">{error}</p>}
       <button className="primary w-fit" disabled={busy || loading}>{busy ? 'Saving…' : action.label}</button>
     </form>
-  </section>
+  </RecordDialog>
 }

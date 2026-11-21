@@ -73,3 +73,18 @@ export const initials = (name) => {
 
 export const words = (value) =>
   value ? value.toLowerCase().replaceAll('_', ' ').replace(/^./, (first) => first.toUpperCase()) : '—'
+
+export const displayReference = (value) => value?.replace(/^DEMO-/, '')
+
+export const displaySupplierName = (supplier) =>
+  supplier.code.startsWith('DEMO-SUP-') ? supplier.name.replace(/ \(Demo\)$/, '') : supplier.name
+
+export const displayContactEmail = (value) => value?.replace(
+  /^((?:customer|supplier)\d+)@demo\.suryadesk\.test$/,
+  '$1@suryadesk.test',
+)
+
+export const displayPackageDescription = (value) => value?.replace(
+  /^Demonstration package\. (?=Equipment and sizing are illustrative\.$)/,
+  '',
+)

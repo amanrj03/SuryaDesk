@@ -1,5 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { api } from '../../lib/api.js'
+import { displayPackageDescription } from '../../lib/format.js'
+import { RecordDialog } from '../../components/ui/RecordDialog.jsx'
 
 const categories = [
   ['ON_GRID', 'On-grid system'], ['OFF_GRID', 'Off-grid system'],
@@ -36,7 +38,7 @@ export default function PackageEditor({ id, token, onClose, onSaved }) {
     const fields = new FormData(event.currentTarget)
     const capacityKw = fields.get('capacityKw')
     const body = {
-      code: fields.get('code'), name: fields.get('name'), type: fields.get('type'), basePrice: fields.get('basePrice'),
+      name: fields.get('name'), type: fields.get('type'), basePrice: fields.get('basePrice'),
       capacityKw: capacityKw === '' ? null : Number(capacityKw), isActive: fields.has('isActive'),
       description: fields.get('description'),
       components: components.map(({ productId, quantity }) => ({ productId, quantity: Number(quantity) })),
@@ -53,15 +55,11 @@ export default function PackageEditor({ id, token, onClose, onSaved }) {
     }
   }
 
-  return <section className="lead-editor">
-    <div className="toolbar items-center"><h2>{id ? 'Edit package' : 'Add solar package'}</h2>
-      <button className="secondary ml-auto" disabled={busy} onClick={onClose}>Close</button>
-    </div>
+  return <RecordDialog title={id ? 'Edit package' : 'Add solar package'} busy={busy} onClose={onClose}>
     {!pack && !error && <p className="feedback" role="status">Loading package options…</p>}
     {error && <p className="notice m-4" role="alert">{error}</p>}
     {pack && <form className="form p-4" onSubmit={save}>
       <div className="form-grid">
-        <label>Package code<input name="code" defaultValue={pack.code} required maxLength={64} /></label>
         <label>Package name<input name="name" defaultValue={pack.name} required maxLength={120} /></label>
         <label>Type<select name="type" defaultValue={pack.type ?? 'ON_GRID'}>
           {categories.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -70,7 +68,7 @@ export default function PackageEditor({ id, token, onClose, onSaved }) {
         <label>Package price (INR)<input name="basePrice" type="number" min={0} step=".01" defaultValue={pack.basePrice} required /></label>
         <label className="check"><input type="checkbox" name="isActive" defaultChecked={pack.isActive ?? true} />Active package</label>
       </div>
-      <label>Description<textarea name="description" defaultValue={pack.description ?? ''} maxLength={2000} /></label>
+      <label>Description<textarea name="description" defaultValue={displayPackageDescription(pack.description) ?? ''} maxLength={2000} /></label>
       <fieldset className="grid gap-3">
         <legend className="mb-2 font-semibold">Bill of materials</legend>
         {components.map((component, index) => <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_6rem_auto]" key={component.key}>
@@ -89,5 +87,5 @@ export default function PackageEditor({ id, token, onClose, onSaved }) {
       </fieldset>
       <button className="primary w-fit" disabled={busy}>{busy ? 'Saving…' : 'Save package'}</button>
     </form>}
-  </section>
+  </RecordDialog>
 }

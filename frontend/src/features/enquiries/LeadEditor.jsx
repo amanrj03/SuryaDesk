@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { words } from '../../lib/format.js'
 import { Notice } from '../../components/ui/Notice.jsx'
+import { RecordDialog } from '../../components/ui/RecordDialog.jsx'
 import { api } from '../../lib/api.js'
 
 export default function LeadEditor({ lead, token, onClose, onSaved }) {
@@ -40,21 +41,8 @@ export default function LeadEditor({ lead, token, onClose, onSaved }) {
   }
 
   return (
-    <section className="lead-editor p-4 mb-4" aria-labelledby="lead-editor-title">
-      <div className="toolbar flex items-center justify-between border-b border-gray-100 pb-3">
-        <h2 id="lead-editor-title" className="text-xs font-bold text-gray-900">
-          Edit Enquiry · {lead.customer.name}
-        </h2>
-        <button
-          type="button"
-          className="secondary ml-auto"
-          disabled={busy}
-          onClick={onClose}
-        >
-          Close
-        </button>
-      </div>
-      <form className="form mt-3 grid gap-3" onSubmit={save}>
+    <RecordDialog title={`Edit enquiry · ${lead.customer.name}`} busy={busy} onClose={onClose}>
+      <form className="form p-4" onSubmit={save}>
         <div className="form-grid grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs font-semibold text-gray-700">
             Status
@@ -126,6 +114,6 @@ export default function LeadEditor({ lead, token, onClose, onSaved }) {
           </button>
         </div>
       </form>
-    </section>
+    </RecordDialog>
   )
 }

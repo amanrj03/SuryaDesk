@@ -13,7 +13,7 @@ export const query = z.object({
 })
 export const orders = query.extend({ status: z.enum(PurchaseStatus).optional() })
 export const supplier = z.strictObject({
-  code: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9-]{0,63}$/),
+  code: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9-]{0,63}$/).optional(),
   name, email: z.email().optional(), phone: name.optional(), address: z.string().trim().min(1).max(500).optional(),
 })
 export const purchase = z.strictObject({
