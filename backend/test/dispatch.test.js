@@ -9,6 +9,7 @@ import { dispatchService } from '../src/modules/dispatch/dispatch.service.js'
 import { warrantiesService } from '../src/modules/warranties/warranties.service.js'
 import { isCovered, warrantyEnd } from '../src/modules/warranties/coverage.js'
 import { paymentsService } from '../src/modules/payments/payments.service.js'
+import { trackingService } from '../src/modules/orders/tracking.service.js'
 
 test('warranty expiry clamps end-of-month dates in India and excludes the end instant', () => {
   const startAt = new Date('2024-02-29T01:30:00+05:30')
@@ -19,7 +20,7 @@ test('warranty expiry clamps end-of-month dates in India and excludes the end in
   assert.equal(isCovered(warranty, endAt), false)
 })
 
-test('serialized dispatch, warranty activation, and assigned installation sign-off', {
+test('signed installation starts warranty before final payment', {
   skip: !process.env.DATABASE_URL,
 }, async () => {
   const db = createDatabase(process.env.DATABASE_URL)
@@ -59,19 +60,17 @@ test('serialized dispatch, warranty activation, and assigned installation sign-o
       await assert.rejects(service.deliver(row.id, delivery, { ...user, capabilities: ['dispatch:deliver'] }), { code: 'FORBIDDEN' })
       await assert.rejects(service.deliver(row.id, delivery, warehouse), { code: 'INVALID_TRANSITION' })
       const payments = paymentsService({ $transaction: callback => callback(tx) })
-      const paid = await payments.record(order.id, { amount: '100.00', method: 'CASH' }, user)
-      assert.equal(paid.balance.toFixed(2), '0.00')
+      const advance = await payments.record(order.id, { amount: '25.00', method: 'CASH' }, user)
+      assert.equal(advance.balance.toFixed(2), '75.00')
       assert.equal(await tx.invoice.count({ where: { orderId: order.id } }), 0)
       const delivered = await service.deliver(row.id, delivery, warehouse)
       assert.equal(delivered.status, 'DELIVERED')
       assert.equal(delivered.order.status, 'DELIVERED')
       assert.equal(delivered.recipientName, delivery.recipientName)
       assert.deepEqual(delivered.dispatchedAt, delivered.deliveredAt)
-      assert.equal(delivered.order.invoiceByOrder.status, 'PAID')
-      const invoice = await tx.invoice.findUniqueOrThrow({ where: { orderId: order.id } })
-      assert.deepEqual(invoice.paidAt, paid.payment.receivedAt)
+      assert.equal(delivered.order.invoiceByOrder, null)
       await service.deliver(row.id, delivery, warehouse)
-      assert.equal(await tx.invoice.count({ where: { orderId: order.id } }), 1)
+      assert.equal(await tx.invoice.count({ where: { orderId: order.id } }), 0)
       assert.equal(await tx.stockMovement.count({ where: { orderId: order.id, type: 'DISPATCH' } }), 1)
       const balance = await tx.stockBalance.findUniqueOrThrow({ where: { productId: product.id } })
       assert.deepEqual([balance.onHand, balance.reserved], [0, 0])
@@ -124,6 +123,21 @@ test('serialized dispatch, warranty activation, and assigned installation sign-o
       const lookup = await warrantiesService(tx).lookup(key, { asOf: complete.signedAt })
       assert.equal(lookup.coveredAsOf, true)
       assert.equal(lookup.asset.customer.id, order.customerId)
+      assert.equal((await payments.orderPayments(order.id)).balance.toFixed(2), '75.00')
+      assert.equal(await tx.invoice.count({ where: { orderId: order.id } }), 0)
+      const tracking = trackingService(tx, 'fixture-tracking-secret')
+      const publicCoverage = await tracking.warranties(order.orderNumber)
+      assert.deepEqual(publicCoverage.products[0].coverage[0].startAt, complete.signedAt)
+      assert.equal(publicCoverage.products[0].coverage[0].status, 'ACTIVE')
+
+      const paid = await payments.record(order.id, { amount: '75.00', method: 'CASH' }, user)
+      assert.equal(paid.balance.toFixed(2), '0.00')
+      const invoice = await tx.invoice.findUniqueOrThrow({ where: { orderId: order.id } })
+      assert.deepEqual(invoice.paidAt, paid.payment.receivedAt)
+      assert.equal(invoice.status, 'PAID')
+      const warrantyAfterPayment = await tx.warranty.findUniqueOrThrow({ where: { id: legacy.id } })
+      assert.deepEqual(warrantyAfterPayment.startAt, complete.signedAt)
+      assert.deepEqual(warrantyAfterPayment.endAt, warranties[0].endAt)
       const expired = await warrantiesService(tx).lookup(key, { asOf: warranties[0].endAt })
       assert.equal(expired.coveredAsOf, false)
 
