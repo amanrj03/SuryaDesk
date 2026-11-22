@@ -1,44 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { CheckIcon } from '@heroicons/react/24/outline'
+import { ProjectTimeline } from '../../components/ui/ProjectTimeline.jsx'
 import { Brand } from '../../components/ui/Brand.jsx'
 import { BackToHome } from '../../components/ui/BackToHome.jsx'
 import { StatusBadge } from '../../components/ui/Badge.jsx'
 import { ErrorState } from '../../components/ui/States.jsx'
 import { api } from '../../lib/api.js'
-import { displayReference, formatDate, formatDateTime, words } from '../../lib/format.js'
+import { displayReference, formatDate, formatDateTime } from '../../lib/format.js'
 import { tokenFromHash, trackingToken } from './trackingLocation.js'
-
-function OrderTimeline({ timeline, cancelled }) {
-  const latest = timeline.findLastIndex(event => event.at)
-  return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5" aria-labelledby="order-timeline">
-      <h2 id="order-timeline" className="text-lg font-semibold">Order timeline</h2>
-      <ol className="mt-5">
-        {timeline.map(({ stage, at }, index) => {
-          const recorded = Boolean(at)
-          const current = index === latest && !cancelled
-          return (
-            <li key={stage} aria-current={current ? 'step' : undefined} className="relative flex gap-3 pb-5 last:pb-0">
-              {index < timeline.length - 1 && <span aria-hidden="true" className="absolute top-6 bottom-0 left-3 w-px bg-gray-200" />}
-              <span aria-hidden="true" className={`relative grid size-6 shrink-0 place-items-center rounded-full border
-                ${recorded ? 'border-emerald-700 bg-emerald-700 text-white' : 'border-gray-300 bg-white'}`}>
-                {recorded && <CheckIcon className="size-4" />}
-              </span>
-              <div>
-                <p className="text-sm font-semibold">{words(stage)}</p>
-                <p className="mt-0.5 text-xs text-gray-600">
-                  {recorded ? <time dateTime={at}>{formatDateTime(at)}</time>
-                    : index < latest ? 'Date unavailable' : cancelled ? 'Not reached' : 'Pending'}
-                </p>
-              </div>
-            </li>
-          )
-        })}
-      </ol>
-    </section>
-  )
-}
 
 export default function TrackingPage() {
   const { hash } = useLocation()
@@ -109,7 +78,7 @@ export default function TrackingPage() {
                 </dl>
               )}
             </section>
-            {order.timeline?.length > 0 && <OrderTimeline timeline={order.timeline} cancelled={['CANCELLED', 'LOST'].includes(order.status)} />}
+            {order.timeline?.length > 0 && <ProjectTimeline timeline={order.timeline} cancelled={['CANCELLED', 'LOST'].includes(order.status)} />}
             {order.orderNumber && order.installation?.status === 'COMPLETED' && <section className="rounded-2xl border border-gray-200 bg-white p-5" aria-labelledby="tracking-warranties">
               <h2 id="tracking-warranties" className="text-lg font-semibold">Equipment warranties</h2>
               {order.warranties.length ? (

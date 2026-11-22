@@ -1,6 +1,7 @@
 import { paymentTotals } from '../payments/payments.service.js'
 import { pricingBreakdown } from '../../lib/line-pricing.js'
 import { quotesService } from '../quotes/quotes.service.js'
+import { projectTimeline } from '../orders/project-timeline.js'
 import { canDownloadInvoice, invoiceService, issuedInvoiceStatuses } from '../invoices/invoices.service.js'
 import { ticketsService } from '../tickets/tickets.service.js'
 import { ApiError } from '../../utils/ApiError.js'
@@ -11,7 +12,7 @@ const packageInfo = { name: true, description: true, capacityKw: true, type: tru
 const survey = { id: true, status: true, scheduledAt: true, visitedAt: true, approvedAt: true }
 const installation = { status: true, scheduledAt: true, startedAt: true, finishedAt: true, signedAt: true, capacityKw: true, generationReading: true }
 const quotation = {
-  id: true, quoteNumber: true, status: true, sentAt: true, acceptedAt: true, validUntil: true,
+  id: true, surveyId: true, quoteNumber: true, status: true, sentAt: true, acceptedAt: true, validUntil: true,
   subtotal: true, tax: true, total: true, package: { select: packageInfo },
   quotationLinesByQuotation: { select: line, orderBy: { id: 'asc' } },
 }
@@ -47,6 +48,26 @@ export function ownership(account) {
   return { lead, order, service, invoices }
 }
 
+function trackedProjects(requests, orders) {
+  const ordersByQuote = new Map(orders.map(order => [order.quotation.id, order]))
+  return requests.map(lead => {
+    const quotes = lead.quotationsByLead
+    const withOrder = quotes.filter(quote => ordersByQuote.has(quote.id))
+    const quote = withOrder.find(row => ordersByQuote.get(row.id).status !== 'CANCELLED')
+      ?? withOrder[0] ?? quotes.find(row => row.sentAt)
+    const order = ordersByQuote.get(quote?.id)
+    const siteSurvey = lead.siteSurveysByLead.find(row => row.id === quote?.surveyId) ?? lead.siteSurveysByLead[0]
+    const installation = order?.installationByOrder
+    return {
+      id: lead.id, reference: lead.leadNumber, address: lead.siteAddress,
+      orderNumber: order?.orderNumber ?? null, status: order?.status ?? lead.status,
+      surveyAppointment: siteSurvey?.status === 'SCHEDULED' ? siteSurvey.scheduledAt : null,
+      installationAppointment: installation?.status === 'SCHEDULED' ? installation.scheduledAt : null,
+      timeline: projectTimeline(lead, siteSurvey, quote, order, order?.dispatchesByOrder[0], installation),
+    }
+  })
+}
+
 export function portalService(db) {
   return {
     async records(account) {
@@ -54,12 +75,12 @@ export function portalService(db) {
       const [requests, orders, invoices, assets, tickets] = await db.$transaction([
         db.lead.findMany({ where: scope.lead, orderBy: { createdAt: 'desc' }, select: {
           id: true, leadNumber: true, status: true, createdAt: true, updatedAt: true, siteAddress: true,
-          siteSurveysByLead: { select: survey, orderBy: { scheduledAt: 'desc' } },
+          siteSurveysByLead: { select: survey, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] },
           quotationsByLead: { where: { status: { not: 'DRAFT' } }, select: quotation, orderBy: { createdAt: 'desc' } },
         } }),
         db.order.findMany({ where: scope.order, orderBy: { confirmedAt: 'desc' }, select: {
           id: true, orderNumber: true, status: true, confirmedAt: true, updatedAt: true, total: true,
-          quotation: { select: { quoteNumber: true, package: { select: packageInfo } } },
+          quotation: { select: { id: true, quoteNumber: true, package: { select: packageInfo } } },
           installationByOrder: { select: installation },
           dispatchesByOrder: { where: { dispatchedAt: { not: null } }, select: { dispatchedAt: true, deliveredAt: true }, orderBy: { dispatchedAt: 'desc' }, take: 1 },
           paymentsByOrder: { where: { voidedAt: null }, select: payment, orderBy: { receivedAt: 'desc' } },
@@ -85,6 +106,7 @@ export function portalService(db) {
       const serviceInvoices = new Map(visibleInvoices.filter(row => row.ticketId).map(row => [row.ticketId, row]))
       return {
         requests: requests.map(row => ({ ...row, quotationsByLead: row.quotationsByLead.map(customerQuote) })),
+        projects: trackedProjects(requests, orders),
         orders: orderBalances,
         invoices: visibleInvoices,
         assets, tickets: tickets.map(row => ({

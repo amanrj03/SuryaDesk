@@ -2,26 +2,12 @@ import { createHmac } from 'node:crypto'
 import jwt from 'jsonwebtoken'
 import { ApiError } from '../../utils/ApiError.js'
 import { isCovered } from '../warranties/coverage.js'
+import { projectTimeline } from './project-timeline.js'
 
 const issuer = 'suryadesk'
 const audience = 'customer-tracking'
 const invalid = () => new ApiError(404, 'TRACKING_UNAVAILABLE', 'Tracking ID or link not found, or the link has expired.')
 const leadReference = /^LEAD-[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i
-
-function timeline(lead, survey, quotation, order, dispatch, job) {
-  return [
-    ['ENQUIRY_RECEIVED', lead.createdAt],
-    ['SITE_SURVEYED', survey?.visitedAt],
-    ['SURVEY_APPROVED', survey?.approvedAt],
-    ['QUOTATION_ISSUED', quotation?.sentAt],
-    ['QUOTATION_ACCEPTED', quotation?.acceptedAt],
-    ['ORDER_CONFIRMED', order?.confirmedAt],
-    ['DISPATCHED', dispatch?.dispatchedAt],
-    ['DELIVERED', dispatch?.deliveredAt],
-    ['INSTALLATION_IN_PROGRESS', job?.startedAt],
-    ['INSTALLATION_COMPLETED', job?.signedAt],
-  ].map(([stage, at]) => ({ stage, at: at ?? null }))
-}
 
 function warrantyStatus(warranty, now) {
   if (isCovered(warranty, now)) return 'ACTIVE'
@@ -61,7 +47,7 @@ export function trackingService(db, secret) {
           ?? quotes.find(quote => quote.orderByQuotation)
         if (!latestOrder) return {
           trackingId: lead.leadNumber, status: lead.status, warranties: [],
-          timeline: timeline(lead, lead.siteSurveysByLead[0], quotes.find(quote => quote.sentAt)),
+          timeline: projectTimeline(lead, lead.siteSurveysByLead[0], quotes.find(quote => quote.sentAt)),
         }
         ids = { id: latestOrder.orderByQuotation.id }
       } else {
@@ -102,7 +88,7 @@ export function trackingService(db, secret) {
       const job = installationByOrder
       return {
         ...summary, dispatch, installation: job ? { status: job.status, scheduledAt: job.scheduledAt } : null,
-        timeline: timeline(quotation.lead, quotation.survey, quotation, order, dispatch, job),
+        timeline: projectTimeline(quotation.lead, quotation.survey, quotation, order, dispatch, job),
         warranties: (job?.status === 'COMPLETED' && job.signedAt ? warrantiesByOrder : []).map(({ asset, status, startAt, endAt }) => ({
           serialNumber: asset.serialNumber, product: asset.product.name, startAt, endAt,
           status: warrantyStatus({ status, startAt, endAt }, now),

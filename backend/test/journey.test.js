@@ -91,6 +91,10 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.equal(received.status, 'NEW')
         assert.ok(received.timeline[0].at)
         assert.ok(received.timeline.slice(1).every(event => event.at === null))
+        const [pendingProject] = (await portalData('/records')).projects
+        assert.equal(pendingProject.reference, enquiry.leadNumber)
+        assert.equal(pendingProject.orderNumber, null)
+        assert.deepEqual(pendingProject.timeline, received.timeline)
         token = (await post('/auth/login', { email, password })).accessToken
         const rate = await patch('/service-labour-rate', { hourlyRate: '600.50', visitCharge: '350.00' })
         assert.equal(rate.hourlyRate, '600.5')
@@ -285,6 +289,10 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.equal(signed.order.status, 'COMPLETED')
         const completed = await post('/public/tracking', { token: tracking.token })
         assert.equal(completed.timeline.at(-1).at, signed.signedAt)
+        const [completedProject] = (await portalData('/records')).projects
+        assert.equal(completedProject.orderNumber, order.orderNumber)
+        assert.equal(completedProject.status, 'COMPLETED')
+        assert.deepEqual(completedProject.timeline, completed.timeline)
         const warrantyLookup = await post('/public/warranties', { orderNumber: order.orderNumber.toLowerCase() })
         assert.equal(warrantyLookup.signedAt, signed.signedAt)
         const [warranty] = warrantyLookup.products[0].coverage
@@ -322,7 +330,9 @@ test('Express connects public intake to paid delivery, signed completion, and co
         const otherLogin = await portal('/login', { method: 'POST', body: { email: otherEmail, password } })
         assert.equal(otherLogin.status, 200)
         const otherSession = otherLogin.headers.get('set-cookie').split(';')[0]
-        assert.deepEqual((await portalData('/records', { session: otherSession })).orders, [])
+        const otherRecords = await portalData('/records', { session: otherSession })
+        assert.deepEqual(otherRecords.orders, [])
+        assert.deepEqual(otherRecords.projects, [])
         for (const path of [
           '/quotations/' + quote.id + '/pdf', '/invoices/' + invoice.id + '/pdf', '/warranties/' + asset.id + '/pdf',
           '/payments/' + paidOrder.paymentsByOrder[0].id + '/receipt', '/photos/' + ticketPhoto.id,

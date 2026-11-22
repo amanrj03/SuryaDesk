@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
-import { ChartBarIcon, ClipboardDocumentListIcon, DocumentTextIcon, ShieldCheckIcon, ShoppingBagIcon, UserCircleIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline'
+import { ChartBarIcon, ClipboardDocumentListIcon, DocumentTextIcon, MapPinIcon, ShieldCheckIcon, ShoppingBagIcon, UserCircleIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline'
 import { Brand } from '../../components/ui/Brand.jsx'
 import { BackToHome } from '../../components/ui/BackToHome.jsx'
 import { Notice } from '../../components/ui/Notice.jsx'
@@ -9,10 +9,12 @@ import Enquiry from '../enquiries/EnquiryPage.jsx'
 import { NewPasswordFields } from './CustomerAuthFields.jsx'
 import { customerApi, downloadCustomerFile } from './customerApi.js'
 import { currentWarranty, Invoices, Orders, Quotations, ServiceRequests, Warranties } from './CustomerRecords.jsx'
+import { CustomerTracking } from './CustomerTracking.jsx'
 import { openRazorpay } from './razorpay.js'
 
 const sections = [
   ['', 'Overview', ChartBarIcon], ['quotations', 'Quotations', ClipboardDocumentListIcon], ['orders', 'Orders', ShoppingBagIcon],
+  ['tracking', 'Tracking', MapPinIcon],
   ['invoices', 'Invoices', DocumentTextIcon], ['warranties', 'Warranties', ShieldCheckIcon],
   ['service', 'Service requests', WrenchScrewdriverIcon], ['profile', 'Profile', UserCircleIcon],
 ]
@@ -43,7 +45,10 @@ function Overview({ profile, data }) {
     <div className="grid gap-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div><h1 className="text-3xl font-bold tracking-tight">Welcome, {profile.name.split(' ')[0]}</h1><p className="mt-1 text-gray-600">Your solar projects and support</p></div>
-        <Link className="primary" to="/customer/quotations/new">Request a quote</Link>
+        <div className="flex flex-wrap gap-2">
+          <Link className="secondary" to="/customer/tracking">Track project</Link>
+          <Link className="primary" to="/customer/quotations/new">Request a quote</Link>
+        </div>
       </header>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
         {metrics.map(([label, value, path]) => <Link key={label} className="rounded-2xl border border-gray-200 bg-white p-4 hover:border-emerald-500" to={'/customer/' + path}>
@@ -222,6 +227,8 @@ export default function CustomerPortal() {
               refresh={() => setRetry(value => value + 1)} />} />
             <Route path="quotations/new" element={<Enquiry profile={profile} onSubmitted={() => setRetry(value => value + 1)} />} />
             <Route path="orders" element={<Orders entries={data.orders} save={save} pay={payOnline} busy={busy} />} />
+            <Route path="tracking" element={<CustomerTracking projects={data.projects ?? []}
+              refresh={() => { setError(''); setRetry(value => value + 1) }} />} />
             <Route path="invoices" element={<Invoices entries={data.invoices} save={save} pay={payOnline} busy={busy} />} />
             <Route path="warranties" element={<Warranties entries={data.assets} save={save} />} />
             <Route path="service" element={<ServiceRequests entries={data.tickets} assets={data.assets.filter(row => row.status === 'INSTALLED')}
