@@ -51,26 +51,34 @@ test('serialized dispatch, warranty activation, and assigned installation sign-o
         } },
       } })
       const service = dispatchService({ $transaction: callback => callback(tx) })
+      const warehouse = { ...user, capabilities: roleCapabilities.WAREHOUSE }
       const { row } = await service.draft(order.id, {}, user)
       const items = [{ productId: product.id, quantity: 1, serialNumbers: [key] }]
       assert.equal((await service.allocate(row.id, { items }, user)).status, 'ALLOCATED')
-      await assert.rejects(service.dispatch(row.id, {}, user), { code: 'INVALID_TRANSITION' })
+      const delivery = { recipientName: 'Customer' }
+      await assert.rejects(service.deliver(row.id, delivery, { ...user, capabilities: ['dispatch:deliver'] }), { code: 'FORBIDDEN' })
+      await assert.rejects(service.deliver(row.id, delivery, warehouse), { code: 'INVALID_TRANSITION' })
       const payments = paymentsService({ $transaction: callback => callback(tx) })
       const paid = await payments.record(order.id, { amount: '100.00', method: 'CASH' }, user)
       assert.equal(paid.balance.toFixed(2), '0.00')
       assert.equal(await tx.invoice.count({ where: { orderId: order.id } }), 0)
-      const dispatched = await service.dispatch(row.id, {}, user)
-      assert.equal(dispatched.status, 'DISPATCHED')
-      assert.equal(dispatched.order.invoiceByOrder.status, 'PAID')
-      assert.deepEqual(dispatched.order.invoiceByOrder.paidAt, paid.payment.receivedAt)
-      await service.dispatch(row.id, {}, user)
+      const delivered = await service.deliver(row.id, delivery, warehouse)
+      assert.equal(delivered.status, 'DELIVERED')
+      assert.equal(delivered.order.status, 'DELIVERED')
+      assert.equal(delivered.recipientName, delivery.recipientName)
+      assert.deepEqual(delivered.dispatchedAt, delivered.deliveredAt)
+      assert.equal(delivered.order.invoiceByOrder.status, 'PAID')
+      const invoice = await tx.invoice.findUniqueOrThrow({ where: { orderId: order.id } })
+      assert.deepEqual(invoice.paidAt, paid.payment.receivedAt)
+      await service.deliver(row.id, delivery, warehouse)
       assert.equal(await tx.invoice.count({ where: { orderId: order.id } }), 1)
       assert.equal(await tx.stockMovement.count({ where: { orderId: order.id, type: 'DISPATCH' } }), 1)
-      assert.equal(await tx.warranty.count({ where: { orderId: order.id } }), 0)
-      await service.deliver(row.id, { recipientName: 'Customer' }, user)
-      await service.deliver(row.id, { recipientName: 'Customer' }, user)
+      const balance = await tx.stockBalance.findUniqueOrThrow({ where: { productId: product.id } })
+      assert.deepEqual([balance.onHand, balance.reserved], [0, 0])
       assert.equal(await tx.warranty.count({ where: { orderId: order.id } }), 0)
       const asset = await tx.serializedAsset.findUniqueOrThrow({ where: { serialNumber: key } })
+      assert.equal(asset.status, 'DELIVERED')
+      assert.equal(asset.customerId, order.customerId)
       const legacy = await tx.warranty.create({ data: {
         assetId: asset.id, orderId: order.id, customerId: order.customerId, status: 'PENDING',
         months: 24, startAt: asset.deliveredAt, endAt: warrantyEnd(asset.deliveredAt, 24),

@@ -91,6 +91,12 @@ export default function Records({ section, token, capabilities }) {
     if (quote) setPanel({ type: 'action', action: quote })
   }
 
+  function allocationSaved(dispatch) {
+    const delivery = recordActions('dispatches', dispatch, capabilities).find(action => action.key === 'deliver')
+    refresh()
+    if (delivery) setPanel({ type: 'action', action: delivery })
+  }
+
   function go(nextPage) {
     updateListParams('page', nextPage === 1 ? '' : String(nextPage))
   }
@@ -328,7 +334,7 @@ export default function Records({ section, token, capabilities }) {
         <InstallationSignoff job={panel.row} token={token} onClose={closePanel} onSaved={refresh} />
       )}
       {panel?.type === 'action' && (panel.action.key === 'allocate' ? (
-        <DispatchAllocation dispatchId={panel.action.dispatchId} token={token} onClose={closePanel} onSaved={refresh} />
+        <DispatchAllocation dispatchId={panel.action.dispatchId} token={token} onClose={closePanel} onSaved={allocationSaved} />
       ) : (
         <WorkflowAction key={panel.action.key} action={panel.action} token={token} onClose={closePanel} onSaved={actionSaved} />
       ))}

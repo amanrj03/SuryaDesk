@@ -54,6 +54,38 @@ function quantities(items) {
   return totals
 }
 
+async function dispatchStock(tx, row, dispatchedAt, user) {
+  if (row.status !== 'ALLOCATED') throw invalid('Allocate stock before dispatching.')
+  const total = await tx.payment.aggregate({ where: { orderId: row.orderId, voidedAt: null }, _sum: { amount: true } })
+  if (row.order.total.greaterThan(0) && !total._sum.amount?.greaterThan(0)) {
+    throw invalid('Record an advance or full payment before dispatching.')
+  }
+  if (dispatchedAt < row.order.confirmedAt || dispatchedAt > new Date()) throw invalid('Choose a valid dispatch date.')
+  for (const [productId, quantity] of [...quantities(row.dispatchItemsByDispatch)].sort(([a], [b]) => a.localeCompare(b))) {
+    const balance = await tx.stockBalance.updateMany({
+      where: { productId, reserved: { gte: quantity }, onHand: { gte: quantity } },
+      data: { reserved: { decrement: quantity }, onHand: { decrement: quantity } },
+    })
+    if (!balance.count) throw insufficient()
+    for (const line of row.order.orderLinesByOrder.filter(item => item.productId === productId && item.lineKind === 'MATERIAL')) {
+      await tx.stockMovement.create({ data: {
+        productId, quantity: line.quantity, unitCost: line.unitCostSnapshot,
+        type: 'DISPATCH', orderId: row.orderId, actorId: user.id, referenceId: row.id,
+      } })
+    }
+  }
+  const ids = row.dispatchItemsByDispatch.flatMap(item => item.assetId ? [item.assetId] : [])
+  const assets = await tx.serializedAsset.updateMany({
+    where: { id: { in: ids }, status: 'RESERVED', orderId: row.orderId },
+    data: { status: 'DISPATCHED', dispatchedAt },
+  })
+  if (assets.count !== ids.length) throw unavailable()
+  await tx.dispatchItem.updateMany({ where: { dispatchId: row.id }, data: { status: 'DISPATCHED' } })
+  const updated = await updateStatus(tx, row, 'DISPATCHED', 'DISPATCHED', user, { dispatchedAt })
+  const invoice = await issuePaidOrderInvoice(tx, row.orderId, user.id)
+  return invoice ? { ...updated, order: { ...updated.order, invoiceByOrder: invoice } } : updated
+}
+
 export function dispatchService(db) {
   return {
     async list({ page, limit, status, orderId, q }) {
@@ -192,45 +224,23 @@ export function dispatchService(db) {
       return db.$transaction(async tx => {
         const row = await lockedDispatch(tx, id)
         if (['DISPATCHED', 'DELIVERED'].includes(row.status)) return row
-        if (row.status !== 'ALLOCATED') throw invalid('Allocate stock before dispatching.')
-        const total = await tx.payment.aggregate({ where: { orderId: row.orderId, voidedAt: null }, _sum: { amount: true } })
-        if (row.order.total.greaterThan(0) && !total._sum.amount?.greaterThan(0)) {
-          throw invalid('Record an advance or full payment before dispatching.')
-        }
-        const dispatchedAt = data.dispatchedAt ?? new Date()
-        if (dispatchedAt < row.order.confirmedAt || dispatchedAt > new Date()) throw invalid('Choose a valid dispatch date.')
-        for (const [productId, quantity] of [...quantities(row.dispatchItemsByDispatch)].sort(([a], [b]) => a.localeCompare(b))) {
-          const balance = await tx.stockBalance.updateMany({
-            where: { productId, reserved: { gte: quantity }, onHand: { gte: quantity } },
-            data: { reserved: { decrement: quantity }, onHand: { decrement: quantity } },
-          })
-          if (!balance.count) throw insufficient()
-          for (const line of row.order.orderLinesByOrder.filter(item => item.productId === productId && item.lineKind === 'MATERIAL')) {
-            await tx.stockMovement.create({ data: {
-              productId, quantity: line.quantity, unitCost: line.unitCostSnapshot,
-              type: 'DISPATCH', orderId: row.orderId, actorId: user.id, referenceId: id,
-            } })
-          }
-        }
-        const ids = row.dispatchItemsByDispatch.flatMap(item => item.assetId ? [item.assetId] : [])
-        const assets = await tx.serializedAsset.updateMany({
-          where: { id: { in: ids }, status: 'RESERVED', orderId: row.orderId },
-          data: { status: 'DISPATCHED', dispatchedAt },
-        })
-        if (assets.count !== ids.length) throw unavailable()
-        await tx.dispatchItem.updateMany({ where: { dispatchId: id }, data: { status: 'DISPATCHED' } })
-        const updated = await updateStatus(tx, row, 'DISPATCHED', 'DISPATCHED', user, { dispatchedAt })
-        const invoice = await issuePaidOrderInvoice(tx, row.orderId, user.id)
-        return invoice ? { ...updated, order: { ...updated.order, invoiceByOrder: invoice } } : updated
+        return dispatchStock(tx, row, data.dispatchedAt ?? new Date(), user)
       })
     },
 
     async deliver(id, data, user) {
       return db.$transaction(async tx => {
-        const row = await lockedDispatch(tx, id)
+        let row = await lockedDispatch(tx, id)
         if (row.status === 'DELIVERED') return row
-        if (row.status !== 'DISPATCHED') throw invalid('Dispatch stock before confirming delivery.')
         const deliveredAt = data.deliveredAt ?? new Date()
+        if (row.status === 'ALLOCATED') {
+          if (!user.capabilities?.includes('dispatch:complete')) {
+            throw new ApiError(403, 'FORBIDDEN', 'You do not have permission to release stock for delivery.')
+          }
+          if (deliveredAt < row.order.confirmedAt || deliveredAt > new Date()) throw invalid('Choose a valid delivery date.')
+          row = await dispatchStock(tx, row, deliveredAt, user)
+        }
+        if (row.status !== 'DISPATCHED') throw invalid('Allocate stock before confirming delivery.')
         if (deliveredAt < row.dispatchedAt || deliveredAt > new Date()) throw invalid('Choose a valid delivery date.')
         const customerId = row.order.customerId
         for (const item of row.dispatchItemsByDispatch.filter(item => item.assetId)) {

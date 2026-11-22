@@ -196,8 +196,8 @@ export default function DispatchAllocation({ dispatchId, token, onClose, onSaved
       const items = stock.items.map(({ productId, quantity }) => ({
         productId, quantity, serialNumbers: selected[productId] ?? [],
       }))
-      await api(path + '/allocate', { token, method: 'POST', body: { items } })
-      onSaved()
+      const { data } = await api(path + '/allocate', { token, method: 'POST', body: { items } })
+      onSaved(data)
     } catch (failure) {
       setError(failure.message)
       setRevision(value => value + 1)

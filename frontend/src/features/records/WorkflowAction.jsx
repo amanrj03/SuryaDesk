@@ -173,10 +173,13 @@ function baseRecordActions(section, row, capabilities, detail) {
     if (row.status === 'DRAFT' && can('dispatch:allocate')) {
       return [{ key: 'allocate', label: 'Allocate stock', dispatchId: id }]
     }
-    if (row.status === 'ALLOCATED' && can('dispatch:complete')) return [post('dispatch', 'Record dispatch', url + '/dispatch')]
-    if (row.status === 'DISPATCHED' && can('dispatch:deliver')) return [post('deliver', 'Confirm delivery', url + '/deliver', [
-      input('recipientName', 'Recipient name', 'text', { defaultValue: row.order.customer.name, maxLength: 120 }),
-    ])]
+    const canDeliver = row.status === 'DISPATCHED' || (row.status === 'ALLOCATED' && can('dispatch:complete'))
+    if (canDeliver && can('dispatch:deliver')) return [{
+      ...post('deliver', 'Confirm delivery', url + '/deliver', [
+        input('recipientName', 'Recipient name', 'text', { defaultValue: row.order.customer.name, maxLength: 120 }),
+      ]),
+      description: 'Confirm only after the recipient has received the materials.',
+    }]
   }
   if (section === 'customers' && can('tickets:create')) {
     return [post('customerTicket', 'Open service ticket', '/tickets', [
@@ -441,6 +444,7 @@ export default function WorkflowAction({ action, token, onClose, onSaved }) {
 
   return <RecordDialog title={action.label} busy={busy} onClose={onClose}>
     <form className="form p-4" onSubmit={submit}>
+      {action.description && <p className="text-sm text-gray-600">{action.description}</p>}
       {loading && <p role="status">Loading available options…</p>}
       {!loading && !!action.fields.length && <div className="form-grid">
         {action.fields.map(field => <Field key={field.name} field={field} options={choices[field.name] ?? field.options ?? []} />)}
