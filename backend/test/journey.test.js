@@ -325,6 +325,31 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.equal(serviceRecord.invoice.invoiceLinesByInvoice[0].lineTotal, '250')
         await portalPdf('/invoices/' + charged.invoiceByTicket.id + '/pdf')
         assert.equal((await portal('/invoices/' + charged.invoiceByTicket.id + '/pdf', { session: otherSession })).status, 404)
+        const subsidy = await post('/subsidies', { orderId: order.id })
+        const subsidyPath = '/subsidies/' + subsidy.id
+        await patch(subsidyPath, { status: 'DOCUMENTS_PENDING', documentChecklist: { identity: true, utilityBill: true } })
+        await patch(subsidyPath, {
+          status: 'SUBMITTED', reference: 'SUB-' + key, submittedAt: new Date(Date.now() - 2000).toISOString(),
+        })
+        await patch(subsidyPath, { status: 'APPROVED', decisionAt: new Date(Date.now() - 1000).toISOString() })
+        const subsidyPaid = await patch(subsidyPath, { status: 'PAID' })
+        assert.equal(subsidyPaid.status, 'PAID')
+        assert.deepEqual(subsidyPaid.documentChecklist, { identity: true, utilityBill: true })
+        const deniedSubsidyUpdate = await fetch(url + subsidyPath, {
+          method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'PAID', notes: 'A finalized application cannot be edited.' }),
+        })
+        assert.equal(deniedSubsidyUpdate.status, 409)
+        const report = await fetch(url + '/reports/export?type=profitability&period=custom'
+          + '&from=' + encodeURIComponent(new Date(Date.now() - 86400000).toISOString())
+          + '&to=' + encodeURIComponent(new Date(Date.now() + 86400000).toISOString()), {
+          headers: { Authorization: 'Bearer ' + token },
+        })
+        assert.equal(report.status, 200)
+        assert.match(report.headers.get('content-type'), /text\/csv/)
+        const csv = await report.text()
+        assert.ok(csv.includes('"margin"'))
+        assert.ok(csv.includes(order.orderNumber))
         await portalData('/enquiries', { method: 'POST', body: { address: 'Another site', notes: 'Second rooftop' } }, 201)
         assert.equal((await portalData('/records')).requests.length, 2)
         assert.equal(await tx.customer.count({ where: { email } }), 1)

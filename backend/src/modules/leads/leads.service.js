@@ -15,7 +15,10 @@ const transitions = {
 
 export function leadScope(user) {
   return user.capabilities.includes('surveys:record') && !user.capabilities.includes('leads:write')
-    ? { assignedToId: user.id } : {}
+    ? { OR: [
+      { assignedToId: user.id },
+      { siteSurveysByLead: { some: { surveyorId: user.id } } },
+    ] } : {}
 }
 
 export function leadsService(db) {

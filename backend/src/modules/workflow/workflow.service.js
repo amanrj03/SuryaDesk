@@ -47,7 +47,7 @@ export async function relatedWorkflowRecords(db, user, section, id) {
     const lead = await tx.lead.findUniqueOrThrow({
       where: { id: leadId },
       select: {
-        ...record, leadNumber: true, assignedToId: true,
+        ...record, leadNumber: true,
         siteSurveysByLead: {
           where: { id: surveyId, ...surveyScope(user) }, orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
           select: { ...record, scheduledAt: true },
@@ -74,8 +74,12 @@ export async function relatedWorkflowRecords(db, user, section, id) {
         links.push({ section: target, id: row.id, reference, status: row.status, date })
       }
     }
-    const leadAccess = leadScope(user)
-    if (!leadAccess.assignedToId || leadAccess.assignedToId === lead.assignedToId) add('leads', lead, lead.leadNumber)
+    if (canRead('leads') && section !== 'leads') {
+      const scope = leadScope(user)
+      if (!Object.keys(scope).length || await tx.lead.count({ where: { id: lead.id, ...scope } })) {
+        add('leads', lead, lead.leadNumber)
+      }
+    }
     for (const survey of lead.siteSurveysByLead) add('surveys', survey, null, survey.scheduledAt)
     for (const quote of lead.quotationsByLead) {
       add('quotes', quote, quote.quoteNumber)

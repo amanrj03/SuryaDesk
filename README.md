@@ -5,7 +5,7 @@
 - **Request a quote** collects the customer's password and verifies their email before creating the account and enquiry. **Customer portal** opens the same account with a password or an email code. Existing customers can request another quote from their portal.
 - To send customer codes from Gmail, enable Google 2-Step Verification and generate an app password. Set `GMAIL_USER` to the sending address and `GMAIL_APP_PASSWORD` to that app password in the private backend `.env`, then restart the backend. If both Gmail settings are present, the backend uses Gmail over SMTP with TLS. If you use Resend, leave both Gmail settings unset and set `CUSTOMER_EMAIL_FROM` and `RESEND_API_KEY`.
 - Use HTTPS in production and serve the frontend and API on the same site so the customer session cookie can be sent. Apply migrations and regenerate Prisma with `npm run db:migrate` and `npm run db:generate` from `backend`.
-- Existing customer records matched by email are reused. An administrator can grant or revoke historical access from **Customers → View → Customer portal access** after verifying who owns the record.
+- Customers can see records linked to their portal account. Previously approved access to older records is retained.
 - For local demos, run `npm run db:seed -- --portal-accounts` from `backend` with `SEED_DEMO_PASSWORD` configured. The command lists the seeded email addresses. It adds portal logins to existing completed demo orders.
 
 SuryaDesk tracks rooftop solar work from the public enquiry through survey, quotation, order, payment, serialized dispatch, delivery, signed installation, and after-sales service. It runs locally with React, Express, Prisma, and PostgreSQL.
@@ -47,9 +47,9 @@ The demo can be used to exercise the workflow:
 
 - Sales can qualify an enquiry, schedule a survey, create and issue a package quotation, and record customer acceptance to create the order.
 - Search for `QUO-0181`, `QUO-0182`, or `QUO-0183` to try **Create order** on an accepted quotation. For an existing seeded database, run `npm.cmd --prefix backend run db:seed -- --pending-order-quotes` to add these examples without resetting the demo.
-- Warehouse can record stock receipts, allocate the order bill of materials by quantity and serial, record dispatch, and confirm delivery. Eligible warranties start when installation is signed off.
+- Warehouse can record stock receipts and allocate the order bill of materials by quantity and serial. **Confirm delivery** opens after allocation and records dispatch and delivery together once the recipient has the materials. Eligible warranties start when installation is signed off.
 - Assigned technicians can record the installation checklist, upload a photo, obtain a drawn signature, and complete the job.
-- Support can look up covered equipment, track a ticket, record service charges, and close the ticket after customer confirmation.
+- Support can look up covered equipment and assign tickets. Assigned technicians record parts and labour, then close the ticket by submitting the customer's signature. Admins can configure the hourly labour rate and visiting charge under **Service tickets → Service charges**.
 - Finance can record collections, track subsidy paperwork, and download reports. Order invoices are issued automatically once the order has been dispatched and paid in full.
 
 Access tokens expire after one hour and are held in browser memory. Reloading the page requires signing in again. Local evidence files are saved under `backend/uploads/` by default and downloaded only through authenticated, assignment-aware APIs.
@@ -57,7 +57,7 @@ Access tokens expire after one hour and are held in browser memory. Reloading th
 ## Checks
 
 ```powershell
-npm.cmd --prefix backend run test:integration
+npm.cmd --prefix backend run test:integration -- --test-concurrency=1
 npm.cmd --prefix frontend run build
 npm.cmd --prefix frontend run test:e2e
 ```
@@ -68,7 +68,7 @@ Integration checks use the migrated local database and remove their synthetic fi
 
 - Recording acceptance creates one order, one dispatch pick queue, and an installation placeholder in the same transaction. Staff with both issue and acceptance permissions can record those events together after sharing the quote and receiving approval. Warehouse allocates the full order bill of materials in a single dispatch and needs an advance or full payment for orders with a positive total.
 - Contract revenue excludes tax. Cash collections and invoice totals are reported separately. Job profitability uses fulfilled material costs, technician work logs, and explicitly recorded costs. Open jobs show a cost completeness indicator.
-- A delivery warranty uses India-local calendar months with an exclusive end timestamp. Covered replacements inherit any remaining term and preserve the links to the returned serial and original warranty.
+- Warranty coverage starts at signed installation completion and uses India-local calendar months with an exclusive end timestamp. Covered replacements inherit any remaining term and preserve the links to the returned serial and original warranty.
 - The application records quote and invoice issue inside the staff workspace. It provides downloadable report CSVs and tracks subsidy paperwork locally. Staff handle external customer communication and government submission.
 - Customers can download payment receipts from **My orders**, including receipts for advances and full payments before dispatch. SuryaDesk automatically issues one order invoice when both dispatch and full payment are recorded. Admin and Finance can download or print invoices from linked orders, dispatches, and invoice details. Dispatch still requires an advance for a nonzero order and delivery can be recorded with a balance due. Set the optional `INVOICE_SELLER_NAME`, `INVOICE_SELLER_ADDRESS`, `INVOICE_SELLER_PAN`, and `INVOICE_SELLER_GSTIN` fields in `backend/.env` to include seller details.
 - Configure tax rates in **Products**, or in **Packages** for services without products. Enter `0` for a zero rate and leave the field blank when the rate is unknown. New quotes split package prices by catalog selling-price weights, round tax on each line, and save the rates and amounts through order conversion and invoicing. Existing quotes retain their original totals. For a previously seeded local database, `npm.cmd --prefix backend run db:seed -- --configure-demo-tax` fills only missing rates on known fictional catalog items with illustrative rates.

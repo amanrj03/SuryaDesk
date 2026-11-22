@@ -4,6 +4,8 @@ import test from 'node:test'
 import { createDatabase } from '../src/lib/prisma.js'
 import { roleCapabilities } from '../src/config/permissions.js'
 import { surveysService } from '../src/modules/surveys/surveys.service.js'
+import { leadsService } from '../src/modules/leads/leads.service.js'
+import { relatedWorkflowRecords } from '../src/modules/workflow/workflow.service.js'
 
 test('assigned survey submission and approval advance the lead atomically', {
   skip: !process.env.DATABASE_URL,
@@ -18,10 +20,18 @@ test('assigned survey submission and approval advance the lead atomically', {
       const [sales, surveyor, director, admin] = users.map(user => ({ ...user, capabilities: roleCapabilities[user.role] }))
       const lead = await tx.lead.create({ data: {
         leadNumber: 'LEAD-' + key, source: 'WEB', status: 'QUALIFIED', subsidyInterest: false,
+        assignedTo: { connect: { id: sales.id } },
         customer: { create: { name: 'Survey fixture', phone: '+919876543210', address: 'Test residence' } },
       } })
       const surveys = surveysService({ $transaction: callback => callback(tx) })
+      const leads = leadsService({ lead: tx.lead, $transaction: queries => Promise.all(queries) })
+      await assert.rejects(leads.detail(lead.id, surveyor), { code: 'NOT_FOUND' })
       const scheduled = await surveys.schedule(lead.id, { surveyorId: surveyor.id, scheduledAt: new Date() }, sales)
+      assert.equal((await leads.detail(lead.id, surveyor)).id, lead.id)
+      const assignedLeads = await leads.list({ page: 1, limit: 20, q: key }, surveyor)
+      assert.deepEqual(assignedLeads.data.map(row => row.id), [lead.id])
+      assert.deepEqual(await relatedWorkflowRecords({ $transaction: callback => callback(tx) }, surveyor, 'surveys', scheduled.id),
+        [{ section: 'leads', id: lead.id, status: 'SURVEY_SCHEDULED', reference: lead.leadNumber, date: null }])
       await assert.rejects(surveys.record(scheduled.id, { status: 'SUBMITTED' }, surveyor), { code: 'INVALID_TRANSITION' })
       await assert.rejects(surveys.approve(scheduled.id, { approved: true }, director), { code: 'INVALID_TRANSITION' })
       await assert.rejects(surveys.record(scheduled.id, { status: 'IN_PROGRESS' }, { ...surveyor, id: sales.id }), { code: 'NOT_FOUND' })
@@ -41,6 +51,7 @@ test('assigned survey submission and approval advance the lead atomically', {
         subsidyInterest: false, customerId: lead.customerId,
       } })
       const direct = await surveys.schedule(secondLead.id, { surveyorId: admin.id, scheduledAt: new Date() }, admin)
+      await assert.rejects(leads.detail(secondLead.id, surveyor), { code: 'NOT_FOUND' })
       await assert.rejects(surveys.record(direct.id, { status: 'SUBMITTED', approveOnSubmit: true }, admin),
         { code: 'INVALID_TRANSITION' })
       const approvedDirectly = await surveys.record(direct.id, { ...findings, approveOnSubmit: true }, admin)
