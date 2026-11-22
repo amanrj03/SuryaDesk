@@ -279,6 +279,17 @@ test('Express connects public intake to paid delivery, signed completion, and co
         assert.equal(warrantyLookup.signedAt, signed.signedAt)
         const [warranty] = warrantyLookup.products[0].coverage
         assert.deepEqual(warranty, { startAt: signed.signedAt, endAt: completed.warranties[0].endAt, months: 240, status: 'ACTIVE' })
+        const authorizedWarranty = await post('/public/warranties', { orderNumber: order.orderNumber, token: tracking.token })
+        assert.deepEqual(authorizedWarranty.products[0].coverage[0], { ...warranty, serialNumber: key })
+        for (const query of [
+          { orderNumber: order.orderNumber, token: tracking.token + 'invalid' },
+          { orderNumber: 'ORD-UNRELATED', token: tracking.token },
+        ]) {
+          const response = await fetch(url + '/public/warranties', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(query),
+          })
+          assert.equal(response.status, 404)
+        }
         const coverage = await request('GET', '/assets/' + key + '/warranty')
         assert.equal(coverage.coveredAsOf, true)
         assert.equal(coverage.warranty.startAt, signed.signedAt)

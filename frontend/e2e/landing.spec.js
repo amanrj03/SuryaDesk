@@ -45,3 +45,33 @@ test('public dashboard supports direct lookups and each public page leads back h
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(360)
   await page.screenshot({ path: info.outputPath('landing-mobile.png'), fullPage: true })
 })
+
+test('warranty lookup shows serials with a private tracking link only', async ({ page }) => {
+  await page.goto('/login')
+  await page.getByLabel('Work email').fill('admin@demo.suryadesk.test')
+  await page.getByLabel('Password', { exact: true }).fill(process.env.SEED_DEMO_PASSWORD)
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await page.getByRole('link', { name: 'Orders', exact: true }).click()
+  const search = page.getByRole('textbox', { name: 'Search orders' })
+  await search.fill('ORD-0001')
+  await search.press('Enter')
+  await page.getByRole('row').filter({ hasText: 'ORD-0001' }).getByRole('link', { name: 'View', exact: true }).click()
+  await page.getByRole('button', { name: 'Share tracking link' }).click()
+  const link = await page.getByRole('textbox', { name: 'Tracking link' }).inputValue()
+
+  await page.goto('/warranty')
+  await page.getByLabel('Order ID').fill('ORD-0001')
+  await page.getByRole('button', { name: 'Check warranties' }).click()
+  const warranties = page.getByRole('region', { name: 'ORD-0001' })
+  await expect(warranties).toBeVisible()
+  await expect(warranties.getByText(/^Serial /)).toHaveCount(0)
+
+  await page.getByLabel('Tracking ID or private tracking link (optional)').fill(link)
+  await page.getByRole('button', { name: 'Check warranties' }).click()
+  await expect(warranties.getByText(/^Serial /).first()).toBeVisible()
+  await expect(warranties.getByText(/no individual serial numbers/i).first()).toBeVisible()
+
+  await page.goto(link)
+  await page.getByRole('region', { name: 'Equipment warranties' }).getByRole('link', { name: 'Warranty status' }).click()
+  await expect(warranties.getByText(/^Serial /).first()).toBeVisible()
+})

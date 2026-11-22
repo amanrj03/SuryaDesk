@@ -127,7 +127,7 @@ export default function TrackingPage() {
                   No equipment warranties are linked to this order.
                 </p>
               )}
-              <Link className="secondary mt-4" to={'/warranty#' + new URLSearchParams({ order: displayReference(order.orderNumber) })}>Warranty status</Link>
+              <Link className="secondary mt-4" to={'/warranty#' + new URLSearchParams({ order: displayReference(order.orderNumber), token })}>Warranty status</Link>
             </section>}
           </>
         )}

@@ -5,6 +5,7 @@ import { BackToHome } from '../../components/ui/BackToHome.jsx'
 import { StatusBadge } from '../../components/ui/Badge.jsx'
 import { api } from '../../lib/api.js'
 import { displayReference, formatDateTime } from '../../lib/format.js'
+import { trackingToken } from './trackingLocation.js'
 
 const duration = months => months + (months === 1 ? ' month' : ' months')
 
@@ -16,32 +17,43 @@ function unrecordedCoverage(product) {
 export default function WarrantyStatusPage() {
   const { hash } = useLocation()
   const navigate = useNavigate()
-  const orderNumber = new URLSearchParams(hash.slice(1)).get('order')
+  const params = new URLSearchParams(hash.slice(1))
+  const orderNumber = params.get('order')
+  const token = params.get('token')
   const [result, setResult] = useState({})
   const [attempt, setAttempt] = useState(0)
+  const [inputError, setInputError] = useState('')
 
   useEffect(() => {
     if (!orderNumber) return
     const controller = new AbortController()
-    api('/public/warranties', { method: 'POST', body: { orderNumber }, signal: controller.signal })
+    api('/public/warranties', { method: 'POST', body: { orderNumber, ...(token && { token }) }, signal: controller.signal })
       .then(({ data }) => {
-        if (!controller.signal.aborted) setResult({ orderNumber, attempt, data })
+        if (!controller.signal.aborted) setResult({ orderNumber, token, attempt, data })
       })
       .catch(error => {
-        if (!controller.signal.aborted) setResult({ orderNumber, attempt, error: error.message })
+        if (!controller.signal.aborted) setResult({ orderNumber, token, attempt, error: error.message })
       })
     return () => controller.abort()
-  }, [orderNumber, attempt])
+  }, [orderNumber, token, attempt])
 
   function submit(event) {
     event.preventDefault()
-    const value = new FormData(event.currentTarget).get('orderNumber').trim().toUpperCase()
+    const fields = new FormData(event.currentTarget)
+    const value = fields.get('orderNumber').trim().toUpperCase()
     if (!value) return
+    const tracking = fields.get('tracking').trim()
+    const nextToken = tracking ? trackingToken(tracking) ?? (tracking === token ? token : null) : null
+    if (tracking && !nextToken) {
+      setInputError('Enter your tracking ID or paste the full private tracking link.')
+      return
+    }
+    setInputError('')
     setAttempt(previous => previous + 1)
-    navigate('/warranty#' + new URLSearchParams({ order: value }), { replace: true })
+    navigate('/warranty#' + new URLSearchParams({ order: value, ...(nextToken && { token: nextToken }) }), { replace: true })
   }
 
-  const current = result.orderNumber === orderNumber && result.attempt === attempt ? result : {}
+  const current = result.orderNumber === orderNumber && result.token === token && result.attempt === attempt ? result : {}
   const order = current.data
   return (
     <main className="min-h-screen bg-[#FAF9F6] px-4 py-6 text-gray-900 sm:px-8">
@@ -56,6 +68,12 @@ export default function WarrantyStatusPage() {
           <label>Order ID
             <input key={orderNumber} name="orderNumber" defaultValue={orderNumber ?? ''} placeholder="ORD-…" maxLength={80} required autoComplete="off" spellCheck={false} />
           </label>
+          <label>Tracking ID or private tracking link (optional)
+            <input key={token} name="tracking" defaultValue={token ?? ''} maxLength={2500} autoComplete="off" spellCheck={false}
+              aria-describedby="serial-lookup-help" />
+          </label>
+          <p id="serial-lookup-help" className="text-sm text-gray-600">Use your tracking ID or private link to see individual equipment serial numbers.</p>
+          {inputError && <p role="alert" className="text-sm text-red-700">{inputError}</p>}
           <button className="primary w-fit">Check warranties</button>
         </form>
         {orderNumber && !order && !current.error && <p role="status">Loading warranties…</p>}
@@ -66,23 +84,31 @@ export default function WarrantyStatusPage() {
             {order.status === 'CANCELLED' ? 'This order was cancelled.' : 'Warranty details will appear after installation is completed and signed off.'}
           </p> : !order.products.length && <p className="mt-3 text-sm text-gray-600">No products are listed for this order.</p>}
           <ul className="mt-3 grid gap-3 sm:grid-cols-2">
-            {order.products.map((product, index) => (
-              <li key={index} className="rounded-xl border border-gray-200 p-4">
-                <h3 className="font-semibold">{product.name}</h3>
-                <p className="text-sm text-gray-600">Quantity {product.quantity}</p>
-                {product.coverage.length > 0 && <ul className="mt-2 space-y-2">
-                  {product.coverage.map((coverage, unit) => <li key={unit} className="text-sm">
-                    <StatusBadge status={coverage.status} /> <span>{duration(coverage.months)}</span>
-                    <p className="text-gray-600">{formatDateTime(coverage.startAt)} to {formatDateTime(coverage.endAt)}</p>
-                  </li>)}
-                </ul>}
-                {product.coverage.length < product.quantity && <p className="mt-2 text-sm text-gray-600">
-                  {product.coverage.length > 0 && (product.quantity - product.coverage.length) + ' remaining · '}
-                  {unrecordedCoverage(product)}
-                  {product.catalogMonths > 0 && order.status !== 'CANCELLED' && ' · Catalog term ' + duration(product.catalogMonths)}
-                </p>}
-              </li>
-            ))}
+            {order.products.map((product, index) => {
+              const remaining = product.quantity - product.coverage.length - (product.serialsWithoutCoverage?.length ?? 0)
+              return (
+                <li key={index} className="rounded-xl border border-gray-200 p-4">
+                  <h3 className="font-semibold">{product.name}</h3>
+                  <p className="text-sm text-gray-600">Quantity {product.quantity}</p>
+                  {!product.serialized && <p className="text-sm text-gray-600">Tracked by quantity · no individual serial numbers</p>}
+                  {product.coverage.length > 0 && <ul className="mt-2 space-y-2">
+                    {product.coverage.map((coverage, unit) => <li key={coverage.serialNumber ?? unit} className="text-sm">
+                      {coverage.serialNumber && <p className="break-all font-medium">Serial {coverage.serialNumber}</p>}
+                      <StatusBadge status={coverage.status} /> <span>{duration(coverage.months)}</span>
+                      <p className="text-gray-600">{formatDateTime(coverage.startAt)} to {formatDateTime(coverage.endAt)}</p>
+                    </li>)}
+                  </ul>}
+                  {product.serialsWithoutCoverage?.map(serial => <p key={serial} className="mt-2 break-all text-sm">
+                    <span className="font-medium">Serial {serial}</span> · {unrecordedCoverage(product)}
+                  </p>)}
+                  {remaining > 0 && <p className="mt-2 text-sm text-gray-600">
+                    {remaining < product.quantity && remaining + ' remaining · '}
+                    {unrecordedCoverage(product)}
+                    {product.catalogMonths > 0 && order.status !== 'CANCELLED' && ' · Catalog term ' + duration(product.catalogMonths)}
+                  </p>}
+                </li>
+              )
+            })}
           </ul>
         </section>}
       </div>

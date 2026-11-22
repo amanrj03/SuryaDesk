@@ -109,21 +109,30 @@ export function trackingService(db, secret) {
         })),
       }
     },
-    async warranties(reference) {
+    async warranties(reference, token) {
+      const tracked = token ? await this.lookup(token) : null
+      if (token && tracked.orderNumber !== reference && tracked.orderNumber !== 'DEMO-' + reference) throw invalid()
       const select = {
         orderNumber: true, status: true,
         installationByOrder: { select: { status: true, signedAt: true } },
         orderLinesByOrder: {
           where: { productId: { not: null } }, orderBy: { descriptionSnapshot: 'asc' },
-          select: { productId: true, descriptionSnapshot: true, quantity: true, product: { select: { warrantyMonths: true } } },
+          select: { productId: true, descriptionSnapshot: true, quantity: true,
+            product: { select: { warrantyMonths: true, serialized: true } } },
         },
         warrantiesByOrder: {
           orderBy: [{ endAt: 'asc' }, { id: 'asc' }],
-          select: { startAt: true, endAt: true, months: true, status: true, asset: { select: { productId: true } } },
+          select: { startAt: true, endAt: true, months: true, status: true,
+            asset: { select: { productId: true, ...(tracked && { serialNumber: true }) } } },
         },
+        ...(tracked && { serializedAssetsByOrder: {
+          where: { status: { in: ['INSTALLED', 'UNDER_REPAIR', 'REPLACED'] } },
+          select: { productId: true, serialNumber: true }, orderBy: { serialNumber: 'asc' },
+        } }),
       }
       const find = orderNumber => db.order.findUnique({ where: { orderNumber }, select })
-      const order = await find(reference) ?? (reference.startsWith('ORD-') ? await find('DEMO-' + reference) : null)
+      const order = tracked ? await find(tracked.orderNumber)
+        : await find(reference) ?? (reference.startsWith('ORD-') ? await find('DEMO-' + reference) : null)
       if (!order) throw new ApiError(404, 'ORDER_NOT_FOUND', 'No order matches that order ID.')
       const { orderNumber, status, installationByOrder: job } = order
       const signedAt = job?.status === 'COMPLETED' ? job.signedAt : null
@@ -131,14 +140,23 @@ export function trackingService(db, secret) {
       const products = new Map()
       for (const line of order.orderLinesByOrder) {
         const product = products.get(line.productId) ?? {
-          name: line.descriptionSnapshot, quantity: 0, catalogMonths: line.product.warrantyMonths, coverage: [],
+          name: line.descriptionSnapshot, quantity: 0, catalogMonths: line.product.warrantyMonths,
+          serialized: line.product.serialized, coverage: [],
+          ...(tracked && { serialsWithoutCoverage: [] }),
         }
         product.quantity += line.quantity
         products.set(line.productId, product)
       }
       const now = new Date()
+      const coveredSerials = new Set()
       for (const { asset, ...warranty } of order.warrantiesByOrder) {
-        products.get(asset.productId)?.coverage.push({ ...warranty, status: warrantyStatus(warranty, now) })
+        if (asset.serialNumber) coveredSerials.add(asset.serialNumber)
+        products.get(asset.productId)?.coverage.push({
+          ...warranty, status: warrantyStatus(warranty, now), ...(tracked && { serialNumber: asset.serialNumber }),
+        })
+      }
+      for (const asset of order.serializedAssetsByOrder ?? []) {
+        if (!coveredSerials.has(asset.serialNumber)) products.get(asset.productId)?.serialsWithoutCoverage.push(asset.serialNumber)
       }
       return { orderNumber, status, signedAt, products: [...products.values()] }
     },
