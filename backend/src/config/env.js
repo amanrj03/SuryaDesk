@@ -13,9 +13,14 @@ const runtime = schema.extend({
   RESEND_API_KEY: z.string().trim().min(1).optional(),
   GMAIL_USER: z.string().trim().pipe(z.email()).optional(),
   GMAIL_APP_PASSWORD: z.string().transform(value => value.replace(/\s/g, '')).pipe(z.string().length(16)).optional(),
+  RAZORPAY_KEY_ID: z.string().trim().regex(/^rzp_test_[A-Za-z0-9]+$/).optional(),
+  RAZORPAY_KEY_SECRET: z.string().trim().min(1).optional(),
 }).refine(config => Boolean(config.GMAIL_USER) === Boolean(config.GMAIL_APP_PASSWORD), {
   path: ['GMAIL_APP_PASSWORD'],
   message: 'Set both GMAIL_USER and GMAIL_APP_PASSWORD to enable Gmail delivery.',
+}).refine(config => Boolean(config.RAZORPAY_KEY_ID) === Boolean(config.RAZORPAY_KEY_SECRET), {
+  path: ['RAZORPAY_KEY_SECRET'],
+  message: 'Set both Razorpay Test Mode credentials to enable checkout.',
 })
 
 export function readRuntimeConfig(environment = process.env) {

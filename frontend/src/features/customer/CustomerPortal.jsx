@@ -9,6 +9,7 @@ import Enquiry from '../enquiries/EnquiryPage.jsx'
 import { NewPasswordFields } from './CustomerAuthFields.jsx'
 import { customerApi, downloadCustomerFile } from './customerApi.js'
 import { currentWarranty, Invoices, Orders, Quotations, ServiceRequests, Warranties } from './CustomerRecords.jsx'
+import { openRazorpay } from './razorpay.js'
 
 const sections = [
   ['', 'Overview', ChartBarIcon], ['quotations', 'Quotations', ClipboardDocumentListIcon], ['orders', 'Orders', ShoppingBagIcon],
@@ -169,6 +170,21 @@ export default function CustomerPortal() {
     }, 'Service request submitted.')
   }
 
+  function pay(kind, id) {
+    return perform(async () => {
+      const path = '/checkout/' + kind + '/' + encodeURIComponent(id)
+      const { data: checkout } = await customerApi(path, { method: 'POST' })
+      if (!checkout.paid) {
+        const proof = await openRazorpay(checkout)
+        if (!proof) return
+        await customerApi(path + '/verify', { method: 'POST', body: proof })
+      }
+      setMessage('Test payment verified.')
+      setRetry(value => value + 1)
+    })
+  }
+
+  const payOnline = data?.razorpayEnabled ? pay : undefined
   const save = (path, title, pdf = true) => perform(() => downloadCustomerFile(path, title + (pdf ? '.pdf' : '')))
   const logout = () => perform(async () => {
     await customerApi('/logout', { method: 'POST' })
@@ -204,11 +220,11 @@ export default function CustomerPortal() {
             <Route index element={<Overview profile={profile} data={data} />} />
             <Route path="quotations" element={<Quotations entries={data.requests} run={run} save={save} busy={busy} />} />
             <Route path="quotations/new" element={<Enquiry profile={profile} onSubmitted={() => setRetry(value => value + 1)} />} />
-            <Route path="orders" element={<Orders entries={data.orders} save={save} />} />
-            <Route path="invoices" element={<Invoices entries={data.invoices} save={save} />} />
+            <Route path="orders" element={<Orders entries={data.orders} save={save} pay={payOnline} busy={busy} />} />
+            <Route path="invoices" element={<Invoices entries={data.invoices} save={save} pay={payOnline} busy={busy} />} />
             <Route path="warranties" element={<Warranties entries={data.assets} save={save} />} />
             <Route path="service" element={<ServiceRequests entries={data.tickets} assets={data.assets.filter(row => row.status === 'INSTALLED')}
-              run={run} create={createTicket} save={save} busy={busy} />} />
+              run={run} create={createTicket} save={save} pay={payOnline} busy={busy} />} />
             <Route path="profile" element={<Profile profile={profile} run={run} busy={busy} />} />
             <Route path="*" element={<Navigate to="/customer" replace />} />
           </Routes>}

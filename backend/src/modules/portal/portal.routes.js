@@ -7,12 +7,19 @@ import { validate } from '../../middleware/validate.js'
 import { ApiError } from '../../utils/ApiError.js'
 import { customerAuthService } from './customer-auth.service.js'
 import { portalService } from './portal.service.js'
+import { razorpayCheckout } from './razorpay.service.js'
 import { invoicePdf } from '../invoices/invoice-pdf.js'
 import { attachmentsService } from '../attachments/attachments.service.js'
 import { quotationPdf, receiptPdf, warrantyPdf } from './portal-pdf.js'
 import * as schema from './portal.schema.js'
 
 const params = z.object({ id: z.string().min(1).max(100) })
+const checkoutParams = params.extend({ kind: z.enum(['orders', 'invoices']) })
+const checkoutProof = z.strictObject({
+  razorpay_order_id: z.string().max(100).regex(/^order_[A-Za-z0-9]+$/),
+  razorpay_payment_id: z.string().max(100).regex(/^pay_[A-Za-z0-9]+$/),
+  razorpay_signature: z.string().regex(/^[a-fA-F0-9]{64}$/),
+})
 const decision = z.strictObject({ status: z.enum(['ACCEPTED', 'REJECTED']) })
 const ticket = z.strictObject({ assetId: z.string().min(1).max(100), description: z.string().trim().min(10).max(2000) })
 const access = schema.requestCode.extend({ approved: z.boolean() })
@@ -29,10 +36,11 @@ function sendPdf(response, reference, file) {
   response.attachment(name + '.pdf').send(file)
 }
 
-export function customerPortalRoutes(db, staffAuth, config, sendEmail) {
+export function customerPortalRoutes(db, staffAuth, config, sendEmail, fetchRazorpay) {
   const router = Router()
   const accounts = customerAuthService(db, config.JWT_SECRET, sendEmail)
   const portal = portalService(db)
+  const checkout = razorpayCheckout(db, config, fetchRazorpay)
   const cookieOptions = {
     httpOnly: true, secure: config.NODE_ENV === 'production', sameSite: 'strict', path: '/api/v1/customer-portal',
   }
@@ -120,7 +128,17 @@ export function customerPortalRoutes(db, staffAuth, config, sendEmail) {
   router.post('/enquiries', limit, validate({ body: schema.extraEnquiry }), async (request, response) => {
     api(response, await accounts.enquiry(request.account, request.validated.body), 201)
   })
-  router.get('/records', async (request, response) => api(response, await portal.records(request.account)))
+  router.get('/records', async (request, response) => api(response, {
+    ...await portal.records(request.account), razorpayEnabled: checkout.enabled,
+  }))
+  router.post('/checkout/:kind/:id', limit, validate({ params: checkoutParams }), async (request, response) => {
+    const { kind, id } = request.validated.params
+    api(response, await checkout.start(request.account, kind, id))
+  })
+  router.post('/checkout/:kind/:id/verify', limit, validate({ params: checkoutParams, body: checkoutProof }), async (request, response) => {
+    const { kind, id } = request.validated.params
+    api(response, await checkout.verify(request.account, kind, id, request.validated.body))
+  })
   router.post('/quotations/:id/decision', validate({ params, body: decision }), async (request, response) => {
     api(response, await portal.decide(request.account, request.validated.params.id, request.validated.body.status))
   })

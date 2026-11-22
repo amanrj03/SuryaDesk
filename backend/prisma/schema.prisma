@@ -550,16 +550,29 @@ model Payment {
   method       PaymentMethod
   reference    String?
   receivedAt   DateTime
-  recordedById String
+  recordedById String?
   voidedAt     DateTime?
   voidReason   String?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   order        Order         @relation("Payment_order", fields: [orderId], references: [id], onDelete: Restrict)
-  recordedBy   User          @relation("Payment_recordedBy", fields: [recordedById], references: [id], onDelete: Restrict)
+  recordedBy   User?         @relation("Payment_recordedBy", fields: [recordedById], references: [id], onDelete: Restrict)
 
   @@index([orderId, receivedAt])
   @@index([recordedById])
+}
+
+model RazorpayCheckout {
+  id                String    @id @default(cuid())
+  kind              String
+  targetId          String
+  amountPaise       BigInt
+  providerOrderId   String    @unique
+  providerPaymentId String?   @unique
+  capturedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@unique([kind, targetId, amountPaise])
 }
 
 model StockBalance {

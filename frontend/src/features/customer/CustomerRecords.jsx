@@ -1,4 +1,4 @@
-﻿import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { StatusBadge } from '../../components/ui/Badge.jsx'
 import { displayReference, formatCurrency, formatDateTime, words } from '../../lib/format.js'
 
@@ -72,7 +72,13 @@ export function Quotations({ entries, run, save, busy }) {
   </Records>
 }
 
-export function Orders({ entries, save }) {
+function PayButton({ pay, kind, id, busy }) {
+  return <button type="button" className="primary" disabled={busy} onClick={() => pay(kind, id)}>
+    Pay with Razorpay (test)
+  </button>
+}
+
+export function Orders({ entries, save, pay, busy }) {
   return <Records title="My orders" entries={entries} empty="Confirmed orders will appear here after quotation acceptance.">
     {row => {
       const installation = row.installationByOrder
@@ -82,6 +88,8 @@ export function Orders({ entries, save }) {
         ['Delivered', dispatch?.deliveredAt], ['Installation scheduled', installation?.scheduledAt],
         ['Installation started', installation?.startedAt], ['Installation signed off', installation?.signedAt],
       ]
+      const hasBalance = Number(row.balance) > 0 && row.status !== 'CANCELLED'
+
       return <Card key={row.id} reference={row.orderNumber} status={row.status}>
         <p className="font-medium">{row.quotation.package.name}</p>
         <dl className="my-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
@@ -89,6 +97,10 @@ export function Orders({ entries, save }) {
             <dt className="text-gray-600">{label}</dt><dd className="font-semibold">{formatCurrency(value)}</dd>
           </div>)}
         </dl>
+
+        {pay && hasBalance && Number(row.balance) >= 1 &&
+          <div className="mb-4"><PayButton pay={pay} kind="orders" id={row.id} busy={busy} /></div>}
+
         <h4 className="font-semibold">Order progress</h4>
         <ol className="my-3 space-y-3 border-l border-gray-200 pl-4 text-sm">
           {timeline.map(([label, value]) => <li key={label}><span className="font-medium">{label}</span> <span className="text-gray-600">{value ? formatDateTime(value) : row.status === 'CANCELLED' ? 'Not reached' : 'Pending'}</span></li>)}
@@ -108,7 +120,7 @@ export function Orders({ entries, save }) {
   </Records>
 }
 
-export function Invoices({ entries, save }) {
+export function Invoices({ entries, save, pay, busy }) {
   return <Records title="My invoices" entries={entries} empty="Order invoices appear after dispatch and full payment. Payment receipts are available in My orders.">
     {row => <Card key={row.id} reference={row.invoiceNumber} status={row.status}>
       <p className="text-sm text-gray-600">Issued {formatDateTime(row.issuedAt)}{row.dueAt && ' · Due ' + formatDateTime(row.dueAt)}</p>
@@ -119,7 +131,11 @@ export function Invoices({ entries, save }) {
         <p>Subtotal {formatCurrency(row.subtotal)} · Tax {formatCurrency(row.tax)}</p>
         {row.paidAt && <p>Paid {formatDateTime(row.paidAt)}</p>}
       </details>
-      {download(save, '/invoices/' + row.id + '/pdf', 'Download invoice', row.invoiceNumber)}
+      <div className="flex flex-wrap gap-2">
+        {download(save, '/invoices/' + row.id + '/pdf', 'Download invoice', row.invoiceNumber)}
+        {pay && row.ticketId && !row.orderId && row.status === 'ISSUED' && Number(row.total) >= 1 &&
+          <PayButton pay={pay} kind="invoices" id={row.id} busy={busy} />}
+      </div>
     </Card>}
   </Records>
 }
@@ -146,7 +162,7 @@ export function Warranties({ entries, save }) {
   </Records>
 }
 
-export function ServiceRequests({ entries, assets, busy, run, save, create }) {
+export function ServiceRequests({ entries, assets, busy, run, save, create, pay }) {
   function submit(event) {
     event.preventDefault()
     const form = event.currentTarget
@@ -177,7 +193,12 @@ export function ServiceRequests({ entries, assets, busy, run, save, create }) {
           <Prices lines={row.invoice.invoiceLinesByInvoice} />
           {Number(row.invoice.tax) > 0 && <p className="text-sm">Tax {formatCurrency(row.invoice.tax)}</p>}
           <p className="my-2 font-semibold">Total {formatCurrency(row.invoice.total)}</p>
-          {download(save, '/invoices/' + row.invoice.id + '/pdf', 'Download service invoice', row.invoice.invoiceNumber)}
+          <p className="mb-2 text-sm text-gray-600">Invoice status · {words(row.invoice.status)}</p>
+          <div className="flex flex-wrap gap-2">
+            {download(save, '/invoices/' + row.invoice.id + '/pdf', 'Download service invoice', row.invoice.invoiceNumber)}
+            {pay && row.invoice.status === 'ISSUED' && Number(row.invoice.total) >= 1 &&
+              <PayButton pay={pay} kind="invoices" id={row.invoice.id} busy={busy} />}
+          </div>
         </section> : row.status === 'CLOSED' && row.coverageDecision === 'COVERED' &&
           <p className="mt-3 text-sm font-medium">Covered by warranty · {formatCurrency(0)}</p>}
         <div className="mt-3 flex flex-wrap gap-2">

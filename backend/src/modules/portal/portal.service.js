@@ -32,7 +32,7 @@ function customerQuote({ quotationLinesByQuotation, ...quote }) {
   return { ...quote, pricing: pricingBreakdown(quotationLinesByQuotation) }
 }
 
-function ownership(account) {
+export function ownership(account) {
   const lead = account.historicalAccess
     ? { OR: [{ portalAccountId: account.id }, { customerId: account.customerId, portalAccountId: null }] }
     : { portalAccountId: account.id }

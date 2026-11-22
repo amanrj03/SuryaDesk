@@ -27,7 +27,7 @@ import { customerPortalRoutes } from './modules/portal/portal.routes.js'
 import { customerMailer } from './modules/portal/portal.mailer.js'
 import { workflowRoutes } from './modules/workflow/workflow.routes.js'
 
-export function createApp(config, database, { sendCustomerEmail = customerMailer(config) } = {}) {
+export function createApp(config, database, { sendCustomerEmail = customerMailer(config), fetchRazorpay } = {}) {
   const { CORS_ORIGIN, JWT_SECRET } = config
   const app = express()
   app.disable('x-powered-by')
@@ -46,7 +46,7 @@ export function createApp(config, database, { sendCustomerEmail = customerMailer
   if (database) {
     const auth = authService(database, JWT_SECRET)
     app.use('/api/v1/auth', authRoutes(auth))
-    app.use('/api/v1/customer-portal', customerPortalRoutes(database, auth, config, sendCustomerEmail))
+    app.use('/api/v1/customer-portal', customerPortalRoutes(database, auth, config, sendCustomerEmail, fetchRazorpay))
     app.use('/api/v1', workflowRoutes(database, auth))
     app.use('/api/v1', customersRoutes(database, auth))
     app.use('/api/v1', procurementRoutes(database, auth))
