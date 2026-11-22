@@ -228,7 +228,7 @@ export default function Records({ section, token, capabilities }) {
                     {state.result.data.map((row) => (
                       <tr key={row.id}>
                         {section.columns.map(([label, value]) => (
-                          <td key={label}>{value(row)}</td>
+                          <td key={label}>{value(row, capabilities)}</td>
                         ))}
                         {hasActions && (
                           <td className="text-right">

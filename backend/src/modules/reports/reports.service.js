@@ -33,7 +33,7 @@ async function profitability(tx, { from, to }, page, limit) {
       ORDER BY "confirmedAt" DESC, id DESC LIMIT ${limit} OFFSET ${(page - 1) * limit}
     )
     SELECT o.id, o."orderNumber", o."confirmedAt", o.status,
-      c.name AS "customerName", o.subtotal AS revenue,
+      c.id AS "customerId", c.name AS "customerName", o.subtotal AS revenue,
       COALESCE(material.cost, 0) AS "materialCost",
       ROUND(COALESCE(labor.cost, 0), 2) AS "laborCost", ROUND(labor.minutes, 2) AS "laborMinutes",
       COALESCE(other.cost, 0) AS "otherCost",

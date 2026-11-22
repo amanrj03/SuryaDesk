@@ -1,4 +1,5 @@
 import { StatusBadge } from '../components/ui/Badge.jsx'
+import { CustomerNameLink, customerDetailsCapabilities } from '../components/ui/CustomerNameLink.jsx'
 import { displayContactEmail, displayReference, displaySupplierName, words } from '../lib/format.js'
 import { ClipboardDocumentCheckIcon, CubeIcon, DocumentTextIcon, InboxStackIcon, ShoppingBagIcon, CreditCardIcon, TruckIcon, ShieldCheckIcon, Squares2X2Icon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline'
 
@@ -15,6 +16,9 @@ const currency = (value) =>
     ? '—'
     : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(value))
 
+const customerColumn = getCustomer => ['Customer', (row, capabilities) =>
+  <CustomerNameLink customer={getCustomer(row)} capabilities={capabilities} />]
+
 export const sections = [
   {
     path: 'leads',
@@ -24,7 +28,7 @@ export const sections = [
     search: true,
     columns: [
       ['Reference', (row) => displayReference(row.leadNumber)],
-      ['Customer', (row) => row.customer.name],
+      customerColumn(row => row.customer),
       ['Phone', (row) => row.customer.phone],
       ['Source', (row) => words(row.source)],
       ['Subsidy interest', (row) => row.subsidyInterest ? 'Interested' : 'Not indicated'],
@@ -35,11 +39,11 @@ export const sections = [
   {
     path: 'customers',
     title: 'Customers',
-    capabilities: ['leads:write', 'tickets:create', 'reports:view', 'orders:create'],
+    capabilities: customerDetailsCapabilities,
     icon: InboxStackIcon,
     search: true,
     columns: [
-      ['Customer', (row) => row.name],
+      customerColumn(row => row),
       ['Phone', (row) => row.phone],
       ['Email', (row) => displayContactEmail(row.email)],
       ['Address', (row) => row.address],
@@ -53,7 +57,7 @@ export const sections = [
     search: true,
     searchPlaceholder: 'Search customer, phone, or surveyor…',
     columns: [
-      ['Customer', (row) => row.lead.customer.name],
+      customerColumn(row => row.lead.customer),
       ['Surveyor', (row) => row.surveyor?.name ?? '—'],
       ['Scheduled', (row) => date(row.scheduledAt)],
       ['Status', (row) => <StatusBadge status={row.status} />],
@@ -96,7 +100,7 @@ export const sections = [
     search: true,
     columns: [
       ['Reference', (row) => displayReference(row.quoteNumber)],
-      ['Customer', (row) => row.lead.customer.name],
+      customerColumn(row => row.lead.customer),
       ['Total', (row) => currency(row.total)],
       ['Status', (row) => <StatusBadge status={row.status} />],
       ['Created', (row) => date(row.createdAt)],
@@ -116,7 +120,7 @@ export const sections = [
           {row.quotation && <span className="block text-xs text-gray-500">Quote {displayReference(row.quotation.quoteNumber)}</span>}
         </>
       )],
-      ['Customer', (row) => row.customer.name],
+      customerColumn(row => row.customer),
       ['Total', (row) => currency(row.total)],
       ['Paid', (row) => currency(row.paidTotal)],
       ['Remaining', (row) => currency(row.status === 'CANCELLED' ? null : row.balance)],
@@ -150,7 +154,7 @@ export const sections = [
       ['Product', (row) => row.product.name],
       ['Status', (row) => <StatusBadge status={row.status} />],
       ['Order', (row) => displayReference(row.order?.orderNumber)],
-      ['Customer', (row) => row.customer?.name],
+      customerColumn(row => row.customer),
     ],
   },
   {
@@ -169,7 +173,7 @@ export const sections = [
           {displayReference(row.dispatchNumber)}
         </span>
       )],
-      ['Customer', (row) => <span className="font-medium text-gray-900">{row.order.customer.name}</span>],
+      customerColumn(row => row.order.customer),
       ['Status', (row) => <StatusBadge status={row.status} />],
       ['Delivered', (row) => <span className="text-gray-500">{date(row.deliveredAt)}</span>],
     ],
@@ -183,7 +187,7 @@ export const sections = [
     columns: [
       ['Serial', (row) => row.asset.serialNumber],
       ['Product', (row) => row.asset.product.name],
-      ['Customer', (row) => row.customer.name],
+      customerColumn(row => row.customer),
       ['Status', (row) => <StatusBadge status={row.status} />],
       ['Expires', (row) => date(row.endAt)],
     ],
@@ -197,7 +201,7 @@ export const sections = [
     searchPlaceholder: 'Search by order ID, customer, or phone',
     columns: [
       ['Order ID', (row) => displayReference(row.order.orderNumber)],
-      ['Customer', (row) => row.order.customer.name],
+      customerColumn(row => row.order.customer),
       ['Capacity', (row) => row.capacityKw + ' kW'],
       ['Scheduled', (row) => date(row.scheduledAt)],
       ['Status', (row) => <StatusBadge status={row.status} />],
@@ -211,7 +215,7 @@ export const sections = [
     search: true,
     columns: [
       ['Reference', (row) => displayReference(row.ticketNumber)],
-      ['Customer', (row) => row.customer.name],
+      customerColumn(row => row.customer),
       ['Fault', (row) => row.faultCode || '—'],
       ['Priority', (row) => words(row.priority)],
       ['Status', (row) => <StatusBadge status={row.status === 'IN_PROGRESS' && row.repairReportedAt ? 'REPAIR_REPORTED' : row.status} />],
@@ -225,7 +229,7 @@ export const sections = [
     search: true,
     columns: [
       ['Reference', (row) => displayReference(row.invoiceNumber)],
-      ['Customer', (row) => row.customer.name],
+      customerColumn(row => row.customer),
       ['Total', (row) => currency(row.total)],
       ['Status', (row) => <StatusBadge status={row.status} />],
       ['Issued', (row) => date(row.issuedAt)],
@@ -238,7 +242,7 @@ export const sections = [
     icon: ClipboardDocumentCheckIcon,
     columns: [
       ['Order', (row) => displayReference(row.order.orderNumber)],
-      ['Customer', (row) => row.order.customer.name],
+      customerColumn(row => row.order.customer),
       ['Reference', (row) => displayReference(row.reference) || '—'],
       ['Status', (row) => <StatusBadge status={row.status} />],
     ],

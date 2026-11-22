@@ -38,7 +38,7 @@ function DetailPage({ section, token, capabilities }) {
         section={section.path}
         token={token}
         capabilities={capabilities}
-        backLabel={'Back to ' + section.title}
+        backLabel={state?.backLabel ?? 'Back to ' + section.title}
         onBack={goBack}
       />
     </div>

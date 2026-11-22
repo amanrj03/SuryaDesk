@@ -13,6 +13,7 @@ import { Button } from '../../components/ui/Button.jsx'
 import { TableSkeleton, ErrorState } from '../../components/ui/States.jsx'
 import { BarChart } from '../../components/charts/BarChart.jsx'
 import { formatNumber } from '../../lib/format.js'
+import { CustomerNameLink } from '../../components/ui/CustomerNameLink.jsx'
 
 const money = (value) =>
   new Intl.NumberFormat('en-IN', {
@@ -286,7 +287,8 @@ export default function Dashboard({ session }) {
                         <tbody>
                           {state.rows.map((row) => (
                             <tr key={row.id}>
-                              <td className="font-semibold text-gray-900">{row.customerName}</td>
+                              <td className="font-semibold text-gray-900"><CustomerNameLink
+                                customer={{ id: row.customerId, name: row.customerName }} capabilities={session.user.capabilities} /></td>
                               <td>{money(row.revenue)}</td>
                               <td>{money(row.materialCost)}</td>
                               <td>

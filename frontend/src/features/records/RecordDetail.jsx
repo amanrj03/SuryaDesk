@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api.js'
 import { ErrorState } from '../../components/ui/States.jsx'
+import { CustomerNameLink } from '../../components/ui/CustomerNameLink.jsx'
 import { displayContactEmail, displayPackageDescription, displayReference, words } from '../../lib/format.js'
 import { Link } from 'react-router-dom'
 import WorkflowAction, { quotationAfterApproval, recordActions } from './WorkflowAction.jsx'
@@ -48,9 +49,10 @@ const evidenceName = item => item.id.startsWith('DEMO-')
   ? item.originalName.replace(/-demo(?=\.png$)/, '')
   : item.originalName
 const definition = {
-  assets: row => ({
+  assets: (row, capabilities) => ({
     title: row.asset.serialNumber, fields: [
-      ['Product', row.asset.product.name], ['Status', state(row.asset.status)], ['Customer', row.asset.customer?.name],
+      ['Product', row.asset.product.name], ['Status', state(row.asset.status)],
+      ['Customer', row.asset.customer && <CustomerNameLink customer={row.asset.customer} capabilities={capabilities} />],
       ['Order', displayReference(row.asset.order?.orderNumber)], ['Warranty active', row.coveredAsOf ? 'Yes' : 'No'],
       ['Warranty starts', localDate(row.warranty?.startAt)], ['Warranty ends', localDate(row.warranty?.endAt)],
     ],
@@ -179,7 +181,7 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
       .then(({ data }) => {
         if (!controller.signal.aborted) {
           setState({
-            data: definition[section](data),
+            data: definition[section](data, capabilities),
             quote: section === 'quotes' ? data : undefined,
             survey: section === 'surveys' ? data : undefined,
             ticket: section === 'tickets' ? data : undefined,
@@ -188,7 +190,7 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
       })
       .catch(error => { if (!controller.signal.aborted) setState({ error: error.message }) })
     return () => controller.abort()
-  }, [section, id, token, retry])
+  }, [section, id, token, capabilities, retry])
 
   function retryDetails() {
     setState({})
