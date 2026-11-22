@@ -7,7 +7,6 @@ import { Link } from 'react-router-dom'
 import WorkflowAction, { quotationAfterApproval, recordActions } from './WorkflowAction.jsx'
 import { TrackingLink } from './TrackingLink.jsx'
 import { InvoiceDocument } from './InvoiceDocument.jsx'
-import { CustomerPortalAccess } from '../customer/CustomerPortalAccess.jsx'
 import { hasRelatedRecords, RelatedRecords } from './RelatedRecords.jsx'
 import { EvidencePreview } from './EvidencePreview.jsx'
 
@@ -65,7 +64,7 @@ const definition = {
     groups: [['Activity', ['At', 'Notes'], activity(row.leadActivitiesByLead)]],
   }),
   customers: row => ({
-    title: row.name, customerEmail: row.email, fields: [['Phone', row.phone], ['Email', displayContactEmail(row.email)], ['Address', row.address]],
+    title: row.name, fields: [['Phone', row.phone], ['Email', displayContactEmail(row.email)], ['Address', row.address]],
     groups: [
       ['Enquiries', ['Reference', 'Status', 'Received'], row.leadsByCustomer?.map(event => [displayReference(event.leadNumber), state(event.status), localDate(event.createdAt)])],
       ['Orders', ['Reference', 'Status', 'Confirmed'], row.ordersByCustomer?.map(event => [displayReference(event.orderNumber), state(event.status), localDate(event.confirmedAt)])],
@@ -263,8 +262,6 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
     {data && <div className="grid gap-5 p-4">
       <dl className="form-grid">{data.fields.filter(([, value]) => value != null && value !== '').map(([label, value]) =>
         <div key={label} className="min-w-0"><dt className="text-sm font-semibold text-slate-600">{label}</dt><dd className="break-words">{value}</dd></div>)}</dl>
-      {section === 'customers' && capabilities.includes('users:manage') &&
-        <CustomerPortalAccess key={id} id={id} email={data.customerEmail} token={token} />}
       {(orderAdminActions.length > 0 || subsidy) && <details className="rounded-xl border border-gray-200 p-3">
         <summary className="cursor-pointer text-sm font-semibold">Job costs and subsidy</summary>
         <div className="mt-3 flex flex-wrap gap-2">

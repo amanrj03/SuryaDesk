@@ -25,6 +25,7 @@ test('customer names link to details across staff lists and return to the source
   await installed.locator(`a[href="${href}"]`).first().click()
   await expect(page).toHaveURL(href)
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
+  await expect(page.getByText('Customer portal access', { exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Back', exact: true }).click()
   await expect(page).toHaveURL(source)
 
