@@ -83,6 +83,25 @@ function PayButton({ pay, kind, id, busy }) {
   </button>
 }
 
+function OrderPayment({ order, pay, busy }) {
+  function submit(event) {
+    event.preventDefault()
+    const amount = event.currentTarget.elements.namedItem('amount').valueAsNumber
+    pay('orders', order.id, Math.round(amount * 100))
+  }
+
+  return (
+    <form className="mb-4 flex flex-wrap items-end gap-3" onSubmit={submit}>
+      <label className="grid gap-1 text-sm font-medium">
+        Payment amount (INR)
+        <input className="w-full rounded-lg border border-gray-300 px-3 py-2 sm:w-44" name="amount" type="number"
+          min="1" max={order.balance} step="0.01" defaultValue={Number(order.balance).toFixed(2)} disabled={busy} required />
+      </label>
+      <button type="submit" className="primary" disabled={busy}>Pay with Razorpay (test)</button>
+    </form>
+  )
+}
+
 export function Orders({ entries, save, pay, busy }) {
   return <Records title="My orders" entries={entries} empty="Confirmed orders will appear here after quotation acceptance.">
     {row => {
@@ -104,7 +123,7 @@ export function Orders({ entries, save, pay, busy }) {
         </dl>
 
         {pay && hasBalance && Number(row.balance) >= 1 &&
-          <div className="mb-4"><PayButton pay={pay} kind="orders" id={row.id} busy={busy} /></div>}
+          <OrderPayment key={row.balance} order={row} pay={pay} busy={busy} />}
 
         <h4 className="font-semibold">Order progress</h4>
         <ol className="my-3 space-y-3 border-l border-gray-200 pl-4 text-sm">

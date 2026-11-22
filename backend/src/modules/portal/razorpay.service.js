@@ -1,4 +1,5 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { Prisma } from '@prisma/client'
 import { ApiError } from '../../utils/ApiError.js'
 import { paymentTotals, recordOrderPayment } from '../payments/payments.service.js'
 import { ownership } from './portal.service.js'
@@ -52,8 +53,8 @@ export function razorpayCheckout(db, config, fetchGateway = fetch) {
       payment.captured !== true || payment.amount_refunded !== 0 || !/^pay_[A-Za-z0-9]+$/.test(payment.id)) {
       throw conflict('The captured payment could not be matched to this checkout.')
     }
-    const amount = due.balance
-    if (!due.eligible || !amount.mul(100).eq(payment.amount)) {
+    const amount = new Prisma.Decimal(payment.amount).div(100)
+    if (!due.eligible || amount.gt(due.balance) || (attempt.kind === 'invoices' && !amount.eq(due.balance))) {
       throw conflict('The balance changed after checkout opened. Contact support with your Razorpay payment reference.')
     }
     const capturedAt = new Date()
@@ -84,8 +85,11 @@ export function razorpayCheckout(db, config, fetchGateway = fetch) {
 
   return {
     enabled,
-    start(account, kind, id) {
+    start(account, kind, id, amountPaise) {
       return transact(account, kind, id, async (tx, due) => {
+        if (kind === 'invoices' && amountPaise !== undefined) throw conflict('Service invoices must be paid in full.')
+        const balancePaise = due.balance.mul(100)
+        const amount = amountPaise ?? balancePaise.toNumber()
         const pending = await tx.razorpayCheckout.findMany({
           where: { kind, targetId: id, providerPaymentId: null }, orderBy: { createdAt: 'desc' },
         })
@@ -97,11 +101,11 @@ export function razorpayCheckout(db, config, fetchGateway = fetch) {
           if (items.some(payment => payment.status === 'authorized')) {
             throw conflict('Razorpay is still confirming a payment. Try again shortly.')
           }
-          if (due.balance.mul(100).eq(attempt.amountPaise.toString())) reusable = attempt
+          if (!reusable && Number(attempt.amountPaise) === amount) reusable = attempt
         }
         if (!due.eligible || !due.balance.greaterThan(0)) throw conflict('This record has no balance available for online payment.')
-        const amount = due.balance.mul(100).toNumber()
         if (!Number.isSafeInteger(amount) || amount < 100) throw conflict('Razorpay Checkout requires a balance of at least ₹1.')
+        if (balancePaise.lt(amount)) throw conflict('The payment amount exceeds the outstanding balance.')
         if (!reusable) {
           const order = await gateway('/orders', { amount, currency: 'INR', receipt: randomUUID(), partial_payment: false })
           if (order.amount !== amount || order.currency !== 'INR' || !/^order_[A-Za-z0-9]+$/.test(order.id)) throw unavailable()

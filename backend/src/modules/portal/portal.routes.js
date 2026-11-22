@@ -15,6 +15,7 @@ import * as schema from './portal.schema.js'
 
 const params = z.object({ id: z.string().min(1).max(100) })
 const checkoutParams = params.extend({ kind: z.enum(['orders', 'invoices']) })
+const checkoutAmount = z.strictObject({ amountPaise: z.number().int().min(100).optional() }).default({})
 const checkoutProof = z.strictObject({
   razorpay_order_id: z.string().max(100).regex(/^order_[A-Za-z0-9]+$/),
   razorpay_payment_id: z.string().max(100).regex(/^pay_[A-Za-z0-9]+$/),
@@ -131,9 +132,9 @@ export function customerPortalRoutes(db, staffAuth, config, sendEmail, fetchRazo
   router.get('/records', async (request, response) => api(response, {
     ...await portal.records(request.account), razorpayEnabled: checkout.enabled,
   }))
-  router.post('/checkout/:kind/:id', limit, validate({ params: checkoutParams }), async (request, response) => {
+  router.post('/checkout/:kind/:id', limit, validate({ params: checkoutParams, body: checkoutAmount }), async (request, response) => {
     const { kind, id } = request.validated.params
-    api(response, await checkout.start(request.account, kind, id))
+    api(response, await checkout.start(request.account, kind, id, request.validated.body.amountPaise))
   })
   router.post('/checkout/:kind/:id/verify', limit, validate({ params: checkoutParams, body: checkoutProof }), async (request, response) => {
     const { kind, id } = request.validated.params

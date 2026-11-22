@@ -175,10 +175,11 @@ export default function CustomerPortal() {
     }, 'Service request submitted.')
   }
 
-  function pay(kind, id) {
+  function pay(kind, id, amountPaise) {
     return perform(async () => {
       const path = '/checkout/' + kind + '/' + encodeURIComponent(id)
-      const { data: checkout } = await customerApi(path, { method: 'POST' })
+      const body = amountPaise === undefined ? undefined : { amountPaise }
+      const { data: checkout } = await customerApi(path, { method: 'POST', body })
       if (!checkout.paid) {
         const proof = await openRazorpay(checkout)
         if (!proof) return
