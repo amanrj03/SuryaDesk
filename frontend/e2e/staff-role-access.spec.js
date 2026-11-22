@@ -41,7 +41,7 @@ for (const [role, modules] of Object.entries(allowed)) {
       await expect(page).toHaveURL('/' + area)
       await expect(page.getByRole('main').getByRole('heading', { name: area === 'overview' ? 'Operations overview' : areas[area], exact: true })).toBeVisible()
       if (role === 'surveyor' && ['leads', 'surveys'].includes(area)) expect(meta.total, area).toBeGreaterThan(0)
-      if (meta?.total > 0) await expect(page.getByRole('main').getByRole('table')).toBeVisible()
+      if (meta?.total > 0) await expect(page.locator('main .records tbody tr').first()).toBeVisible()
       if (meta?.total === 0) await expect(page.getByText(`No ${areas[area].toLowerCase()} found.`, { exact: true })).toBeVisible()
     }
     if (role !== 'admin') {
