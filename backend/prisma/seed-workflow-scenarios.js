@@ -195,13 +195,13 @@ async function scenario(tx, client, actors, packages, index, now, passwordHash, 
   }, actors.sales)
   await tx.quotation.update({ where: { id: quote.id }, data: { quoteNumber: key + '-QUO', createdAt: when(4) } })
   if (stage === 'quote-draft') return
-  await quotes.transition(quote.id, 'SENT', {}, actors.sales)
+  if (quote.status === 'DRAFT') await quotes.transition(quote.id, 'SENT', {}, actors.sales)
   if (stage === 'quote-declined') await quotes.transition(quote.id, 'REJECTED', { reason: 'Customer deferred the capital purchase.' }, actors.sales)
   if (stage === 'quote-expired') await tx.quotation.update({
     where: { id: quote.id }, data: { status: 'EXPIRED', sentAt: when(5), validUntil: when(35) },
   })
   if (['quote-sent', 'quote-declined', 'quote-expired'].includes(stage)) return
-  const accepted = await quotes.transition(quote.id, 'ACCEPTED', {}, actors.sales)
+  const accepted = await quotes.transition(quote.id, 'ACCEPTED', {}, account ? { customerAccountId: account.id } : actors.sales)
   await tx.quotation.update({
     where: { id: quote.id }, data: { sentAt: when(5), acceptedAt: when(6), ...(old && { validUntil: when(35) }) },
   })

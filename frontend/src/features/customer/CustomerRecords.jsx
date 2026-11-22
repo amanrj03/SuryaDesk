@@ -40,13 +40,18 @@ function Prices({ lines }) {
 const download = (save, path, title, reference) => <button className="secondary" onClick={() =>
   save(path, displayReference(reference) || title)} type="button">{title}</button>
 
-export function Quotations({ entries, run, save, busy }) {
+export function Quotations({ entries, run, save, busy, refresh }) {
   return <Records title="My quotations" entries={entries} empty="Your quotation requests will appear here."
-    action={<Link className="primary" to="/customer/quotations/new">Request another quote</Link>}>
+    action={<div className="flex flex-wrap gap-2">
+      <button type="button" className="secondary" disabled={busy} onClick={refresh}>Refresh quotations</button>
+      <Link className="primary" to="/customer/quotations/new">Request another quote</Link>
+    </div>}>
     {request => <Card key={request.id} reference={request.leadNumber} status={request.status}>
       <p className="text-sm text-gray-600">Requested {formatDateTime(request.createdAt)}</p>
       {request.siteAddress && <p className="text-sm text-gray-600">{request.siteAddress}</p>}
       {request.siteSurveysByLead.map(survey => <p key={survey.id} className="mt-2 text-sm">Survey <StatusBadge status={survey.status} /> {formatDateTime(survey.scheduledAt)}</p>)}
+      {request.status === 'SURVEY_APPROVED' && !request.quotationsByLead.length &&
+        <p className="mt-2 text-sm text-gray-600">Your quotation is being prepared.</p>}
       {request.quotationsByLead.map(quote => <section key={quote.id} className="mt-4 rounded-xl border border-gray-200 p-4">
         <div className="flex flex-wrap items-center gap-2">
           <h4 className="break-all font-semibold">{displayReference(quote.quoteNumber)}</h4>

@@ -237,6 +237,9 @@ export default function RecordDetail({ section, id, token, capabilities, backLab
         {data?.title ?? 'Record details'}
       </h1>
       {data && hasRelatedRecords(section) && <RelatedRecords section={section} id={id} token={token} />}
+      {state.quote?.requiresCustomerDecision && state.quote.status === 'SENT' &&
+        (!state.quote.validUntil || new Date(state.quote.validUntil).getTime() > Date.now()) &&
+        <p className="text-sm text-gray-600">Published to the customer portal. Awaiting the customer’s decision.</p>}
       {detailActions.length > 0 && <div className="flex flex-wrap gap-2">
         {detailActions.map(action => (
           <button key={action.key} type="button"

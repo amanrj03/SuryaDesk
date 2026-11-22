@@ -93,9 +93,9 @@ function baseRecordActions(section, row, capabilities, detail) {
     if (row.status === 'DRAFT' && can('quotes:send')) return [
       post('send', 'Issue quotation', url + '/send', [time('validUntil', 'Valid until')],
         ({ validUntil }) => ({ validUntil: toDate(validUntil) })),
-      ...(withinValidity && can('quotes:accept') ? [accept(true)] : []),
+      ...(withinValidity && can('quotes:accept') && !row.requiresCustomerDecision ? [accept(true)] : []),
     ]
-    if (row.status === 'SENT' && can('quotes:accept')) {
+    if (row.status === 'SENT' && can('quotes:accept') && !row.requiresCustomerDecision) {
       return [...(withinValidity ? [accept(false)] : []), post('rejectQuote', 'Record rejection', url + '/reject',
         [input('reason', 'Reason', 'textarea', { optional: true })])]
     }

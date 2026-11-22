@@ -218,7 +218,8 @@ export default function CustomerPortal() {
               : <p role="status">Loading customer portal...</p>}
           </div> : <Routes>
             <Route index element={<Overview profile={profile} data={data} />} />
-            <Route path="quotations" element={<Quotations entries={data.requests} run={run} save={save} busy={busy} />} />
+            <Route path="quotations" element={<Quotations entries={data.requests} run={run} save={save} busy={busy}
+              refresh={() => setRetry(value => value + 1)} />} />
             <Route path="quotations/new" element={<Enquiry profile={profile} onSubmitted={() => setRetry(value => value + 1)} />} />
             <Route path="orders" element={<Orders entries={data.orders} save={save} pay={payOnline} busy={busy} />} />
             <Route path="invoices" element={<Invoices entries={data.invoices} save={save} pay={payOnline} busy={busy} />} />

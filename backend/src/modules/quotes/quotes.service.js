@@ -6,8 +6,11 @@ import { createAcceptedOrder } from '../orders/orders.service.js'
 
 const missing = entity => new ApiError(404, 'NOT_FOUND', entity + ' not found.')
 const invalid = message => new ApiError(409, 'INVALID_TRANSITION', message)
+const portalCustomer = { include: { _count: { select: { portalAccounts: { where: { historicalAccess: true } } } } } }
+const quoteLead = { include: { customer: portalCustomer } }
+const needsCustomerDecision = lead => Boolean(lead.portalAccountId || lead.customer._count.portalAccounts)
 const context = {
-  lead: { include: { customer: true } },
+  lead: quoteLead,
   orderByQuotation: { select: { id: true, orderNumber: true } },
 }
 const include = {
@@ -52,11 +55,16 @@ async function audit(tx, id, action, actorId, summary = {}) {
   await tx.auditLog.create({ data: { actorId, entityType: 'Quotation', entityId: id, action, summary } })
 }
 
+async function advanceLead(tx, id, from, status) {
+  const changed = await tx.lead.updateMany({ where: { id, status: { in: from } }, data: { status } })
+  if (!changed.count) throw invalid('The lead is no longer open for this quotation.')
+}
+
 export function quotesService(db) {
   return {
     async create({ leadId, surveyId, packageId, includeInstallation, notes, validUntil }, user) {
       return db.$transaction(async tx => {
-        const survey = await tx.siteSurvey.findUnique({ where: { id: surveyId }, include: { lead: true } })
+        const survey = await tx.siteSurvey.findUnique({ where: { id: surveyId }, include: { lead: quoteLead } })
         if (!survey || survey.leadId !== leadId || survey.status !== 'APPROVED' ||
           !['SURVEY_APPROVED', 'QUOTED'].includes(survey.lead.status)) {
           throw new ApiError(409, 'SURVEY_NOT_APPROVED', 'Choose an approved survey for this enquiry.')
@@ -84,14 +92,21 @@ export function quotesService(db) {
         }
         const subtotal = lines.reduce((total, line) => total.plus(line.lineTotal), new Prisma.Decimal(0))
         const tax = lines.reduce((total, line) => total.plus(line.taxAmount ?? 0), new Prisma.Decimal(0))
+        const publish = needsCustomerDecision(survey.lead)
+        if (publish && !user.capabilities?.includes('quotes:send')) {
+          throw new ApiError(403, 'FORBIDDEN', 'You do not have permission to publish a quotation to the customer portal.')
+        }
+        if (publish) await advanceLead(tx, leadId, ['SURVEY_APPROVED', 'QUOTED'], 'QUOTED')
         const quote = await tx.quotation.create({
           data: {
             quoteNumber: 'QUO-' + randomUUID().toUpperCase(), leadId, surveyId, packageId,
-            status: 'DRAFT', createdById: user.id, subtotal, tax, total: subtotal.plus(tax), notes, validUntil,
+            status: publish ? 'SENT' : 'DRAFT', sentAt: publish ? new Date() : null,
+            createdById: user.id, subtotal, tax, total: subtotal.plus(tax), notes, validUntil,
             quotationLinesByQuotation: { createMany: { data: lines } },
           }, include,
         })
         await audit(tx, quote.id, 'CREATED', user.id)
+        if (publish) await audit(tx, quote.id, 'SENT', user.id, { from: 'DRAFT', channel: 'CUSTOMER_PORTAL' })
         return quote
       }, { isolationLevel: 'RepeatableRead' })
     },
@@ -105,7 +120,8 @@ export function quotesService(db) {
         }),
         db.quotation.count({ where }),
       ], { isolationLevel: 'RepeatableRead' })
-      return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } }
+      return { data: data.map(quote => ({ ...quote, requiresCustomerDecision: needsCustomerDecision(quote.lead) })),
+        meta: { page, limit, total, totalPages: Math.ceil(total / limit) } }
     },
     async detail(id) {
       const quote = await db.quotation.findUnique({ where: { id }, include })
@@ -114,16 +130,28 @@ export function quotesService(db) {
         where: { entityType: 'Quotation', entityId: id }, orderBy: { createdAt: 'asc' },
         select: { action: true, createdAt: true, summary: true },
       })
-      return { ...quote, timeline, pricing: pricingBreakdown(quote.quotationLinesByQuotation) }
+      return { ...quote, timeline, requiresCustomerDecision: needsCustomerDecision(quote.lead),
+        pricing: pricingBreakdown(quote.quotationLinesByQuotation) }
     },
     async transition(id, status, options, user) {
       return db.$transaction(async tx => {
         await tx.$queryRaw`SELECT id FROM "Quotation" WHERE id = ${id} FOR UPDATE`
-        const quote = await tx.quotation.findUnique({ where: { id }, include: { lead: true } })
+        const quote = await tx.quotation.findUnique({ where: { id }, include: { lead: quoteLead } })
         if (!quote) throw missing('Quotation')
         const now = new Date()
         const sending = status === 'SENT'
         const accepting = status === 'ACCEPTED'
+        if (user.customerAccountId && quote.lead.portalAccountId !== user.customerAccountId) {
+          const ownsHistory = !quote.lead.portalAccountId && await tx.customerAccount.findFirst({
+            where: { id: user.customerAccountId, customerId: quote.lead.customerId, historicalAccess: true },
+            select: { id: true },
+          })
+          if (!ownsHistory) throw missing('Quotation')
+        }
+        if (!sending && !user.customerAccountId && needsCustomerDecision(quote.lead) &&
+          !(accepting && quote.status === 'ACCEPTED')) {
+          throw new ApiError(403, 'FORBIDDEN', 'The customer must accept or decline this quotation in their portal.')
+        }
         if (accepting && quote.status === 'ACCEPTED') {
           await createAcceptedOrder(tx, id, {}, user)
           return tx.quotation.findUnique({ where: { id }, include })
@@ -137,11 +165,8 @@ export function quotesService(db) {
         const validUntil = options.validUntil ?? quote.validUntil
         if (status !== 'REJECTED' && validUntil && validUntil <= now) throw invalid('This quotation has expired.')
         if (sending || accepting) {
-          const leadChanged = await tx.lead.updateMany({
-            where: { id: quote.leadId, status: { in: sending || issueTogether ? ['SURVEY_APPROVED', 'QUOTED'] : ['QUOTED'] } },
-            data: { status: accepting ? 'WON' : 'QUOTED' },
-          })
-          if (!leadChanged.count) throw invalid('The lead is no longer open for this quotation.')
+          await advanceLead(tx, quote.leadId, sending || issueTogether ? ['SURVEY_APPROVED', 'QUOTED'] : ['QUOTED'],
+            accepting ? 'WON' : 'QUOTED')
         }
         const acceptedAt = options.acceptedAt ?? now
         if (accepting && (acceptedAt > now || (!issueTogether && acceptedAt < quote.sentAt))) {

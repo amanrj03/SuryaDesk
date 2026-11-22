@@ -131,11 +131,21 @@ test('Express connects public intake to paid delivery, signed completion, and co
         const pack = await post('/packages', { code: key, name: 'Journey package', type: 'PANEL_SET',
           basePrice: '250.00', components: [{ productId: product.id, quantity: 1 }] })
         const quote = await post('/quotes', { leadId: lead.id, surveyId: survey.id, packageId: pack.id })
-        assert.deepEqual((await portalData('/records')).requests[0].quotationsByLead, [])
-        assert.equal((await portal('/quotations/' + quote.id + '/pdf')).status, 404)
-        await post('/quotes/' + quote.id + '/send')
+        assert.equal(quote.status, 'SENT')
+        assert.ok(quote.sentAt)
+        const availableQuote = (await portalData('/records')).requests[0].quotationsByLead[0]
+        assert.equal(availableQuote.id, quote.id)
+        assert.equal(availableQuote.status, 'SENT')
+        assert.equal(await tx.order.count({ where: { quotationId: quote.id } }), 0)
+        for (const action of ['accept', 'reject']) {
+          const denied = await fetch(url + '/quotes/' + quote.id + '/' + action, {
+            method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: '{}',
+          })
+          assert.equal(denied.status, 403)
+        }
         await portalPdf('/quotations/' + quote.id + '/pdf')
         await portalData('/quotations/' + quote.id + '/decision', { method: 'POST', body: { status: 'ACCEPTED' } })
+        assert.equal(await tx.order.count({ where: { quotationId: quote.id } }), 1)
         const order = await post('/quotes/' + quote.id + '/convert-to-order')
         assert.equal(order.id, (await portalData('/records')).orders[0].id)
         assert.equal((await post('/public/tracking', { token: enquiry.leadNumber })).orderNumber, order.orderNumber)
