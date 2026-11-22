@@ -2,17 +2,12 @@
 import { api } from '../../lib/api.js'
 import { RecordDialog } from '../../components/ui/RecordDialog.jsx'
 import { Signature } from '../../components/ui/Signature.jsx'
+import { localDateTimeInput } from '../../lib/format.js'
 
 const checks = [
   ['mounting', 'Mounting and panels secured'], ['electrical', 'Electrical connections checked'],
   ['earthing', 'Earthing and protection verified'], ['generation', 'Generation test completed'],
 ]
-
-function localInput(value) {
-  if (!value) return ''
-  const date = new Date(value)
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
-}
 
 export default function InstallationSignoff({ job, token, onClose, onSaved }) {
   const canvas = useRef(null)
@@ -70,8 +65,8 @@ export default function InstallationSignoff({ job, token, onClose, onSaved }) {
   return <RecordDialog title={`Sign off installation · ${job.order.customer.name}`} busy={busy} onClose={onClose}>
     <form className="form p-4" onSubmit={save}>
       <div className="form-grid">
-        <label>Started at<input type="datetime-local" name="startedAt" required defaultValue={localInput(job.startedAt)} /></label>
-        <label>Finished at<input type="datetime-local" name="finishedAt" required defaultValue={localInput(job.finishedAt)} /></label>
+        <label>Started at<input type="datetime-local" name="startedAt" required defaultValue={localDateTimeInput(job.startedAt)} /></label>
+        <label>Finished at<input type="datetime-local" name="finishedAt" required defaultValue={localDateTimeInput(job.finishedAt)} /></label>
         <label>Installed capacity (kW)<input type="number" name="capacityKw" min="0.01" step="0.01" defaultValue={job.capacityKw || ''} required /></label>
         <label>Generation reading (kW)<input type="number" name="generationReading" min="0" step="0.01" defaultValue={job.generationReading ?? ''} required /></label>
       </div>

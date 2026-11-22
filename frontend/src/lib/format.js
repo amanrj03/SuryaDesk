@@ -9,6 +9,12 @@ const numberFormatter = new Intl.NumberFormat('en-IN')
 /** ₹1,23,456.78 */
 export const formatCurrency = (value) => (value == null ? '—' : currencyFormatter.format(Number(value)))
 
+export function localDateTimeInput(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+}
+
 /** Splits money into whole and decimal parts so the UI can de-emphasise paise. */
 export const splitCurrency = (value) => {
   if (value == null) return { whole: '₹0', fraction: '' }

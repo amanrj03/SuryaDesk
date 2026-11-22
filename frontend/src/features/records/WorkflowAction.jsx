@@ -1,6 +1,6 @@
 ﻿import { useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api.js'
-import { displayReference, displaySupplierName } from '../../lib/format.js'
+import { displayReference, displaySupplierName, localDateTimeInput } from '../../lib/format.js'
 import { useNavigate } from 'react-router-dom'
 import { RecordDialog } from '../../components/ui/RecordDialog.jsx'
 import { Signature } from '../../components/ui/Signature.jsx'
@@ -277,10 +277,15 @@ function baseRecordActions(section, row, capabilities, detail) {
     }))]
   }
   if (section === 'installations' && row.status !== 'COMPLETED' && can('installations:manage') && !row.startedAt) {
-    return [patch('scheduleJob', 'Schedule crew', '/installations/' + id, [
-      { ...choice('technicianIds', 'Technicians', []), source: '/users/options?kind=technician', multiple: true },
-      time('scheduledAt', 'Installation appointment'),
-    ], values => ({ ...values, scheduledAt: toDate(values.scheduledAt) }))]
+    const appointment = localDateTimeInput(row.scheduledAt)
+    return [patch('scheduleJob', row.status === 'SCHEDULED' ? 'Change crew' : 'Schedule crew', '/installations/' + id, [
+      { ...choice('technicianIds', 'Technicians', []), source: '/users/options?kind=technician', multiple: true,
+        attributes: { defaultValue: row.installationAssignmentsByInstallation?.map(member => member.technicianId) ?? [] } },
+      input('scheduledAt', 'Installation appointment', 'datetime-local', { defaultValue: appointment }),
+    ], ({ scheduledAt, technicianIds }) => ({
+      technicianIds,
+      ...(scheduledAt !== appointment && { scheduledAt: toDate(scheduledAt) }),
+    }))]
   }
   return []
 }
@@ -353,7 +358,7 @@ function Field({ field, options }) {
   const common = { name, required: !optional && (!['validUntil', 'dueAt', 'submittedAt', 'decisionAt'].includes(name)), ...props }
   if (type === 'checkbox') return <label className="check"><input type="checkbox" name={name} {...props} />{label}</label>
   if (type === 'textarea') return <label>{label}<textarea {...common} /></label>
-  if (type === 'select') return <label>{label}<select {...common} multiple={multiple} defaultValue={multiple ? [] : attributes.defaultValue ?? ''}>
+  if (type === 'select') return <label>{label}<select {...common} multiple={multiple} defaultValue={attributes.defaultValue ?? (multiple ? [] : '')}>
     {!multiple && <option value="">{!options.length && field.emptyLabel ? field.emptyLabel : `Choose ${label.toLowerCase()}`}</option>}
     {options.map(option => typeof option === 'string'
       ? <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>
